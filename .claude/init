@@ -17,16 +17,25 @@ Zielgruppe: Fitness-Enthusiasten, wissenschaftlich fundiert.
 
 ```
 src/
-├── lib/              # Supabase client, utils
-├── services/         # API calls, business logic
+├── lib/              # Third-party library configs
+│   └── supabase.ts   # ✅ Supabase client mit AsyncStorage
+├── services/         # Business logic
+│   └── auth.service.ts  # ✅ Authentication service
+├── utils/            # Utilities
+│   └── validation.ts    # ✅ Form validation functions
+├── hooks/            # Custom React hooks
+│   └── useForm.ts       # ✅ Form state management
 ├── screens/          # Screen components
-│   ├── auth/         # Login, Register, Onboarding
-│   ├── training/     # Training screens
-│   └── nutrition/    # Nutrition screens
+│   ├── auth/         # ⏸️ Login, Register, Onboarding
+│   ├── training/     # ⏸️ Training screens
+│   └── nutrition/    # ⏸️ Nutrition screens
 ├── components/       # Reusable UI components
-│   └── ui/           # Buttons, Inputs, Cards
-├── types/            # TypeScript types
-└── navigation/       # Navigation setup
+│   └── ui/           # ✅ Button, Card, Input, Text
+├── types/            # ⏸️ TypeScript types
+├── tests/            # Test files
+│   ├── auth.test.simple.ts   # ✅ Auth tests
+│   └── validation.test.ts    # ✅ Validation tests (59 tests)
+└── navigation/       # ⏸️ Navigation setup
 ```
 
 ## Supabase Schema
@@ -43,15 +52,115 @@ src/
 ## Wichtige Dateien
 
 - `.env`: EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY
-- `src/lib/supabase.ts`: Supabase client setup
-- `src/services/auth.service.ts`: Auth logic
-- `src/navigation/AppNavigator.tsx`: Navigation
+- `src/lib/supabase.ts`: Supabase client setup (✅ implementiert mit AsyncStorage)
+- `src/services/auth.service.ts`: Auth logic (✅ komplett mit 7 Funktionen)
+- `src/utils/validation.ts`: Form validation utilities (✅ implementiert)
+- `src/hooks/useForm.ts`: Custom form hook (✅ implementiert)
+- `src/components/ui/`: Button, Card, Input, Text (✅ implementiert)
+- `src/navigation/AppNavigator.tsx`: Navigation (⏸️ geplant)
+
+## Implementierte Features (Stand: 2025-12-25)
+
+### 1. Authentication System (✅ Komplett)
+
+**Dateien**: `src/lib/supabase.ts`, `src/services/auth.service.ts`
+
+**Funktionen**:
+- `signUp(email, password)` - Registrierung mit deutscher Fehlerbehandlung
+- `signIn(email, password)` - Login
+- `signOut()` - Logout
+- `getCurrentUser()` - Aktueller User
+- `onAuthStateChange(callback)` - Auth state listener
+- `resetPassword(email)` - Passwort zurücksetzen
+- `updatePassword(newPassword)` - Passwort ändern
+
+**Features**:
+- AsyncStorage persistence für Sessions
+- Alle Fehler in Deutsch
+- TypeScript strict mode
+- Response format: `{ user: User | null, error: string | null }`
+
+**Tests**: `src/tests/auth.test.simple.ts` - Run mit `npm run test:auth:simple`
+
+### 2. Form Validation System (✅ Komplett)
+
+**Dateien**: `src/utils/validation.ts`, `src/hooks/useForm.ts`
+
+**Validators**:
+- `validateEmail()` - Email-Format prüfen
+- `validatePassword()` - Min 8 Zeichen, Groß-/Kleinbuchstaben, Zahl
+- `validateName()` - Namen validieren
+- `validateAge()` - Alter 13-120 Jahre
+- `validateRegistrationForm()` - Komplette Registrierung
+- `validateLoginForm()` - Login-Form
+
+**useForm Hook**:
+```typescript
+const { values, errors, isSubmitting, handleChange, handleSubmit, reset } = useForm({
+  initialValues: { email: '', password: '' },
+  validate: validateLoginForm,
+  onSubmit: async (values) => { /* logic */ }
+});
+```
+
+**Tests**: 59 Unit Tests in `src/tests/validation.test.ts` - Run mit `npm run test:validation`
+
+**Design-Entscheidung**: Keine externe Validation Library (Zod/Yup) für kleineren Bundle
+
+### 3. UI Components (✅ Basis-Set)
+
+**Location**: `src/components/ui/`
+
+- `Button.tsx` - Variants: primary, secondary, outline
+- `Card.tsx` - Container component
+- `Input.tsx` - Text input mit error state
+- `Text.tsx` - Typography mit size variants
+
+Alle mit TypeScript interfaces und variant-based styling.
 
 ## Aktuelle Phase: MVP
 
-**Heute**: Login & Registrierung
-**Diese Woche**: Onboarding + Trainingsplan-Generator
-**Nächste Woche**: Workout Tracking + Nutrition Tracking
+**Abgeschlossen**:
+- ✅ Authentication Service
+- ✅ Form Validation System
+- ✅ UI Components (Basis)
+- ✅ Testing Setup
+
+**Diese Woche**:
+- 🔄 Login & Registrierung Screens (verwenden obige Services)
+- 🔄 Onboarding Flow
+- ⏸️ Trainingsplan-Generator
+
+**Nächste Woche**:
+- ⏸️ Workout Tracking
+- ⏸️ Nutrition Tracking
+
+## Architektur-Entscheidungen
+
+### 1. Validation ohne externe Library
+**Entscheidung**: Custom validation in `src/utils/validation.ts` statt Zod/Yup
+**Grund**: Kleinerer Bundle, volle Kontrolle, ausreichend für MVP
+**Impact**: 59 Tests, alle Validation-Regeln selbst definiert
+
+### 2. Testing Setup ohne Framework
+**Entscheidung**: `tsx` + console assertions statt Jest/Vitest
+**Grund**: Schneller Setup, weniger Dependencies für MVP
+**Future**: Migration zu Jest empfohlen wenn Projekt wächst
+
+### 3. Supabase AsyncStorage Integration
+**Entscheidung**: AsyncStorage für Session persistence
+**Grund**: Native persistence, keine zusätzlichen Cookies nötig
+**Implementation**: In `src/lib/supabase.ts` konfiguriert
+
+### 4. Deutsche Error Messages
+**Entscheidung**: Alle Fehler in Deutsch
+**Grund**: Zielgruppe ist deutsch
+**Future**: i18n-Support wenn internationale Expansion geplant
+
+### 5. Service Layer Pattern
+**Entscheidung**: Separate `services/` für Business Logic
+**Grund**: Trennung von UI und Logik, bessere Testbarkeit
+**Example**: `auth.service.ts` kann ohne UI getestet werden
 
 ## Coding Standards
 
@@ -61,19 +170,36 @@ src/
 - Descriptive variable names (deutsch ok)
 - Error handling überall
 - Comments nur wenn nötig
+- Alle Dateien mit absoluten Pfaden referenzieren in Dokumentation
+
+## Testing Infrastructure
+
+**Setup**:
+- `tsx` für TypeScript execution (kein Jest/Vitest)
+- `dotenv` für Environment variables
+- Simple console-based assertions
+
+**Test Commands**:
+```bash
+npm run test:auth:simple    # Authentication service tests
+npm run test:validation     # Validation tests (59 tests, all passing)
+```
+
+**Test Files**:
+- `src/tests/auth.test.simple.ts` - Auth service functions
+- `src/tests/validation.test.ts` - Alle Validation utilities
+
+**Manual Testing**:
+- iOS Simulator / Android Emulator
+- Nach jedem Screen testen
+- Validierung testen (leere Felder, wrong format)
 
 ## Git Workflow
 
 - `main` = stable
-- Feature branches: `feature/screen-name`
+- Feature branches: `features/feature-name` (aktuell: `features/ui`)
 - Pull bevor du arbeitest
 - Kleine, häufige Commits
-
-## Testing
-
-- Manuell auf iOS Simulator / Android Emulator
-- Nach jedem Screen testen
-- Validierung testen (leere Felder, wrong format)
 
 ## Supabase Access
 
