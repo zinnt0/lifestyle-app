@@ -4,7 +4,7 @@
 node_modules/
 
 # Expo
-.expo/
+#.expo/
 dist/
 web-build/
 expo-env.d.ts
@@ -31,7 +31,7 @@ yarn-error.*
 *.pem
 
 # local tooling
-.claude/
+#.claude/
 
 # local env files
 .env*.local

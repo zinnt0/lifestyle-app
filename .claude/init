@@ -1,0 +1,80 @@
+# Lifestyle App - Fitness & Nutrition Tracker
+
+## Projekt-Übersicht
+
+React Native (Expo) App für Training, Ernährung und Supplements.
+Zielgruppe: Fitness-Enthusiasten, wissenschaftlich fundiert.
+
+## Tech Stack
+
+- **Frontend**: React Native + Expo (TypeScript)
+- **Backend**: Supabase (PostgreSQL + Auth)
+- **Navigation**: React Navigation
+- **State**: React Hooks (kein Redux)
+- **Styling**: React Native StyleSheet (kein Tailwind/NativeWind)
+
+## Projekt-Struktur
+
+```
+src/
+├── lib/              # Supabase client, utils
+├── services/         # API calls, business logic
+├── screens/          # Screen components
+│   ├── auth/         # Login, Register, Onboarding
+│   ├── training/     # Training screens
+│   └── nutrition/    # Nutrition screens
+├── components/       # Reusable UI components
+│   └── ui/           # Buttons, Inputs, Cards
+├── types/            # TypeScript types
+└── navigation/       # Navigation setup
+```
+
+## Supabase Schema
+
+**18 Tabellen, alle erstellt:**
+
+- Core: profiles, exercises (6 rows), intolerances_catalog (8 rows)
+- Training: training_plans, plan_workouts, plan_exercises, workout_sessions, workout_sets, user_1rm
+- Nutrition: nutrition_goals, meal_plans, meals, meal_items, food_items, daily_nutrition_log
+- Supplements: supplements, user_supplements
+
+**RLS aktiviert** auf allen User-Tabellen.
+
+## Wichtige Dateien
+
+- `.env`: EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY
+- `src/lib/supabase.ts`: Supabase client setup
+- `src/services/auth.service.ts`: Auth logic
+- `src/navigation/AppNavigator.tsx`: Navigation
+
+## Aktuelle Phase: MVP
+
+**Heute**: Login & Registrierung
+**Diese Woche**: Onboarding + Trainingsplan-Generator
+**Nächste Woche**: Workout Tracking + Nutrition Tracking
+
+## Coding Standards
+
+- TypeScript strict mode
+- Functional components + Hooks (keine Classes)
+- Async/await (keine Promises.then)
+- Descriptive variable names (deutsch ok)
+- Error handling überall
+- Comments nur wenn nötig
+
+## Git Workflow
+
+- `main` = stable
+- Feature branches: `feature/screen-name`
+- Pull bevor du arbeitest
+- Kleine, häufige Commits
+
+## Testing
+
+- Manuell auf iOS Simulator / Android Emulator
+- Nach jedem Screen testen
+- Validierung testen (leere Felder, wrong format)
+
+## Supabase Access
+
+Via MCP Server - direkte DB-Zugriffe möglich.
