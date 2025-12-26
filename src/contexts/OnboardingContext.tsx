@@ -1,0 +1,417 @@
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { supabase } from '../lib/supabase';
+import { createProfile } from '../services/profile.service';
+
+/**
+ * Onboarding Data Interface
+ * Stores all user information collected across 6 onboarding screens
+ */
+export interface OnboardingData {
+  // Screen 1: Basisdaten
+  age: number | null;
+  weight: number | null; // kg
+  height: number | null; // cm
+  gender: 'male' | 'female' | 'other' | null;
+
+  // Screen 2: Trainingserfahrung
+  fitness_level: 'beginner' | 'intermediate' | 'advanced' | null;
+  training_experience_months: number | null;
+  available_training_days: number | null; // 1-7
+  has_gym_access: boolean;
+  home_equipment: string[]; // ['barbell', 'dumbbells', ...]
+
+  // Screen 3: Ziele
+  primary_goal:
+    | 'strength'
+    | 'hypertrophy'
+    | 'endurance'
+    | 'weight_loss'
+    | 'general_fitness'
+    | null;
+
+  // Screen 4: Lifestyle
+  sleep_hours_avg: number | null; // 6.5, 7.0, etc.
+  stress_level: number | null; // 1-10
+
+  // Screen 5: Unverträglichkeiten (optional)
+  intolerances: Array<{
+    intolerance_id: string;
+    severity: 'mild' | 'moderate' | 'severe' | 'life_threatening';
+  }>;
+}
+
+/**
+ * Onboarding Context Type
+ * Provides state and actions for managing the onboarding flow
+ */
+export interface OnboardingContextType {
+  // State
+  data: OnboardingData;
+  currentStep: number;
+  totalSteps: number;
+  isSubmitting: boolean;
+  error: string | null;
+  progress: number;
+
+  // Actions
+  updateData: (updates: Partial<OnboardingData>) => void;
+  nextStep: () => void;
+  previousStep: () => void;
+  goToStep: (step: number) => void;
+  submitOnboarding: () => Promise<void>;
+
+  // Validation
+  isStepValid: (step: number) => boolean;
+  getStepErrors: (step: number) => string[];
+}
+
+/**
+ * Initial onboarding data with default values
+ */
+const initialData: OnboardingData = {
+  // Screen 1
+  age: null,
+  weight: null,
+  height: null,
+  gender: null,
+
+  // Screen 2
+  fitness_level: null,
+  training_experience_months: null,
+  available_training_days: null,
+  has_gym_access: true,
+  home_equipment: [],
+
+  // Screen 3
+  primary_goal: null,
+
+  // Screen 4
+  sleep_hours_avg: null,
+  stress_level: null,
+
+  // Screen 5
+  intolerances: [],
+};
+
+const OnboardingContext = createContext<OnboardingContextType | undefined>(
+  undefined
+);
+
+interface OnboardingProviderProps {
+  children: ReactNode;
+}
+
+/**
+ * Onboarding Provider Component
+ * Manages state and validation for the 6-step onboarding flow
+ */
+export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
+  children,
+}) => {
+  const [data, setData] = useState<OnboardingData>(initialData);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const totalSteps = 6;
+
+  /**
+   * Update onboarding data with partial updates
+   */
+  const updateData = (updates: Partial<OnboardingData>) => {
+    setData((prev) => ({ ...prev, ...updates }));
+  };
+
+  /**
+   * Validate a specific step based on its requirements
+   */
+  const isStepValid = (step: number): boolean => {
+    switch (step) {
+      case 1:
+        // NUR Basisdaten prüfen (age, weight, height, gender)
+        return !!(
+          data.age &&
+          data.age >= 13 &&
+          data.age <= 120 &&
+          data.weight &&
+          data.weight > 0 &&
+          data.height &&
+          data.height > 0 &&
+          data.gender
+        );
+        // fitness_level gehört NICHT hier!
+
+      case 2:
+        // HIER wird fitness_level geprüft
+        return !!(
+          data.fitness_level &&
+          data.training_experience_months !== null &&
+          data.available_training_days &&
+          data.available_training_days >= 1 &&
+          data.available_training_days <= 7
+        );
+
+      case 3:
+        return !!data.primary_goal;
+
+      case 4:
+        return !!(
+          data.sleep_hours_avg &&
+          data.sleep_hours_avg >= 3 &&
+          data.sleep_hours_avg <= 12 &&
+          data.stress_level &&
+          data.stress_level >= 1 &&
+          data.stress_level <= 10
+        );
+
+      case 5:
+        // Optional screen, always valid
+        return true;
+
+      case 6:
+        // Summary screen, check all previous steps
+        return (
+          isStepValid(1) &&
+          isStepValid(2) &&
+          isStepValid(3) &&
+          isStepValid(4)
+        );
+
+      default:
+        return false;
+    }
+  };
+
+  /**
+   * Get validation error messages for a specific step
+   * @returns Array of German error messages
+   */
+  const getStepErrors = (step: number): string[] => {
+    const errors: string[] = [];
+
+    switch (step) {
+      case 1:
+        // NUR Basisdaten Fehler
+        if (!data.age) {
+          errors.push('Alter ist erforderlich');
+        } else if (data.age < 13) {
+          errors.push('Du musst mindestens 13 Jahre alt sein');
+        } else if (data.age > 120) {
+          errors.push('Bitte gib ein gültiges Alter ein');
+        }
+
+        if (!data.weight) {
+          errors.push('Gewicht ist erforderlich');
+        } else if (data.weight <= 0) {
+          errors.push('Gewicht muss größer als 0 sein');
+        }
+
+        if (!data.height) {
+          errors.push('Größe ist erforderlich');
+        } else if (data.height <= 0) {
+          errors.push('Größe muss größer als 0 sein');
+        }
+
+        if (!data.gender) {
+          errors.push('Geschlecht ist erforderlich');
+        }
+        break;
+        // fitness_level NICHT hier!
+
+      case 2:
+        // HIER kommen fitness_level Fehler
+        if (!data.fitness_level) {
+          errors.push('Trainingslevel ist erforderlich');
+        }
+        if (data.training_experience_months === null) {
+          errors.push('Trainingserfahrung ist erforderlich');
+        }
+        if (!data.available_training_days) {
+          errors.push('Verfügbare Trainingstage sind erforderlich');
+        } else if (
+          data.available_training_days < 1 ||
+          data.available_training_days > 7
+        ) {
+          errors.push('Trainingstage müssen zwischen 1 und 7 liegen');
+        }
+        break;
+
+      case 3:
+        if (!data.primary_goal) {
+          errors.push('Trainingsziel ist erforderlich');
+        }
+        break;
+
+      case 4:
+        if (!data.sleep_hours_avg) {
+          errors.push('Durchschnittliche Schlafstunden sind erforderlich');
+        } else if (data.sleep_hours_avg < 3 || data.sleep_hours_avg > 12) {
+          errors.push('Schlafstunden müssen zwischen 3 und 12 liegen');
+        }
+
+        if (!data.stress_level) {
+          errors.push('Stress-Level ist erforderlich');
+        } else if (data.stress_level < 1 || data.stress_level > 10) {
+          errors.push('Stress-Level muss zwischen 1 und 10 liegen');
+        }
+        break;
+
+      case 6:
+        // Check all previous steps for summary
+        const allErrors = [
+          ...getStepErrors(1),
+          ...getStepErrors(2),
+          ...getStepErrors(3),
+          ...getStepErrors(4),
+        ];
+        return allErrors;
+    }
+
+    return errors;
+  };
+
+  /**
+   * Move to the next step if current step is valid
+   */
+  const nextStep = () => {
+    // DEBUG - TEMPORÄR
+    console.log('🔍 DEBUG - Current Step:', currentStep);
+    console.log('🔍 Data:', {
+      age: data.age,
+      weight: data.weight,
+      height: data.height,
+      gender: data.gender,
+    });
+    console.log('🔍 Step Valid?', isStepValid(currentStep));
+    console.log('🔍 Errors:', getStepErrors(currentStep));
+    // ENDE DEBUG
+
+    if (!isStepValid(currentStep)) {
+      const errors = getStepErrors(currentStep);
+      setError(errors[0]); // Show first error
+      return;
+    }
+
+    if (currentStep < totalSteps) {
+      setCurrentStep((prev) => prev + 1);
+      setError(null);
+    }
+  };
+
+  /**
+   * Move to the previous step
+   */
+  const previousStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep((prev) => prev - 1);
+      setError(null);
+    }
+  };
+
+  /**
+   * Jump to a specific step
+   */
+  const goToStep = (step: number) => {
+    if (step >= 1 && step <= totalSteps) {
+      setCurrentStep(step);
+      setError(null);
+    }
+  };
+
+  /**
+   * Calculate progress percentage
+   */
+  const getProgress = (): number => {
+    return (currentStep / totalSteps) * 100;
+  };
+
+  /**
+   * Submit onboarding data to Supabase
+   * Creates user profile with all collected information
+   */
+  const submitOnboarding = async () => {
+    // Validate all steps before submission
+    if (!isStepValid(6)) {
+      const errors = getStepErrors(6);
+      setError(errors[0]);
+      throw new Error(errors[0]);
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // Get current authenticated user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error('Nicht angemeldet');
+      }
+
+      // Use profile service to create profile with all onboarding data
+      const { profile, error: profileError } = await createProfile(user.id, data);
+
+      if (profileError) {
+        throw new Error(profileError.message);
+      }
+
+      if (!profile) {
+        throw new Error('Profil konnte nicht erstellt werden');
+      }
+
+      // Success - navigation will be handled in the screen component
+    } catch (err: any) {
+      const errorMessage = err.message || 'Fehler beim Speichern';
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const value: OnboardingContextType = {
+    data,
+    currentStep,
+    totalSteps,
+    isSubmitting,
+    error,
+    progress: getProgress(),
+    updateData,
+    nextStep,
+    previousStep,
+    goToStep,
+    submitOnboarding,
+    isStepValid,
+    getStepErrors,
+  };
+
+  return (
+    <OnboardingContext.Provider value={value}>
+      {children}
+    </OnboardingContext.Provider>
+  );
+};
+
+/**
+ * Custom hook to use Onboarding Context
+ * Must be used within OnboardingProvider
+ *
+ * @example
+ * ```tsx
+ * const { data, updateData, nextStep } = useOnboarding();
+ *
+ * <Input
+ *   value={data.age?.toString() || ''}
+ *   onChangeText={(text) => updateData({ age: parseInt(text) || null })}
+ * />
+ * ```
+ */
+export const useOnboarding = (): OnboardingContextType => {
+  const context = useContext(OnboardingContext);
+  if (!context) {
+    throw new Error('useOnboarding must be used within OnboardingProvider');
+  }
+  return context;
+};

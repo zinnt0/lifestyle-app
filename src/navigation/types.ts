@@ -19,15 +19,28 @@ export type AuthStackParamList = {
 };
 
 /**
+ * Onboarding Stack Parameter List
+ *
+ * Screens in the onboarding flow (6 screens)
+ */
+export type OnboardingStackParamList = {
+  OnboardingStep1: undefined;
+  OnboardingStep2: undefined;
+  OnboardingStep3: undefined;
+  OnboardingStep4: undefined;
+  OnboardingStep5: undefined;
+  OnboardingSummary: undefined;
+};
+
+/**
  * Main App Stack Parameter List
  *
- * Screens accessible after authentication
+ * Screens accessible after authentication and onboarding completion
  */
-export type AppStackParamList = {
+export type MainStackParamList = {
   Home: undefined;
   Profile: undefined;
   Settings: undefined;
-  Onboarding: undefined;
 };
 
 /**

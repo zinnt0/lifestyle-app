@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, View, ViewStyle, Platform } from "react-native";
+import { StyleSheet, View, ViewStyle, Platform, TouchableOpacity } from "react-native";
 
 // Design System Constants
 const COLORS = {
@@ -28,6 +28,8 @@ interface CardProps {
   elevation?: CardElevation;
   /** Card style override */
   style?: ViewStyle;
+  /** Optional press handler to make card touchable */
+  onPress?: () => void;
 }
 
 /**
@@ -49,6 +51,7 @@ export const Card: React.FC<CardProps> = ({
   padding = "medium",
   elevation = "small",
   style,
+  onPress,
 }) => {
   const getPaddingStyle = (): ViewStyle => {
     switch (padding) {
@@ -106,14 +109,31 @@ export const Card: React.FC<CardProps> = ({
     }
   };
 
+  const cardStyle = [
+    styles.card,
+    getPaddingStyle(),
+    getElevationStyle(),
+    style,
+  ];
+
+  // If onPress is provided, wrap in TouchableOpacity
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        style={cardStyle}
+        onPress={onPress}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+      >
+        {children}
+      </TouchableOpacity>
+    );
+  }
+
+  // Otherwise, render as regular View
   return (
     <View
-      style={[
-        styles.card,
-        getPaddingStyle(),
-        getElevationStyle(),
-        style,
-      ]}
+      style={cardStyle}
       accessibilityRole="none"
     >
       {children}
