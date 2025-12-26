@@ -2,20 +2,22 @@
  * App Navigator
  *
  * Root navigation structure for the entire app.
- * Handles switching between authenticated and unauthenticated flows.
+ * Handles switching between:
+ * - Auth flow (not authenticated)
+ * - Onboarding flow (authenticated but onboarding not completed)
+ * - Main app flow (authenticated and onboarding completed)
  * Includes deep link configuration for email confirmation and password reset.
  */
 
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AuthNavigator } from "./AuthNavigator";
+import { OnboardingNavigator } from "./OnboardingNavigator";
+import { MainNavigator } from "./MainNavigator";
 import { getCurrentUser, onAuthStateChange } from "../services/auth.service";
-import type { RootStackParamList } from "./types";
+import { isOnboardingCompleted } from "../services/profile.service";
 import type { AuthUser } from "../services/auth.service";
-
-const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 /**
  * Deep Link Configuration
@@ -29,23 +31,13 @@ const linking = {
   prefixes: ["lifestyleapp://", "https://lifestyleapp.com"],
   config: {
     screens: {
-      Auth: {
-        path: "auth",
-        screens: {
-          Login: "login",
-          Register: "register",
-          AuthCallback: "callback",
-          ForgotPassword: "forgot-password",
-        },
-      },
-      App: {
-        path: "app",
-        screens: {
-          Home: "home",
-          Profile: "profile",
-          Settings: "settings",
-        },
-      },
+      Login: "login",
+      Register: "register",
+      AuthCallback: "callback",
+      ForgotPassword: "forgot-password",
+      Home: "home",
+      Profile: "profile",
+      Settings: "settings",
     },
   },
 };
@@ -55,23 +47,30 @@ const linking = {
  *
  * Main navigation component that:
  * 1. Checks authentication status on mount
- * 2. Listens to auth state changes
- * 3. Switches between Auth and App stacks
- * 4. Handles deep links for email confirmation
+ * 2. Checks onboarding completion status
+ * 3. Listens to auth state changes
+ * 4. Routes to correct navigator:
+ *    - Not authenticated → AuthNavigator
+ *    - Authenticated + onboarding NOT complete → OnboardingNavigator
+ *    - Authenticated + onboarding complete → MainNavigator
+ * 5. Handles deep links for email confirmation
  */
 export const AppNavigator: React.FC = () => {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check initial auth state
+  // Check initial auth and onboarding state
   useEffect(() => {
-    checkAuthState();
+    checkAuthAndOnboarding();
   }, []);
 
   // Listen to auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((authUser) => {
+    const unsubscribe = onAuthStateChange(async (authUser) => {
       setUser(authUser);
+      // Re-check onboarding when auth state changes
+      await checkAuthAndOnboarding();
     });
 
     return () => {
@@ -80,21 +79,37 @@ export const AppNavigator: React.FC = () => {
   }, []);
 
   /**
-   * Check current authentication state
+   * Check current authentication and onboarding state
    */
-  const checkAuthState = async () => {
+  const checkAuthAndOnboarding = async () => {
+    setIsLoading(true);
+
     try {
+      // 1. Check if user is logged in
       const currentUser = await getCurrentUser();
+
+      if (!currentUser) {
+        setUser(null);
+        setHasCompletedOnboarding(false);
+        setIsLoading(false);
+        return;
+      }
+
       setUser(currentUser);
+
+      // 2. Check if onboarding is completed
+      const completed = await isOnboardingCompleted(currentUser.id);
+      setHasCompletedOnboarding(completed);
     } catch (error) {
-      console.error("Error checking auth state:", error);
+      console.error("Error checking auth/onboarding:", error);
       setUser(null);
+      setHasCompletedOnboarding(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Show loading screen while checking auth state
+  // Show loading screen while checking auth and onboarding
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -103,47 +118,25 @@ export const AppNavigator: React.FC = () => {
     );
   }
 
-  return (
-    <NavigationContainer linking={linking}>
-      <RootStack.Navigator
-        screenOptions={{
-          headerShown: false,
-          animation: "fade",
-        }}
-      >
-        {user ? (
-          // Authenticated: Show App Stack
-          // TODO: Create and add AppStack when implementing main app screens
-          <RootStack.Screen
-            name="App"
-            component={PlaceholderAppScreen}
-            options={{ headerShown: false }}
-          />
-        ) : (
-          // Not authenticated: Show Auth Stack
-          <RootStack.Screen
-            name="Auth"
-            component={AuthNavigator}
-            options={{ headerShown: false }}
-          />
-        )}
-      </RootStack.Navigator>
-    </NavigationContainer>
-  );
-};
+  /**
+   * Determine which navigator to show based on auth and onboarding status
+   */
+  const getNavigator = () => {
+    // Not authenticated → Show Auth Stack
+    if (!user) {
+      return <AuthNavigator />;
+    }
 
-/**
- * Placeholder App Screen
- *
- * Temporary screen shown when user is authenticated.
- * Replace this with actual AppStack once main screens are built.
- */
-const PlaceholderAppScreen: React.FC = () => {
-  return (
-    <View style={styles.placeholderContainer}>
-      <ActivityIndicator size="large" color="#007AFF" />
-    </View>
-  );
+    // Authenticated but onboarding not complete → Show Onboarding Stack
+    if (!hasCompletedOnboarding) {
+      return <OnboardingNavigator />;
+    }
+
+    // Authenticated and onboarding complete → Show Main App Stack
+    return <MainNavigator />;
+  };
+
+  return <NavigationContainer linking={linking}>{getNavigator()}</NavigationContainer>;
 };
 
 const styles = StyleSheet.create({

@@ -20,22 +20,33 @@ src/
 ├── lib/              # Third-party library configs
 │   └── supabase.ts   # ✅ Supabase client mit AsyncStorage
 ├── services/         # Business logic
-│   └── auth.service.ts  # ✅ Authentication service
+│   ├── auth.service.ts     # ✅ Authentication service
+│   └── profile.service.ts  # ✅ Profile & onboarding service
+├── contexts/         # React Context providers
+│   └── OnboardingContext.tsx  # ✅ 6-step onboarding state
 ├── utils/            # Utilities
 │   └── validation.ts    # ✅ Form validation functions
 ├── hooks/            # Custom React hooks
 │   └── useForm.ts       # ✅ Form state management
 ├── screens/          # Screen components
-│   ├── auth/         # ⏸️ Login, Register, Onboarding
+│   ├── onboarding/   # ✅ 6 Onboarding Screens + Summary (2025-12-26)
+│   ├── app/          # ✅ Main app screens (Home, Profile) (2025-12-26)
+│   ├── auth/         # ⏸️ Login, Register
 │   ├── training/     # ⏸️ Training screens
 │   └── nutrition/    # ⏸️ Nutrition screens
 ├── components/       # Reusable UI components
-│   └── ui/           # ✅ Button, Card, Input, Text
+│   └── ui/           # ✅ 13 UI Components (2025-12-26)
 ├── types/            # ⏸️ TypeScript types
 ├── tests/            # Test files
 │   ├── auth.test.simple.ts   # ✅ Auth tests
 │   └── validation.test.ts    # ✅ Validation tests (59 tests)
-└── navigation/       # ⏸️ Navigation setup
+└── navigation/       # ✅ Complete navigation system (2025-12-26)
+    ├── AppNavigator.tsx          # ✅ Root navigator (Auth/Onboarding/Main routing)
+    ├── OnboardingNavigator.tsx   # ✅ Onboarding flow coordinator
+    ├── MainNavigator.tsx         # ✅ Main app navigation (Home/Profile)
+    ├── AuthNavigator.tsx         # ⏸️ Auth flow (Login/Register)
+    ├── types.ts                  # ✅ Navigation type definitions
+    └── index.ts                  # ✅ Navigation exports
 ```
 
 ## Supabase Schema
@@ -54,12 +65,20 @@ src/
 - `.env`: EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY
 - `src/lib/supabase.ts`: Supabase client setup (✅ implementiert mit AsyncStorage)
 - `src/services/auth.service.ts`: Auth logic (✅ komplett mit 7 Funktionen)
+- `src/services/profile.service.ts`: Profile & onboarding logic (✅ komplett mit 8 Funktionen)
+- `src/contexts/OnboardingContext.tsx`: 6-step onboarding state management (✅ implementiert)
 - `src/utils/validation.ts`: Form validation utilities (✅ implementiert)
 - `src/hooks/useForm.ts`: Custom form hook (✅ implementiert)
-- `src/components/ui/`: Button, Card, Input, Text (✅ implementiert)
-- `src/navigation/AppNavigator.tsx`: Navigation (⏸️ geplant)
+- `src/components/ui/`: 13 UI Components (✅ implementiert 2025-12-26)
+- `src/screens/onboarding/`: 6 Onboarding Screens + Summary (✅ implementiert 2025-12-26)
+- `src/screens/app/`: Main app screens - Home, Profile (✅ implementiert 2025-12-26)
+- `src/navigation/`: Complete navigation system (✅ implementiert 2025-12-26)
+  - `AppNavigator.tsx`: Root navigator with auth/onboarding/main flow routing
+  - `OnboardingNavigator.tsx`: Onboarding flow manager
+  - `MainNavigator.tsx`: Main app stack navigator
+  - `types.ts`: TypeScript navigation parameter lists
 
-## Implementierte Features (Stand: 2025-12-25)
+## Implementierte Features (Stand: 2025-12-26)
 
 ### 1. Authentication System (✅ Komplett)
 
@@ -107,31 +126,488 @@ const { values, errors, isSubmitting, handleChange, handleSubmit, reset } = useF
 
 **Design-Entscheidung**: Keine externe Validation Library (Zod/Yup) für kleineren Bundle
 
-### 3. UI Components (✅ Basis-Set)
+### 3. UI Components (✅ Komplett - 2025-12-26)
 
 **Location**: `src/components/ui/`
 
+**Basis Components** (ursprünglich):
 - `Button.tsx` - Variants: primary, secondary, outline
 - `Card.tsx` - Container component
 - `Input.tsx` - Text input mit error state
 - `Text.tsx` - Typography mit size variants
 
-Alle mit TypeScript interfaces und variant-based styling.
+**Neue Components** (2025-12-26):
+- `ProgressBar.tsx` - Progress Indicator (0-100% mit animated fill)
+- `RadioGroup.tsx` - Radio Button Group mit Vertical/Horizontal Layout
+- `NumberPicker.tsx` - +/- Number Selector mit Min/Max bounds
+- `MultiSelectChips.tsx` - Multi-Select Chips mit horizontal scrollbar
+- `GoalCard.tsx` - Large Goal Selection Card mit Icon & Checkmark
+- `Slider.tsx` - React Native Slider Wrapper mit Labels & Value Formatter
+- `index.tsx` - Central export für alle UI Components
+
+**Design System**:
+- Consistent `COLORS` object (primary, secondary, text, border, error, success)
+- `SPACING` constants (xs: 4, sm: 8, md: 16, lg: 24, xl: 32)
+- `FONT_SIZES` (sm: 12, md: 14, lg: 16, xl: 18, xxl: 24)
+- Style composition via `style` prop override
+
+**Features**:
+- TypeScript strict mode mit vollständigen Interfaces
+- Accessibility support (accessibilityLabel, accessibilityRole)
+- Error states & validation feedback
+- Loading states wo relevant
+- Disabled states mit visueller Rückmeldung
+- Native Performance (keine Web-Dependencies)
+
+### 4. Profile Service (✅ Komplett) - **NEU 2025-12-26**
+
+**Datei**: `src/services/profile.service.ts`
+
+**Zweck**: Service Layer für Profile-Management und Onboarding-Daten
+
+**Funktionen**:
+- `createProfile(data)` - Erstellt/aktualisiert Profil mit Onboarding-Daten
+- `getProfile(userId)` - Lädt User-Profil mit Intolerances
+- `updateProfile(userId, updates)` - Aktualisiert spezifische Profil-Felder
+- `getIntolerancesCatalog()` - Lädt Intolerances Katalog aus DB
+- `saveUserIntolerances(userId, intoleranceIds)` - Speichert User Intolerances
+- `getUserIntolerances(userId)` - Holt User Intolerances mit Details
+- `isOnboardingCompleted(userId)` - Prüft Onboarding-Status
+- `getProfileCompleteness(userId)` - Berechnet Profil-Vollständigkeit (0-100%)
+
+**Features**:
+- Deutsche Fehlermeldungen mit automatischem Error-Mapping
+- TypeScript strict typing
+- Service Layer Pattern (Trennung von UI und Business Logic)
+- Integration mit Supabase (profiles + user_intolerances tables)
+- Wiederverwendbare Funktionen für verschiedene Screens
+
+**Beispiel-Verwendung**:
+```typescript
+import { createProfile, getProfile } from '@/services/profile.service';
+
+// Profil erstellen nach Onboarding
+const result = await createProfile({
+  gender: 'male',
+  age: 28,
+  height: 180,
+  weight: 75,
+  goal: 'muscle_gain',
+  intolerances: ['lactose', 'gluten']
+});
+
+// Profil laden
+const profile = await getProfile(userId);
+```
+
+**Response Format**: `{ data: T | null, error: string | null }`
+
+### 5. Onboarding Screens (✅ Komplett - 2025-12-26)
+
+**Location**: `src/screens/onboarding/`
+
+**6 Onboarding Screens**:
+
+1. **OnboardingScreen1.tsx** - Basisdaten
+   - Age (NumberPicker: 13-120)
+   - Weight (NumberPicker: 40-200 kg)
+   - Height (NumberPicker: 140-220 cm)
+   - Gender (RadioGroup: Male/Female/Diverse)
+
+2. **OnboardingScreen2.tsx** - Trainingserfahrung
+   - Training Level (RadioGroup: Beginner/Intermediate/Advanced/Elite)
+   - Years of Experience (NumberPicker: 0-50)
+   - Days per Week (NumberPicker: 1-7)
+   - Equipment Access (RadioGroup: Gym/Home/Both/Bodyweight)
+
+3. **OnboardingScreen3.tsx** - Fitnessziele
+   - Goal Selection (5 GoalCards):
+     - 💪 Kraft aufbauen
+     - 🏋️ Muskelaufbau
+     - 🔥 Gewicht verlieren
+     - 🏃 Ausdauer steigern
+     - 🌟 Allgemeine Fitness
+   - Single-Select mit Icon & Checkmark
+
+4. **OnboardingScreen4.tsx** - Lifestyle
+   - Sleep Hours per Night (Slider: 4-12h mit 0.5h steps)
+   - Stress Level (Slider: 1-10)
+
+5. **OnboardingScreen5.tsx** - Unverträglichkeiten
+   - Lädt Katalog aus Supabase (`intolerances_catalog`)
+   - MultiSelectChips für Selection
+   - Optional (Skip möglich)
+   - Error Handling mit Retry-Button
+
+6. **OnboardingSummary.tsx** - Zusammenfassung & Submit
+   - Zeigt alle Eingaben in Kategorien
+   - "Bearbeiten" Links zu jedem Screen via `goToStep()`
+   - Submit Button → `submitOnboarding()` → Supabase
+
+**Gemeinsame Features**:
+- ✅ Integration mit `OnboardingContext` via `useOnboarding()` hook
+- ✅ Automatische Validierung vor `nextStep()`
+- ✅ ProgressBar in jedem Screen (currentStep / totalSteps * 100)
+- ✅ KeyboardAvoidingView für iOS/Android Keyboard-Handling
+- ✅ ScrollView für alle Inhalte (responsive auf kleinen Screens)
+- ✅ Deutsche Fehlermeldungen
+- ✅ Loading States (Screen 5 beim Laden, Summary beim Submit)
+- ✅ Error Handling mit User-Feedback
+- ✅ Navigation: `nextStep()`, `previousStep()`, `goToStep(n)`
+
+**Supabase Integration**:
+- Screen 5: `getIntolerancesCatalog()` lädt Optionen
+- Summary: `submitOnboarding()` → `createProfile()` → Profil in DB
+
+**Export Structure**:
+```typescript
+// src/screens/onboarding/index.tsx
+export { default as OnboardingScreen1 } from './OnboardingScreen1';
+export { default as OnboardingScreen2 } from './OnboardingScreen2';
+// ... etc
+```
+
+**Usage Example**:
+```typescript
+import { OnboardingScreen1 } from '@/screens/onboarding';
+
+<OnboardingProvider>
+  <OnboardingScreen1 />
+</OnboardingProvider>
+```
+
+**Dokumentation**: `src/screens/onboarding/README.md`
+
+### 6. Onboarding Context (✅ Komplett - 2025-12-26)
+
+**Datei**: `src/contexts/OnboardingContext.tsx`
+
+**Zweck**: Zentrale State-Management für 6-stufigen Onboarding-Flow
+
+**Architektur**:
+- React Context + useReducer Pattern
+- 6 separate Screens mit eigener Validation
+- Integration mit ProfileService
+- Progress Tracking (0-100%)
+
+**State Structure**:
+```typescript
+{
+  currentScreen: number,           // 0-5
+  data: {
+    gender: string | null,
+    age: number | null,
+    height: number | null,
+    weight: number | null,
+    goal: string | null,
+    intolerances: string[]
+  },
+  errors: Record<string, string>,  // Field-level errors
+  isSubmitting: boolean
+}
+```
+
+**Actions**:
+- `UPDATE_FIELD` - Update einzelnes Feld
+- `NEXT_SCREEN` - Nächster Screen (mit Validation)
+- `PREVIOUS_SCREEN` - Zurück
+- `SET_ERROR` - Fehler setzen
+- `CLEAR_ERROR` - Fehler löschen
+- `SET_SUBMITTING` - Loading state
+- `RESET` - Zurücksetzen
+
+**Provider Usage**:
+```typescript
+<OnboardingProvider>
+  <OnboardingScreen />
+</OnboardingProvider>
+```
+
+**Hook Usage**:
+```typescript
+const {
+  state,
+  updateField,
+  nextScreen,
+  previousScreen,
+  submitOnboarding,
+  progress
+} = useOnboarding();
+
+// Update field
+updateField('age', 28);
+
+// Navigate
+await nextScreen(); // Validiert automatisch
+
+// Submit
+await submitOnboarding(); // Calls ProfileService
+```
+
+**Validation**:
+- Screen-spezifische Validation vor Navigation
+- Deutsche Fehlermeldungen
+- Automatisches Error-Clearing bei Field-Update
+
+**Integration mit ProfileService**:
+```typescript
+// In submitOnboarding()
+const result = await createProfile({
+  gender: state.data.gender!,
+  age: state.data.age!,
+  height: state.data.height!,
+  weight: state.data.weight!,
+  goal: state.data.goal!,
+  intolerances: state.data.intolerances
+});
+```
+
+### 7. Navigation System (✅ Komplett - 2025-12-26)
+
+**Location**: `src/navigation/`
+
+**Architektur**: Drei-Schicht Navigation (Auth → Onboarding → Main App)
+
+#### 7.1 AppNavigator (Root Navigator)
+
+**Datei**: `src/navigation/AppNavigator.tsx`
+
+**Zweck**: Root-Level Navigation die zwischen drei Hauptflows routet
+
+**Features**:
+- ✅ Authentication State Management via `onAuthStateChange()`
+- ✅ Onboarding Completion Check via `isOnboardingCompleted()`
+- ✅ Automatic Flow Routing basierend auf User Status:
+  - Not authenticated → `AuthNavigator`
+  - Authenticated + Onboarding incomplete → `OnboardingNavigator`
+  - Authenticated + Onboarding complete → `MainNavigator`
+- ✅ Loading State während Auth/Onboarding Check
+- ✅ Deep Link Configuration für Email Confirmation & Password Reset
+- ✅ NavigationContainer Integration
+
+**State Logic**:
+```typescript
+// 1. Check auth on mount
+useEffect(() => checkAuthAndOnboarding() }, []);
+
+// 2. Listen to auth changes
+useEffect(() => {
+  const unsubscribe = onAuthStateChange(async (authUser) => {
+    setUser(authUser);
+    await checkAuthAndOnboarding();
+  });
+  return () => unsubscribe();
+}, []);
+
+// 3. Route to correct navigator
+if (!user) return <AuthNavigator />;
+if (!hasCompletedOnboarding) return <OnboardingNavigator />;
+return <MainNavigator />;
+```
+
+**Deep Links**:
+- `lifestyleapp://auth/callback` - Email Confirmation
+- `lifestyleapp://auth/forgot-password` - Password Reset
+- `lifestyleapp://login` - Login Screen
+- `lifestyleapp://register` - Register Screen
+- `lifestyleapp://home` - Home Screen
+- `lifestyleapp://profile` - Profile Screen
+
+**Integration**:
+- Importiert in `App.tsx` als Root Component
+- Wrapped in `NavigationContainer`
+- Services: `auth.service.ts`, `profile.service.ts`
+
+#### 7.2 OnboardingNavigator
+
+**Datei**: `src/navigation/OnboardingNavigator.tsx`
+
+**Zweck**: Managed den 6-Screen Onboarding Flow
+
+**Architektur**:
+- State-based Navigation (nicht Stack-based)
+- OnboardingContext managed `currentStep` (1-6)
+- Switch-Statement rendert passenden Screen basierend auf Step
+
+**Implementation**:
+```typescript
+<OnboardingProvider>
+  <OnboardingScreens />  {/* Renders screen based on currentStep */}
+</OnboardingProvider>
+```
+
+**Screen Mapping**:
+- Step 1 → OnboardingScreen1 (Basisdaten)
+- Step 2 → OnboardingScreen2 (Trainingserfahrung)
+- Step 3 → OnboardingScreen3 (Fitnessziele)
+- Step 4 → OnboardingScreen4 (Lifestyle)
+- Step 5 → OnboardingScreen5 (Unverträglichkeiten)
+- Step 6 → OnboardingSummary (Submit)
+
+**Navigation Methods**:
+- `nextStep()` - Nächster Screen (mit Validation)
+- `previousStep()` - Vorheriger Screen
+- `goToStep(n)` - Direkter Sprung zu Screen (für Edit-Links in Summary)
+
+**Exit Flow**:
+- Nach Success in `submitOnboarding()` → AppNavigator checkt `isOnboardingCompleted()` → Auto-Route zu MainNavigator
+
+#### 7.3 MainNavigator
+
+**Datei**: `src/navigation/MainNavigator.tsx`
+
+**Zweck**: React Navigation Stack für Main App Screens
+
+**Stack Screens**:
+- Home (`src/screens/app/HomeScreen.tsx`) - Dashboard/Landing
+- Profile (`src/screens/app/ProfileScreen.tsx`) - User Profile & Settings
+
+**Configuration**:
+```typescript
+<Stack.Navigator
+  screenOptions={{
+    headerShown: true,
+    animation: "slide_from_right",
+  }}
+  initialRouteName="Home"
+>
+```
+
+**Features**:
+- ✅ Native Stack Navigator (performanter als Stack)
+- ✅ iOS Large Title Support
+- ✅ Slide Animation
+- ✅ Header shown by default
+
+**Future Screens** (geplant):
+- Training
+- Nutrition
+- Progress/Stats
+- Settings
+
+#### 7.4 Navigation Types
+
+**Datei**: `src/navigation/types.ts`
+
+**TypeScript Param Lists für Type-Safe Navigation**:
+
+```typescript
+// Auth Flow
+export type AuthStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  ForgotPassword: undefined;
+  Welcome: undefined;
+  AuthCallback: undefined;
+};
+
+// Onboarding Flow (State-based, keine Params)
+export type OnboardingStackParamList = {
+  OnboardingStep1: undefined;
+  OnboardingStep2: undefined;
+  OnboardingStep3: undefined;
+  OnboardingStep4: undefined;
+  OnboardingStep5: undefined;
+  OnboardingSummary: undefined;
+};
+
+// Main App Flow
+export type MainStackParamList = {
+  Home: undefined;
+  Profile: undefined;
+  Settings: undefined;
+};
+
+// Root Level
+export type RootStackParamList = {
+  Auth: undefined;
+  App: undefined;
+};
+```
+
+**Usage in Screens**:
+```typescript
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { MainStackParamList } from '@/navigation/types';
+
+type HomeScreenProps = NativeStackScreenProps<MainStackParamList, 'Home'>;
+
+const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
+  navigation.navigate('Profile'); // Type-safe!
+};
+```
+
+#### 7.5 Navigation Exports
+
+**Datei**: `src/navigation/index.ts`
+
+**Zentrale Exports**:
+```typescript
+export { AppNavigator } from './AppNavigator';
+export { OnboardingNavigator } from './OnboardingNavigator';
+export { MainNavigator } from './MainNavigator';
+export * from './types';
+```
+
+**Usage**:
+```typescript
+import { AppNavigator } from '@/navigation';
+// oder
+import { MainStackParamList } from '@/navigation';
+```
+
+#### Navigation Flow Diagram
+
+```
+App Start
+    ↓
+AppNavigator (Root)
+    ├─ getCurrentUser()
+    ├─ isOnboardingCompleted()
+    ↓
+┌──────────────────┬─────────────────────┬──────────────────┐
+│ Not Authenticated│ Auth + No Onboarding│ Auth + Onboarding│
+│                  │                     │                  │
+↓                  ↓                     ↓
+AuthNavigator      OnboardingNavigator   MainNavigator
+(Login, Register)  (6 Screens)          (Home, Profile)
+    ↓                     ↓
+Sign In/Up         submitOnboarding()
+    ↓                     ↓
+OnboardingNavigator  → MainNavigator
+```
+
+**Design-Entscheidung**: State-Based Onboarding statt Stack
+- **Warum**: Bessere UX für Multi-Step Forms (keine Back-Stack Confusion)
+- **Wie**: OnboardingContext managed `currentStep`, Navigator rendert Screen via Switch
+- **Vorteil**: `goToStep()` erlaubt direkten Sprung (z.B. Edit-Links in Summary)
+- **Trade-off**: Kein nativer Back-Button Support (muss `previousStep()` nutzen)
 
 ## Aktuelle Phase: MVP
 
 **Abgeschlossen**:
 - ✅ Authentication Service
 - ✅ Form Validation System
-- ✅ UI Components (Basis)
+- ✅ UI Components (13 Components - 2025-12-26)
 - ✅ Testing Setup
+- ✅ Profile Service (2025-12-26)
+- ✅ Onboarding Context (2025-12-26)
+- ✅ Onboarding Screens (6 Screens + Summary - 2025-12-26)
+- ✅ **Navigation System** (2025-12-26):
+  - ✅ AppNavigator (Root with Auth/Onboarding/Main routing)
+  - ✅ OnboardingNavigator (State-based 6-screen flow)
+  - ✅ MainNavigator (Home/Profile stack)
+  - ✅ Navigation Types (TypeScript param lists)
+- ✅ Main App Screens (Home, Profile - 2025-12-26)
 
-**Diese Woche**:
-- 🔄 Login & Registrierung Screens (verwenden obige Services)
-- 🔄 Onboarding Flow
+**In Arbeit** (Branch: `features/onboarding`):
+- 🔄 Login & Registrierung Screens
+- 🔄 AuthNavigator Implementation
+- 🔄 App.tsx Integration & Testing
+
+**Nächste Schritte**:
+- ⏸️ Auth Screens fertigstellen (Login, Register, ForgotPassword)
 - ⏸️ Trainingsplan-Generator
-
-**Nächste Woche**:
 - ⏸️ Workout Tracking
 - ⏸️ Nutrition Tracking
 
@@ -161,6 +637,82 @@ Alle mit TypeScript interfaces und variant-based styling.
 **Entscheidung**: Separate `services/` für Business Logic
 **Grund**: Trennung von UI und Logik, bessere Testbarkeit
 **Example**: `auth.service.ts` kann ohne UI getestet werden
+**Update 2025-12-26**: `profile.service.ts` für Onboarding-Daten hinzugefügt
+
+### 6. Context + Reducer für Multi-Step Forms
+**Entscheidung**: React Context + useReducer für Onboarding-Flow
+**Grund**:
+- Zentraler State über 6 Screens
+- Validation vor Screen-Wechsel
+- Einfaches Progress-Tracking
+- Kein Redux für MVP nötig
+**Implementation**: `OnboardingContext.tsx` mit 7 Actions
+**Alternative erwogen**: Zustand Library (zu viel für MVP)
+**Future**: Bei mehr komplexen Flows könnte Zustand sinnvoll sein
+
+### 7. Component-Based UI ohne externe UI Library
+**Entscheidung**: Eigene UI Components in `src/components/ui/` statt Library (NativeBase, React Native Paper, etc.)
+**Grund**:
+- Volle Design-Kontrolle
+- Kleinerer Bundle Size
+- Keine Breaking Changes durch Library Updates
+- Native Performance (kein Web-Bridge)
+- Einfach zu customizen für spezifische Use Cases
+**Implementation**: 13 Components mit consistentem Design System
+**Trade-off**: Mehr Entwicklungszeit initial, aber langfristig flexibler
+**Future**: Bei sehr komplexen Components könnte Headless UI (z.B. React Native ARIA) sinnvoll sein
+
+### 8. Multi-Step Onboarding Pattern
+**Entscheidung**: 6 separate Screens statt Single-Page Form
+**Grund**:
+- Bessere UX auf Mobile (weniger overwhelming)
+- Klare Progress-Indication (ProgressBar)
+- Screen-spezifische Validation möglich
+- Einfacher zu navigieren (zurück zu einzelnem Screen)
+- Kleinere Code-Dateien pro Screen
+**Implementation**:
+- Jeder Screen ist eigenständige Component
+- OnboardingContext managed State zentral
+- `goToStep()` für direkte Navigation (z.B. von Summary zurück)
+**Data Flow**: User Input → updateData() → nextStep() validiert → Success: Wechsel → Summary: submitOnboarding() → Supabase
+**Alternative erwogen**: Wizard Component mit Steps (zu eingeschränkt für komplexe Flows)
+
+### 9. Three-Tier Navigation Architecture
+**Entscheidung**: Drei separate Navigator-Schichten (Auth, Onboarding, Main) mit Root-Level Routing
+**Grund**:
+- **Klare Trennung**: Jeder Flow hat eigenen Navigator mit eigener Logik
+- **Zustandsbasierte Navigation**: Root Navigator entscheidet basierend auf Auth + Onboarding Status
+- **Einfache Flow-Kontrolle**: Ein Check in AppNavigator routet zu korrektem Flow
+- **Bessere Performance**: Nur benötigte Screens werden geladen
+- **Type Safety**: Separate ParamLists für jeden Flow
+**Implementation**:
+- `AppNavigator`: Root mit conditionalem Rendering (`!user` → Auth, `!onboarding` → Onboarding, else → Main)
+- `OnboardingNavigator`: State-based (Context `currentStep`) statt Stack
+- `MainNavigator`: Standard React Navigation Stack
+**Alternative erwogen**: Single Stack mit Conditional Screens (zu komplex, schlechtere Type Safety)
+**Trade-off**: Mehr Boilerplate initial, aber langfristig wartbarer
+
+### 10. State-Based vs Stack-Based Navigation für Onboarding
+**Entscheidung**: State-Based Navigation (OnboardingContext `currentStep`) für Onboarding
+**Grund**:
+- **UX**: Kein Back-Stack der User verwirrt (nicht zurück außerhalb von Onboarding)
+- **Progress Control**: `goToStep(n)` erlaubt direkten Sprung (Edit-Links in Summary)
+- **Validation Flow**: Screen-Wechsel nur via `nextStep()` mit Validation-Gate
+- **State Persistence**: Context hält alle Daten zentral (kein Param-Passing zwischen Screens)
+**Implementation**:
+```typescript
+// OnboardingNavigator.tsx
+const OnboardingScreens = () => {
+  const { currentStep } = useOnboarding();
+  switch (currentStep) {
+    case 1: return <OnboardingScreen1 />;
+    case 2: return <OnboardingScreen2 />;
+    // ...
+  }
+};
+```
+**Alternative erwogen**: Stack Navigator mit 6 Screens (komplexere Back-Handling, kein direkter Step-Jump)
+**Trade-off**: Kein nativer Back-Button Support (Android), muss `previousStep()` Button in UI haben
 
 ## Coding Standards
 
