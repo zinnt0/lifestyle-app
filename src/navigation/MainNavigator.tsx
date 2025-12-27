@@ -13,6 +13,7 @@ import type { MainStackParamList } from "./types";
 import { HomeScreen } from "../screens/app/HomeScreen";
 import { ProfileScreen } from "../screens/app/ProfileScreen";
 import { ProfileEditScreen } from "../screens/app/ProfileEditScreen";
+import { DailyCheckinScreen } from "../screens/app/DailyCheckinScreen";
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
@@ -52,6 +53,13 @@ export const MainNavigator: React.FC = () => {
         options={{
           title: "Profil bearbeiten",
           headerBackTitle: "Zurück",
+        }}
+      />
+      <Stack.Screen
+        name="DailyCheckin"
+        component={DailyCheckinScreen}
+        options={{
+          title: "Tägliches Check-in",
         }}
       />
     </Stack.Navigator>

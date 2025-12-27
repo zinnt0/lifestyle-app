@@ -42,6 +42,7 @@ export type MainStackParamList = {
   Profile: undefined;
   ProfileEdit: undefined;
   Settings: undefined;
+  DailyCheckin: undefined;
 };
 
 /**

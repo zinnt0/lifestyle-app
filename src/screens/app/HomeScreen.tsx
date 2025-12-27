@@ -2,15 +2,20 @@
  * Home Screen
  *
  * Main landing screen after onboarding completion.
- * Placeholder for now - will be expanded with main app features.
+ * Displays daily check-in status and recovery score.
  */
 
-import React from "react";
-import { View, Text, StyleSheet, Button } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import React, { useState, useCallback } from "react";
+import { View, Text, StyleSheet, Button, TouchableOpacity } from "react-native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "../../navigation/types";
 import { supabase } from "../../lib/supabase";
+import {
+  getTodayRecoveryWithScore,
+  hasLoggedToday,
+  getRecoveryScoreInterpretation,
+} from "../../services/recovery.service";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   MainStackParamList,
@@ -20,11 +25,43 @@ type HomeScreenNavigationProp = NativeStackNavigationProp<
 /**
  * HomeScreen Component
  *
- * Displays welcome message and provides navigation to other screens.
- * Includes logout functionality.
+ * Displays daily check-in status and recovery score.
+ * Prompts user to complete check-in if not done today.
  */
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
+  const [hasLogged, setHasLogged] = useState(false);
+  const [recoveryScore, setRecoveryScore] = useState<number | null>(null);
+
+  /**
+   * Check if user has logged today and fetch recovery score
+   */
+  const checkTodayLog = useCallback(async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const logged = await hasLoggedToday(user.id);
+    setHasLogged(logged);
+
+    if (logged) {
+      const { recoveryLog } = await getTodayRecoveryWithScore(user.id);
+      if (recoveryLog) {
+        setRecoveryScore(recoveryLog.recovery_score);
+      }
+    }
+  }, []);
+
+  /**
+   * Refresh data when screen comes into focus
+   * This ensures the home screen updates after completing daily check-in
+   */
+  useFocusEffect(
+    useCallback(() => {
+      checkTodayLog();
+    }, [checkTodayLog])
+  );
 
   /**
    * Handle user logout
@@ -42,11 +79,23 @@ export const HomeScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Willkommen! 🎉</Text>
-      <Text style={styles.subtitle}>Dein Onboarding ist abgeschlossen</Text>
-      <Text style={styles.description}>
-        Dies ist der Startbildschirm der App. Hier werden später deine
-        Trainingspläne, Ernährungstipps und Fortschritte angezeigt.
-      </Text>
+
+      {hasLogged ? (
+        <View style={styles.recoveryCard}>
+          <Text style={styles.recoveryLabel}>Heutiger Recovery Score</Text>
+          <Text style={styles.recoveryScore}>{recoveryScore}/100</Text>
+          <Text style={styles.recoveryEmoji}>
+            {getRecoveryScoreInterpretation(recoveryScore || 0).emoji}
+          </Text>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.checkinButton}
+          onPress={() => navigation.navigate("DailyCheckin")}
+        >
+          <Text style={styles.checkinText}>📋 Tägliches Check-in</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={styles.buttonContainer}>
         <Button
@@ -73,21 +122,47 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    marginBottom: 8,
+    marginBottom: 24,
     textAlign: "center",
   },
-  subtitle: {
+  recoveryCard: {
+    backgroundColor: "#F2F2F7",
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 24,
+    width: "100%",
+    maxWidth: 300,
+  },
+  recoveryLabel: {
     fontSize: 16,
     color: "#8E8E93",
-    marginBottom: 16,
+    marginBottom: 12,
     textAlign: "center",
   },
-  description: {
-    fontSize: 14,
-    color: "#8E8E93",
-    marginBottom: 32,
+  recoveryScore: {
+    fontSize: 48,
+    fontWeight: "bold",
+    color: "#007AFF",
+    marginBottom: 8,
+  },
+  recoveryEmoji: {
+    fontSize: 32,
     textAlign: "center",
-    lineHeight: 20,
+  },
+  checkinButton: {
+    backgroundColor: "#007AFF",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 24,
+    width: "100%",
+    maxWidth: 300,
+  },
+  checkinText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "600",
   },
   buttonContainer: {
     marginTop: 16,

@@ -12,6 +12,7 @@ import { ProgressBar } from '../../components/ui/ProgressBar';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { getIntolerancesCatalog, Intolerance } from '../../services/profile.service';
+import { supabase } from '../../lib/supabase';
 
 /**
  * Onboarding Summary Screen
@@ -41,7 +42,16 @@ export const OnboardingSummary: React.FC = () => {
   const handleSubmit = async () => {
     try {
       await submitOnboarding();
-      // Navigation will be handled by parent component
+
+      console.log('✅ Onboarding complete! Refreshing session...');
+
+      // Trigger Auth State Change by refreshing the session
+      // This will cause the AppNavigator's onAuthStateChange listener
+      // to fire and execute checkAuthAndOnboarding(), which will then
+      // detect the completed profile and navigate to the main app
+      await supabase.auth.refreshSession();
+
+      // Navigation will be handled by AppNavigator's auth state change listener
       Alert.alert(
         'Erfolgreich! 🎉',
         'Dein Profil wurde erstellt. Wir erstellen jetzt deinen persönlichen Trainingsplan.',
