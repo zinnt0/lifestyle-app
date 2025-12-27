@@ -30,7 +30,10 @@ src/
 │   └── useForm.ts       # ✅ Form state management
 ├── screens/          # Screen components
 │   ├── onboarding/   # ✅ 6 Onboarding Screens + Summary (2025-12-26)
-│   ├── app/          # ✅ Main app screens (Home, Profile) (2025-12-26)
+│   ├── app/          # ✅ Main app screens (2025-12-27)
+│   │   ├── HomeScreen.tsx        # ✅ Dashboard/Landing
+│   │   ├── ProfileScreen.tsx     # ✅ Profile display with Edit button
+│   │   └── ProfileEditScreen.tsx # ✅ Profile edit form (2025-12-27)
 │   ├── auth/         # ⏸️ Login, Register
 │   ├── training/     # ⏸️ Training screens
 │   └── nutrition/    # ⏸️ Nutrition screens
@@ -71,14 +74,17 @@ src/
 - `src/hooks/useForm.ts`: Custom form hook (✅ implementiert)
 - `src/components/ui/`: 13 UI Components (✅ implementiert 2025-12-26)
 - `src/screens/onboarding/`: 6 Onboarding Screens + Summary (✅ implementiert 2025-12-26)
-- `src/screens/app/`: Main app screens - Home, Profile (✅ implementiert 2025-12-26)
-- `src/navigation/`: Complete navigation system (✅ implementiert 2025-12-26)
+- `src/screens/app/`: Main app screens (✅ implementiert 2025-12-27)
+  - `HomeScreen.tsx`: Dashboard/Landing
+  - `ProfileScreen.tsx`: Profile display with Edit button + useFocusEffect refresh
+  - `ProfileEditScreen.tsx`: Comprehensive profile edit form (✅ implementiert 2025-12-27)
+- `src/navigation/`: Complete navigation system (✅ implementiert 2025-12-26, updated 2025-12-27)
   - `AppNavigator.tsx`: Root navigator with auth/onboarding/main flow routing
   - `OnboardingNavigator.tsx`: Onboarding flow manager
-  - `MainNavigator.tsx`: Main app stack navigator
-  - `types.ts`: TypeScript navigation parameter lists
+  - `MainNavigator.tsx`: Main app stack navigator (includes ProfileEdit route)
+  - `types.ts`: TypeScript navigation parameter lists (includes ProfileEdit)
 
-## Implementierte Features (Stand: 2025-12-26)
+## Implementierte Features (Stand: 2025-12-27)
 
 ### 1. Authentication System (✅ Komplett)
 
@@ -362,6 +368,270 @@ const result = await createProfile({
 });
 ```
 
+### 6.1 Profile Edit System (✅ Komplett - 2025-12-27)
+
+**Location**: `src/screens/app/ProfileEditScreen.tsx`, `src/screens/app/ProfileScreen.tsx`
+
+**Zweck**: Ermöglicht Usern, ihr Profil nach dem Onboarding zu bearbeiten
+
+#### ProfileEditScreen
+
+**Datei**: `src/screens/app/ProfileEditScreen.tsx`
+
+**Architektur**:
+- Comprehensive Single-Page Form mit 5 Sektionen
+- ScrollView Layout mit KeyboardAvoidingView
+- Integration mit ProfileService für CRUD Operations
+- Reuse von Onboarding UI Components
+
+**Form Sections**:
+
+1. **Basisdaten** (Section 1)
+   - Age (Input mit NumberPad, 13-120 Jahre)
+   - Weight (Input mit DecimalPad, kg)
+   - Height (Input mit DecimalPad, cm)
+   - Gender (RadioGroup: Male/Female/Other)
+
+2. **Training** (Section 2)
+   - Fitness Level (OptionButtons: Beginner/Intermediate/Advanced)
+   - Training Experience (Input, Monate)
+   - Training Days per Week (NumberPicker: 1-7)
+   - Gym Access (Switch: Ja/Nein)
+   - Home Equipment (MultiSelectChips, conditional on no gym access)
+
+3. **Trainingsziel** (Section 3)
+   - Primary Goal (GoalCards mit Icons):
+     - 💪 Kraft aufbauen
+     - 🏋️ Muskeln aufbauen
+     - 🔥 Gewicht verlieren
+     - 🏃 Ausdauer
+     - ✨ Allgemeine Fitness
+
+4. **Lifestyle** (Section 4)
+   - Sleep Hours (Slider: 3-12h mit 0.5h steps)
+   - Stress Level (Slider: 1-10)
+
+5. **Unverträglichkeiten** (Section 5)
+   - Checkboxes für Intolerances aus Katalog
+   - Severity Picker (Mild/Moderate/Severe/Life-threatening) per Intolerance
+   - Lädt Katalog via `getIntolerancesCatalog()`
+
+**State Management**:
+```typescript
+interface ProfileFormData {
+  age: number | null;
+  weight: number | null;
+  height: number | null;
+  gender: 'male' | 'female' | 'other' | null;
+  fitness_level: 'beginner' | 'intermediate' | 'advanced' | null;
+  training_experience_months: number | null;
+  available_training_days: number | null;
+  has_gym_access: boolean;
+  home_equipment: string[];
+  primary_goal: 'strength' | 'hypertrophy' | 'endurance' | 'weight_loss' | 'general_fitness' | null;
+  sleep_hours_avg: number | null;
+  stress_level: number | null;
+}
+
+// Separate state for intolerances
+const [intolerances, setIntolerances] = useState<UserIntoleranceInput[]>([]);
+```
+
+**Input Handling Strategy**:
+- **Numeric Fields**: Separate `inputStrings` state preserves comma/period during typing
+- **Reason**: Prevents value disappearing when user types "75," for weight
+- **Implementation**:
+```typescript
+const [inputStrings, setInputStrings] = useState({
+  age: '',
+  weight: '',
+  height: '',
+  training_experience_months: '',
+});
+
+const handleNumericInput = (field, text) => {
+  const displayText = text.replace(',', '.');
+  setInputStrings(prev => ({ ...prev, [field]: displayText }));
+  const numericValue = displayText === '' ? null : parseFloat(displayText) || null;
+  updateField(field, numericValue);
+};
+```
+
+**Validation**:
+- Client-side validation via `validateForm()` before save
+- Field-level validations:
+  - Age: 13-120
+  - Weight/Height: > 0
+  - Training Days: 1-7
+  - Sleep: 3-12 hours
+  - Stress: 1-10
+- German error messages
+- Validation errors displayed in error banner
+
+**Data Flow**:
+1. **Load**: `loadProfile()` → `getProfile(userId)` + `getUserIntolerances(userId)` → Populate `formData`
+2. **Edit**: User changes → `updateField(field, value)` → Updates `formData` state
+3. **Save**: `handleSave()` → `validateForm()` → `updateProfile()` + `saveUserIntolerances()` → Navigate back
+4. **Cancel**: `handleCancel()` → `navigation.goBack()` (no save)
+
+**Loading States**:
+- Initial load: ActivityIndicator während Profile-Fetch
+- Save: Button disabled + loading prop während Update
+- Success: Green success message + auto-navigation nach 1.5s
+
+**Error Handling**:
+- Try-catch in allen async Funktionen
+- Deutsche Fehlermeldungen in error banner
+- Validation errors vor Supabase-Call
+- Network/DB errors angezeigt mit Retry-Option
+
+**UI/UX Features**:
+- ✅ Section Headers für klare Struktur
+- ✅ Error/Success Banners (rot/grün mit farbigem Hintergrund)
+- ✅ Disabled states während Save
+- ✅ Success Message mit Checkmark "Profil erfolgreich gespeichert!"
+- ✅ Auto-Navigation zurück zu ProfileScreen nach Success
+- ✅ ScrollView für alle Inhalte (responsive)
+- ✅ Consistent Styling mit Onboarding Screens
+
+**Supabase Integration**:
+```typescript
+// Load profile
+const { profile, error } = await getProfile(user.id);
+
+// Update profile
+const { error: profileError } = await updateProfile(user.id, formData);
+
+// Update intolerances
+const { error: intolerancesError } = await saveUserIntolerances(
+  user.id,
+  intolerances
+);
+```
+
+#### ProfileScreen Updates
+
+**Datei**: `src/screens/app/ProfileScreen.tsx`
+
+**Neue Features**:
+
+1. **Edit Button** (Header):
+```typescript
+<Button
+  title="Bearbeiten"
+  variant="outline"
+  size="small"
+  onPress={() => navigation.navigate('ProfileEdit')}
+/>
+```
+
+2. **Auto-Refresh via useFocusEffect**:
+```typescript
+import { useFocusEffect } from '@react-navigation/native';
+
+useFocusEffect(
+  useCallback(() => {
+    loadProfile(); // Reload when screen comes into focus
+  }, [])
+);
+```
+- **Zweck**: Zeigt aktualisierte Daten automatisch nach Rückkehr von ProfileEdit
+- **Trigger**: Jedes Mal wenn ProfileScreen fokussiert wird
+- **Benefit**: Keine manuellen Refresh-Buttons nötig
+
+**Navigation Flow**:
+```
+ProfileScreen
+    ↓ (Press "Bearbeiten")
+ProfileEditScreen
+    ↓ (Load existing data)
+User edits fields
+    ↓ (Press "Speichern")
+Validate → Save to Supabase
+    ↓ (Success)
+Navigate back (navigation.goBack())
+    ↓
+ProfileScreen (useFocusEffect triggers)
+    ↓
+loadProfile() fetches updated data
+    ✅ Display updated profile
+```
+
+#### Navigation Integration
+
+**MainNavigator.tsx Updates**:
+```typescript
+<Stack.Screen
+  name="ProfileEdit"
+  component={ProfileEditScreen}
+  options={{
+    title: "Profil bearbeiten",
+    headerBackTitle: "Zurück",
+  }}
+/>
+```
+
+**Navigation Types Updates** (`src/navigation/types.ts`):
+```typescript
+export type MainStackParamList = {
+  Home: undefined;
+  Profile: undefined;
+  ProfileEdit: undefined; // Added 2025-12-27
+  Settings: undefined;
+};
+```
+
+**Type-Safe Navigation**:
+```typescript
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { MainStackParamList } from '../../navigation/types';
+
+type ProfileScreenNavigationProp = NativeStackNavigationProp<
+  MainStackParamList,
+  'Profile'
+>;
+
+const navigation = useNavigation<ProfileScreenNavigationProp>();
+navigation.navigate('ProfileEdit'); // Type-safe!
+```
+
+**Design-Entscheidungen**:
+
+1. **Single-Page Form vs Tabs**:
+   - **Entscheidung**: Single ScrollView mit Sections
+   - **Grund**: Einfacher zu implementieren, übersichtlich für ~15 Felder
+   - **Future**: Bei mehr Feldern könnte Tab-Interface sinnvoll sein
+
+2. **Input String Preservation**:
+   - **Problem**: Native Input löscht Wert bei "75," (trailing comma)
+   - **Lösung**: Separate `inputStrings` state für Display
+   - **Benefit**: Bessere UX beim Tippen von Dezimalzahlen
+
+3. **useFocusEffect vs Manual Refresh**:
+   - **Entscheidung**: Automatisches Reload via useFocusEffect
+   - **Grund**: Bessere UX, keine Refresh-Button nötig
+   - **Trade-off**: Minimaler Performance-Impact (akzeptabel für Profile Screen)
+
+4. **Validation Strategy**:
+   - **Client-Side First**: Schnelles Feedback ohne Network-Call
+   - **Server-Side als Backup**: RLS + DB Constraints als Sicherheitsnetz
+   - **German Messages**: Alle Fehler in Deutsch für Zielgruppe
+
+**Reused Components**:
+- Input (from `src/components/ui/Input.tsx`)
+- Button (from `src/components/ui/Button.tsx`)
+- RadioGroup (from `src/components/ui/RadioGroup.tsx`)
+- NumberPicker (from `src/components/ui/NumberPicker.tsx`)
+- MultiSelectChips (from `src/components/ui/MultiSelectChips.tsx`)
+- GoalCard (from `src/components/ui/GoalCard.tsx`)
+- Slider (from `src/components/ui/Slider.tsx`)
+
+**Component Consistency**:
+- Alle UI Components identisch zu Onboarding Screens
+- Consistent COLORS, SPACING, FONT_SIZES
+- Identische Validation-Logik
+- Gleiche Error-Handling Pattern
+
 ### 7. Navigation System (✅ Komplett - 2025-12-26)
 
 **Location**: `src/navigation/`
@@ -460,7 +730,8 @@ return <MainNavigator />;
 
 **Stack Screens**:
 - Home (`src/screens/app/HomeScreen.tsx`) - Dashboard/Landing
-- Profile (`src/screens/app/ProfileScreen.tsx`) - User Profile & Settings
+- Profile (`src/screens/app/ProfileScreen.tsx`) - User Profile Display (Read-only with Edit button)
+- ProfileEdit (`src/screens/app/ProfileEditScreen.tsx`) - Profile Editing Form (2025-12-27)
 
 **Configuration**:
 ```typescript
@@ -478,6 +749,7 @@ return <MainNavigator />;
 - ✅ iOS Large Title Support
 - ✅ Slide Animation
 - ✅ Header shown by default
+- ✅ Profile Edit Flow with automatic data refresh (2025-12-27)
 
 **Future Screens** (geplant):
 - Training
@@ -515,6 +787,7 @@ export type OnboardingStackParamList = {
 export type MainStackParamList = {
   Home: undefined;
   Profile: undefined;
+  ProfileEdit: undefined;  // Added 2025-12-27
   Settings: undefined;
 };
 
@@ -599,8 +872,12 @@ OnboardingNavigator  → MainNavigator
   - ✅ MainNavigator (Home/Profile stack)
   - ✅ Navigation Types (TypeScript param lists)
 - ✅ Main App Screens (Home, Profile - 2025-12-26)
+- ✅ **Profile Edit System** (2025-12-27):
+  - ✅ ProfileEditScreen (Comprehensive edit form)
+  - ✅ ProfileScreen integration (Edit button + auto-refresh)
+  - ✅ Navigation updates (ProfileEdit route)
 
-**In Arbeit** (Branch: `features/onboarding`):
+**In Arbeit** (Branch: `feature/profile-edit`):
 - 🔄 Login & Registrierung Screens
 - 🔄 AuthNavigator Implementation
 - 🔄 App.tsx Integration & Testing
@@ -713,6 +990,46 @@ const OnboardingScreens = () => {
 ```
 **Alternative erwogen**: Stack Navigator mit 6 Screens (komplexere Back-Handling, kein direkter Step-Jump)
 **Trade-off**: Kein nativer Back-Button Support (Android), muss `previousStep()` Button in UI haben
+
+### 11. Profile Edit with Input String Preservation (2025-12-27)
+**Entscheidung**: Separate `inputStrings` state für numeric inputs zusätzlich zu parsed values
+**Problem**: React Native TextInput löscht Value bei trailing comma/period (z.B. "75," wird zu "")
+**Grund**:
+- Bessere UX beim Tippen von Dezimalzahlen
+- User kann "75," tippen ohne dass Wert verschwindet
+- Comma wird automatisch zu Period konvertiert
+**Implementation**:
+```typescript
+const [formData, setFormData] = useState({ weight: null });
+const [inputStrings, setInputStrings] = useState({ weight: '' });
+
+const handleNumericInput = (field, text) => {
+  const displayText = text.replace(',', '.');
+  setInputStrings(prev => ({ ...prev, [field]: displayText }));
+  const numericValue = parseFloat(displayText) || null;
+  updateField(field, numericValue);
+};
+```
+**Trade-off**: Mehr State-Management, aber deutlich bessere User Experience
+
+### 12. useFocusEffect für Auto-Refresh (2025-12-27)
+**Entscheidung**: useFocusEffect Hook statt manueller Refresh-Button in ProfileScreen
+**Grund**:
+- Automatisches Reload der Profil-Daten nach Rückkehr von ProfileEdit
+- Bessere UX (keine manuellen Actions nötig)
+- Stellt sicher dass User immer aktuelle Daten sieht
+**Implementation**:
+```typescript
+import { useFocusEffect } from '@react-navigation/native';
+
+useFocusEffect(
+  useCallback(() => {
+    loadProfile();
+  }, [])
+);
+```
+**Alternative erwogen**: Navigation Parameter zum Trigger Reload (komplizierter, weniger elegant)
+**Trade-off**: Minimaler Performance-Impact bei jedem Focus (akzeptabel für Profile Screen)
 
 ## Coding Standards
 

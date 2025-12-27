@@ -40,6 +40,7 @@ export type OnboardingStackParamList = {
 export type MainStackParamList = {
   Home: undefined;
   Profile: undefined;
+  ProfileEdit: undefined;
   Settings: undefined;
 };
 

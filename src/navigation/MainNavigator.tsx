@@ -12,6 +12,7 @@ import type { MainStackParamList } from "./types";
 // Main app screens
 import { HomeScreen } from "../screens/app/HomeScreen";
 import { ProfileScreen } from "../screens/app/ProfileScreen";
+import { ProfileEditScreen } from "../screens/app/ProfileEditScreen";
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
@@ -43,6 +44,14 @@ export const MainNavigator: React.FC = () => {
         component={ProfileScreen}
         options={{
           title: "Profil",
+        }}
+      />
+      <Stack.Screen
+        name="ProfileEdit"
+        component={ProfileEditScreen}
+        options={{
+          title: "Profil bearbeiten",
+          headerBackTitle: "Zurück",
         }}
       />
     </Stack.Navigator>

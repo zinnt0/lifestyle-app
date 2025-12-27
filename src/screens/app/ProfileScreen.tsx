@@ -5,7 +5,7 @@
  * Read-only for now - editing functionality will be added later.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,9 +13,18 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { supabase } from "../../lib/supabase";
 import { getProfile } from "../../services/profile.service";
 import type { Profile } from "../../services/profile.service";
+import type { MainStackParamList } from "../../navigation/types";
+import { Button } from "../../components/ui/Button";
+
+type ProfileScreenNavigationProp = NativeStackNavigationProp<
+  MainStackParamList,
+  'Profile'
+>;
 
 /**
  * ProfileScreen Component
@@ -24,12 +33,19 @@ import type { Profile } from "../../services/profile.service";
  * Shows all onboarding data in a read-only format.
  */
 export const ProfileScreen: React.FC = () => {
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  /**
+   * Reload profile whenever screen comes into focus
+   * This ensures we see updated data after editing
+   */
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [])
+  );
 
   /**
    * Load user profile from Supabase
@@ -77,7 +93,15 @@ export const ProfileScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Dein Profil</Text>
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>Dein Profil</Text>
+        <Button
+          title="Bearbeiten"
+          variant="outline"
+          size="small"
+          onPress={() => navigation.navigate('ProfileEdit')}
+        />
+      </View>
 
       {/* Basic Info */}
       <View style={styles.section}>
@@ -141,9 +165,6 @@ export const ProfileScreen: React.FC = () => {
         )}
       </View>
 
-      <Text style={styles.note}>
-        Hinweis: Vollständige Profil-Bearbeitung kommt später
-      </Text>
     </ScrollView>
   );
 };
@@ -177,10 +198,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
   },
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    marginBottom: 24,
   },
   section: {
     marginBottom: 24,
@@ -207,13 +233,6 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: "#FF3B30",
-    textAlign: "center",
-  },
-  note: {
-    fontSize: 14,
-    color: "#8E8E93",
-    fontStyle: "italic",
-    marginTop: 24,
     textAlign: "center",
   },
 });
