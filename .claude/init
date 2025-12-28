@@ -21,7 +21,8 @@ src/
 │   └── supabase.ts   # ✅ Supabase client mit AsyncStorage
 ├── services/         # Business logic
 │   ├── auth.service.ts     # ✅ Authentication service
-│   └── profile.service.ts  # ✅ Profile & onboarding service
+│   ├── profile.service.ts  # ✅ Profile & onboarding service
+│   └── recovery.service.ts # ✅ Recovery tracking service (2025-12-28)
 ├── contexts/         # React Context providers
 │   └── OnboardingContext.tsx  # ✅ 6-step onboarding state
 ├── utils/            # Utilities
@@ -30,10 +31,11 @@ src/
 │   └── useForm.ts       # ✅ Form state management
 ├── screens/          # Screen components
 │   ├── onboarding/   # ✅ 6 Onboarding Screens + Summary (2025-12-26)
-│   ├── app/          # ✅ Main app screens (2025-12-27)
-│   │   ├── HomeScreen.tsx        # ✅ Dashboard/Landing
+│   ├── app/          # ✅ Main app screens (2025-12-28)
+│   │   ├── HomeScreen.tsx        # ✅ Dashboard/Landing with recovery status
 │   │   ├── ProfileScreen.tsx     # ✅ Profile display with Edit button
-│   │   └── ProfileEditScreen.tsx # ✅ Profile edit form (2025-12-27)
+│   │   ├── ProfileEditScreen.tsx # ✅ Profile edit form (2025-12-27)
+│   │   └── DailyCheckinScreen.tsx # ✅ Daily recovery check-in (2025-12-28)
 │   ├── auth/         # ⏸️ Login, Register
 │   ├── training/     # ⏸️ Training screens
 │   └── nutrition/    # ⏸️ Nutrition screens
@@ -69,22 +71,24 @@ src/
 - `src/lib/supabase.ts`: Supabase client setup (✅ implementiert mit AsyncStorage)
 - `src/services/auth.service.ts`: Auth logic (✅ komplett mit 7 Funktionen)
 - `src/services/profile.service.ts`: Profile & onboarding logic (✅ komplett mit 8 Funktionen)
+- `src/services/recovery.service.ts`: Recovery tracking logic (✅ komplett, 2025-12-28)
 - `src/contexts/OnboardingContext.tsx`: 6-step onboarding state management (✅ implementiert)
 - `src/utils/validation.ts`: Form validation utilities (✅ implementiert)
 - `src/hooks/useForm.ts`: Custom form hook (✅ implementiert)
 - `src/components/ui/`: 13 UI Components (✅ implementiert 2025-12-26)
 - `src/screens/onboarding/`: 6 Onboarding Screens + Summary (✅ implementiert 2025-12-26)
-- `src/screens/app/`: Main app screens (✅ implementiert 2025-12-27)
-  - `HomeScreen.tsx`: Dashboard/Landing
+- `src/screens/app/`: Main app screens (✅ implementiert 2025-12-28)
+  - `HomeScreen.tsx`: Dashboard/Landing with recovery status display
   - `ProfileScreen.tsx`: Profile display with Edit button + useFocusEffect refresh
   - `ProfileEditScreen.tsx`: Comprehensive profile edit form (✅ implementiert 2025-12-27)
-- `src/navigation/`: Complete navigation system (✅ implementiert 2025-12-26, updated 2025-12-27)
+  - `DailyCheckinScreen.tsx`: Daily recovery check-in form (✅ implementiert 2025-12-28)
+- `src/navigation/`: Complete navigation system (✅ implementiert 2025-12-26, updated 2025-12-28)
   - `AppNavigator.tsx`: Root navigator with auth/onboarding/main flow routing
   - `OnboardingNavigator.tsx`: Onboarding flow manager
-  - `MainNavigator.tsx`: Main app stack navigator (includes ProfileEdit route)
-  - `types.ts`: TypeScript navigation parameter lists (includes ProfileEdit)
+  - `MainNavigator.tsx`: Main app stack navigator (includes ProfileEdit, DailyCheckin routes)
+  - `types.ts`: TypeScript navigation parameter lists (includes ProfileEdit, DailyCheckin)
 
-## Implementierte Features (Stand: 2025-12-27)
+## Implementierte Features (Stand: 2025-12-28)
 
 ### 1. Authentication System (✅ Komplett)
 
@@ -632,7 +636,139 @@ navigation.navigate('ProfileEdit'); // Type-safe!
 - Identische Validation-Logik
 - Gleiche Error-Handling Pattern
 
-### 7. Navigation System (✅ Komplett - 2025-12-26)
+### 7. Daily Recovery Tracking System (✅ Komplett - 2025-12-28)
+
+**Dateien**: `src/services/recovery.service.ts`, `src/screens/app/DailyCheckinScreen.tsx`
+
+**Zweck**: Tägliches Tracking von Recovery-Metriken mit Score-Berechnung und Analytics
+
+#### Recovery Service
+
+**Datei**: `src/services/recovery.service.ts` (593 Zeilen)
+
+**Core Metrics** (Required):
+- Sleep Hours (0-12h)
+- Sleep Quality (1-5)
+- Stress Level (1-5, inverted für Score)
+- Energy Level (1-5)
+- Muscle Soreness (1-5, inverted für Score)
+- Overall Readiness (1-5)
+
+**Optional Metrics**:
+- Mood (1-5)
+- Hydration (1-5)
+- Recovery Activities (string[])
+- Notes (text)
+
+**Recovery Score Algorithm**:
+- Range: 0-100 (normalized)
+- Weighted calculation:
+  - Sleep Hours: 20% (optimal: 7-9h)
+  - Sleep Quality: 20%
+  - Energy Level: 15%
+  - Stress Level: 15% (inverted)
+  - Muscle Soreness: 15% (inverted)
+  - Overall Readiness: 15%
+
+**Score Interpretation**:
+- 80-100: Excellent Recovery
+- 60-79: Good Recovery
+- 40-59: Moderate Recovery
+- 20-39: Poor Recovery
+- 0-19: Critical Recovery Needed
+
+**Key Functions**:
+```typescript
+// CRUD
+createRecoveryLog(data: RecoveryLogInput): Promise<RecoveryLog>
+getRecoveryLog(date: string): Promise<RecoveryLog | null>
+updateRecoveryLog(id: string, data: Partial<RecoveryLogInput>): Promise<RecoveryLog>
+deleteRecoveryLog(id: string): Promise<void>
+getAllRecoveryLogs(): Promise<RecoveryLog[]>
+
+// Analytics
+getRecoveryTrend(days: number): Promise<RecoveryTrend>
+getCurrentStreak(): Promise<number>
+getAverageScore(days: number): Promise<number>
+
+// Helpers
+calculateRecoveryScore(data: RecoveryLogInput): number
+validateRecoveryInput(data: RecoveryLogInput): boolean
+getScoreInterpretation(score: number): string
+getRecommendation(score: number): string
+```
+
+**Data Storage**:
+- AsyncStorage mit key structure: `recovery_log_${userId}_${date}`
+- JSON serialization
+- Date format: ISO (YYYY-MM-DD)
+
+#### DailyCheckinScreen
+
+**Datei**: `src/screens/app/DailyCheckinScreen.tsx` (750 Zeilen)
+
+**Features**:
+- Interactive Form mit Slider-Inputs für alle Metriken
+- Real-time Recovery Score Preview mit color-coded display
+- Pre-filled data für existing logs (Edit-Mode)
+- Optional fields toggle
+- Input validation mit visual feedback
+- Success/Error messaging
+- Haptic feedback (expo-haptics) on save
+- Auto-navigation nach successful save
+
+**UI Design**:
+- Color-coded Recovery Score:
+  - Green (80-100): Excellent
+  - Blue (60-79): Good
+  - Yellow (40-59): Moderate
+  - Orange (20-39): Poor
+  - Red (0-19): Critical
+- Slider-based inputs für intuitive entry
+- Toggle für optional fields
+- ScrollView layout mit KeyboardAvoidingView
+
+**User Flow**:
+1. Navigate from HomeScreen via "Log Today's Recovery" button
+2. Fill core recovery metrics (all required)
+3. Optionally toggle and fill additional metrics
+4. View real-time score calculation
+5. Save with haptic feedback
+6. Auto-navigate back to HomeScreen
+7. See updated recovery status on HomeScreen
+
+#### Integration
+
+**HomeScreen Updates**:
+- Displays current recovery status
+- Shows today's recovery score if logged
+- Prompts for daily check-in if not logged
+- Auto-refresh on screen focus
+- Navigation to DailyCheckinScreen
+
+**Navigation**:
+- Added `DailyCheckin` route to MainNavigator
+- Navigation types updated:
+```typescript
+export type MainStackParamList = {
+  Home: undefined;
+  Profile: undefined;
+  ProfileEdit: undefined;
+  DailyCheckin: { date?: string; logId?: string }; // NEW
+};
+```
+
+**Dependencies Added**:
+- `expo-haptics: ^13.0.1` - Haptic feedback für save operations
+
+**Technical Patterns**:
+- Service Layer Pattern für data management
+- AsyncStorage für local persistence
+- Full TypeScript typing
+- Validation in service layer
+- German error messages
+
+### 8. Navigation System (✅ Komplett - 2025-12-26)
 
 **Location**: `src/navigation/`
 
@@ -729,9 +865,10 @@ return <MainNavigator />;
 **Zweck**: React Navigation Stack für Main App Screens
 
 **Stack Screens**:
-- Home (`src/screens/app/HomeScreen.tsx`) - Dashboard/Landing
+- Home (`src/screens/app/HomeScreen.tsx`) - Dashboard/Landing with recovery status
 - Profile (`src/screens/app/ProfileScreen.tsx`) - User Profile Display (Read-only with Edit button)
 - ProfileEdit (`src/screens/app/ProfileEditScreen.tsx`) - Profile Editing Form (2025-12-27)
+- DailyCheckin (`src/screens/app/DailyCheckinScreen.tsx`) - Daily Recovery Check-in (2025-12-28)
 
 **Configuration**:
 ```typescript
@@ -750,6 +887,7 @@ return <MainNavigator />;
 - ✅ Slide Animation
 - ✅ Header shown by default
 - ✅ Profile Edit Flow with automatic data refresh (2025-12-27)
+- ✅ Daily Recovery Check-in Flow (2025-12-28)
 
 **Future Screens** (geplant):
 - Training
@@ -788,6 +926,7 @@ export type MainStackParamList = {
   Home: undefined;
   Profile: undefined;
   ProfileEdit: undefined;  // Added 2025-12-27
+  DailyCheckin: { date?: string; logId?: string };  // Added 2025-12-28
   Settings: undefined;
 };
 
@@ -869,15 +1008,21 @@ OnboardingNavigator  → MainNavigator
 - ✅ **Navigation System** (2025-12-26):
   - ✅ AppNavigator (Root with Auth/Onboarding/Main routing)
   - ✅ OnboardingNavigator (State-based 6-screen flow)
-  - ✅ MainNavigator (Home/Profile stack)
+  - ✅ MainNavigator (Home/Profile/DailyCheckin stack)
   - ✅ Navigation Types (TypeScript param lists)
 - ✅ Main App Screens (Home, Profile - 2025-12-26)
 - ✅ **Profile Edit System** (2025-12-27):
   - ✅ ProfileEditScreen (Comprehensive edit form)
   - ✅ ProfileScreen integration (Edit button + auto-refresh)
   - ✅ Navigation updates (ProfileEdit route)
+- ✅ **Daily Recovery Tracking System** (2025-12-28):
+  - ✅ Recovery Service (CRUD, Analytics, Score Calculation)
+  - ✅ DailyCheckinScreen (Interactive form with real-time score)
+  - ✅ HomeScreen integration (Recovery status display)
+  - ✅ Navigation updates (DailyCheckin route)
+  - ✅ Haptic feedback integration
 
-**In Arbeit** (Branch: `feature/profile-edit`):
+**In Arbeit**:
 - 🔄 Login & Registrierung Screens
 - 🔄 AuthNavigator Implementation
 - 🔄 App.tsx Integration & Testing
@@ -1030,6 +1175,33 @@ useFocusEffect(
 ```
 **Alternative erwogen**: Navigation Parameter zum Trigger Reload (komplizierter, weniger elegant)
 **Trade-off**: Minimaler Performance-Impact bei jedem Focus (akzeptabel für Profile Screen)
+
+### 13. Recovery Score Algorithm (2025-12-28)
+**Entscheidung**: Weighted Score mit 6 Core Metrics (0-100 normalized)
+**Grund**:
+- Balanced Representation: Sleep (40% combined), Energy/Stress/Soreness (15% each), Readiness (15%)
+- Inverted Scoring für negative Faktoren (Stress, Soreness)
+- Industry-Standard Ranges für Interpretation
+- Real-time Calculation für instant Feedback
+**Implementation**:
+- Normalization: Jede Metrik auf 0-100 scale
+- Weighted Sum: Gewichtete Summierung
+- Sleep Hours optimal: 7-9h (bell curve scoring)
+**Trade-off**: Simpler als ML-based Scoring, aber ausreichend für MVP und transparent für User
+
+### 14. AsyncStorage für Recovery Data (2025-12-28)
+**Entscheidung**: AsyncStorage statt Supabase für Recovery Logs
+**Grund**:
+- **Offline-First**: Logs müssen auch ohne Internet funktionieren
+- **Performance**: Keine Network-Latency für tägliches Logging
+- **Privacy**: Recovery-Daten bleiben lokal (sensible Health-Daten)
+- **MVP-Speed**: Schneller implementiert ohne Backend-Schema
+**Implementation**:
+- Key Structure: `recovery_log_${userId}_${date}`
+- JSON Serialization für complex objects
+- Date-based retrieval (ISO format YYYY-MM-DD)
+**Future**: Migration zu Supabase für cloud sync & cross-device
+**Trade-off**: Keine Cloud-Backup, aber bessere UX und Privacy für MVP
 
 ## Coding Standards
 

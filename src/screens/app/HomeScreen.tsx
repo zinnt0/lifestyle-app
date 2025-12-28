@@ -16,6 +16,9 @@ import {
   hasLoggedToday,
   getRecoveryScoreInterpretation,
 } from "../../services/recovery.service";
+import { trainingService } from "../../services/trainingService";
+import { QuickWorkoutAction } from "../../components/training/QuickWorkoutAction";
+import type { NextWorkout } from "../../types/training.types";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   MainStackParamList,
@@ -32,6 +35,7 @@ export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const [hasLogged, setHasLogged] = useState(false);
   const [recoveryScore, setRecoveryScore] = useState<number | null>(null);
+  const [nextWorkout, setNextWorkout] = useState<NextWorkout | null>(null);
 
   /**
    * Check if user has logged today and fetch recovery score
@@ -54,13 +58,33 @@ export const HomeScreen: React.FC = () => {
   }, []);
 
   /**
+   * Load next scheduled workout
+   */
+  const loadNextWorkout = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const workout = await trainingService.getNextWorkout(user.id);
+      setNextWorkout(workout);
+    } catch (error) {
+      console.error("Error loading next workout:", error);
+      // Fail silently - user can still access training via tab
+    }
+  }, []);
+
+  /**
    * Refresh data when screen comes into focus
    * This ensures the home screen updates after completing daily check-in
+   * or starting a workout
    */
   useFocusEffect(
     useCallback(() => {
       checkTodayLog();
-    }, [checkTodayLog])
+      loadNextWorkout();
+    }, [checkTodayLog, loadNextWorkout])
   );
 
   /**
@@ -79,6 +103,9 @@ export const HomeScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Willkommen! 🎉</Text>
+
+      {/* Quick Workout Action - Prominent position */}
+      <QuickWorkoutAction workout={nextWorkout || undefined} />
 
       {hasLogged ? (
         <View style={styles.recoveryCard}>

@@ -14,7 +14,7 @@ import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { AuthNavigator } from "./AuthNavigator";
 import { OnboardingNavigator } from "./OnboardingNavigator";
-import { MainNavigator } from "./MainNavigator";
+import { TabNavigator } from "./TabNavigator";
 import { getCurrentUser, onAuthStateChange } from "../services/auth.service";
 import { isOnboardingCompleted } from "../services/profile.service";
 import type { AuthUser } from "../services/auth.service";
@@ -132,8 +132,8 @@ export const AppNavigator: React.FC = () => {
       return <OnboardingNavigator />;
     }
 
-    // Authenticated and onboarding complete → Show Main App Stack
-    return <MainNavigator />;
+    // Authenticated and onboarding complete → Show Tab Navigator
+    return <TabNavigator />;
   };
 
   return <NavigationContainer linking={linking}>{getNavigator()}</NavigationContainer>;

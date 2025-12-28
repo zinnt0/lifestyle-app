@@ -213,16 +213,16 @@ const LevelButton: React.FC<LevelButtonProps> = ({
 }) => {
   return (
     <Card
-      style={[styles.levelButton, selected && styles.levelButtonSelected]}
+      style={[styles.levelButton, selected ? styles.levelButtonSelected : undefined]}
       onPress={onPress}
     >
-      <Text style={[styles.levelLabel, selected && styles.levelLabelSelected]}>
+      <Text style={[styles.levelLabel, selected ? styles.levelLabelSelected : undefined]}>
         {label}
       </Text>
       <Text
         style={[
           styles.levelDescription,
-          selected && styles.levelDescriptionSelected,
+          selected ? styles.levelDescriptionSelected : undefined,
         ]}
       >
         {description}
