@@ -7,10 +7,15 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "test": "tsx src/utils/__tests__/planRecommendationScoring.test.ts",
     "test:auth": "tsx src/tests/auth.test.ts --quick",
     "test:auth:all": "tsx src/tests/auth.test.ts --all",
     "test:auth:simple": "tsx src/tests/auth.test.simple.ts",
-    "test:validation": "tsx src/tests/validation.test.ts"
+    "test:validation": "tsx src/tests/validation.test.ts",
+    "test:scoring": "tsx src/utils/__tests__/planRecommendationScoring.test.ts",
+    "test:scoring:e2e": "tsx scripts/e2e-scoring-test-simple.ts",
+    "test:scoring:all": "npm run test:scoring && npm run test:scoring:e2e",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

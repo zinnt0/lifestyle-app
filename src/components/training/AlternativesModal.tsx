@@ -86,10 +86,10 @@ export const AlternativesModal: React.FC<AlternativesModalProps> = ({
                   <Text style={styles.alternativeName}>{exercise.name_de}</Text>
                   <Text style={styles.alternativeDetails}>
                     {exercise.movement_pattern} •{" "}
-                    {exercise.equipment.join(", ")}
+                    {(exercise.equipment_required || []).join(", ")}
                   </Text>
                   <View style={styles.musclesTags}>
-                    {exercise.primary_muscles.map((muscle) => (
+                    {(exercise.primary_muscles || []).map((muscle) => (
                       <View key={muscle} style={styles.muscleTag}>
                         <Text style={styles.muscleTagText}>{muscle}</Text>
                       </View>

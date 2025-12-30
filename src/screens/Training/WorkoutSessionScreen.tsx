@@ -22,6 +22,8 @@ import {
   ActivityIndicator,
   Dimensions,
   ViewToken,
+  AppState,
+  AppStateStatus,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -56,6 +58,9 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
   const [expandedSet, setExpandedSet] = useState<number | null>(null);
   const [showAlternatives, setShowAlternatives] = useState(false);
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
+  const [pendingSets, setPendingSets] = useState<
+    Record<string, Record<number, { weight: number; reps: number; rir?: number }>>
+  >({});
 
   // Current exercise
   const currentExercise = exercises[currentIndex];
@@ -96,6 +101,42 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
     }
   }, [exercises]);
 
+  // Auto-pause when app goes to background or component unmounts
+  useEffect(() => {
+    let isPausing = false; // Flag to prevent duplicate pause calls
+
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        if (isPausing) {
+          console.log("Pausierung läuft bereits, überspringe");
+          return;
+        }
+        // App goes to background - pause the session
+        try {
+          isPausing = true;
+          await trainingService.pauseWorkoutSession(sessionId);
+        } catch (error) {
+          console.error("Fehler beim automatischen Pausieren:", error);
+        } finally {
+          isPausing = false;
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    // Cleanup: Pause session when component unmounts (user navigates away)
+    return () => {
+      subscription.remove();
+      // Only pause on unmount if not already pausing
+      if (!isPausing) {
+        trainingService.pauseWorkoutSession(sessionId).catch((error) => {
+          console.error("Fehler beim Pausieren beim Verlassen:", error);
+        });
+      }
+    };
+  }, [sessionId]);
+
   /**
    * Load session exercises
    */
@@ -121,27 +162,22 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
   };
 
   /**
-   * Handle set logging
+   * Handle set logging (now just stores in local state)
    */
-  const handleSetLog = async (
+  const handleSetLog = (
     exerciseId: string,
     setNumber: number,
     weight: number,
     reps: number,
-    rpe?: number
+    rir?: number
   ) => {
-    try {
-      await trainingService.logSet(sessionId, exerciseId, setNumber, weight, reps, rpe);
-
-      // Haptic feedback
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      // Reload session to get updated data
-      await loadSession();
-    } catch (err) {
-      console.error("Fehler beim Loggen des Sets:", err);
-      Alert.alert("Fehler", "Set konnte nicht gespeichert werden");
-    }
+    setPendingSets((prev) => ({
+      ...prev,
+      [exerciseId]: {
+        ...prev[exerciseId],
+        [setNumber]: { weight, reps, rir },
+      },
+    }));
   };
 
   /**
@@ -151,12 +187,14 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
     const exercise = exercises.find((ex) => ex.exercise_id === exerciseId);
     if (!exercise) return;
 
-    // Check if all sets are completed
-    const completedSetsCount = exercise.completed_sets.length;
-    if (completedSetsCount < exercise.sets) {
+    const pendingSetsForExercise = pendingSets[exerciseId] || {};
+    const totalSetsCount = exercise.completed_sets.length + Object.keys(pendingSetsForExercise).length;
+
+    // Check if all sets are logged
+    if (totalSetsCount < exercise.sets) {
       Alert.alert(
         "Unvollständige Übung",
-        `Du hast erst ${completedSetsCount} von ${exercise.sets} Sätzen absolviert. Möchtest du trotzdem fortfahren?`,
+        `Du hast erst ${totalSetsCount} von ${exercise.sets} Sätzen absolviert. Möchtest du trotzdem fortfahren?`,
         [
           { text: "Abbrechen", style: "cancel" },
           { text: "Fortfahren", onPress: () => completeExercise(exerciseId) },
@@ -172,29 +210,59 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
    * Complete exercise and advance
    */
   const completeExercise = async (exerciseId: string) => {
-    // Haptic feedback
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try {
+      // Save all pending sets for this exercise
+      const pendingSetsForExercise = pendingSets[exerciseId] || {};
 
-    // Mark as completed locally
-    const updatedExercises = exercises.map((ex) =>
-      ex.exercise_id === exerciseId ? { ...ex, is_completed: true } : ex
-    );
-    setExercises(updatedExercises);
+      for (const [setNumberStr, setData] of Object.entries(pendingSetsForExercise)) {
+        const setNumber = parseInt(setNumberStr);
+        await trainingService.logSet(
+          sessionId,
+          exerciseId,
+          setNumber,
+          setData.weight,
+          setData.reps,
+          setData.rir
+        );
+      }
 
-    // Check if this was the last exercise
-    const allCompleted = updatedExercises.every((ex) => ex.is_completed);
+      // Clear pending sets for this exercise
+      setPendingSets((prev) => {
+        const newPendingSets = { ...prev };
+        delete newPendingSets[exerciseId];
+        return newPendingSets;
+      });
 
-    if (allCompleted) {
-      // Last exercise → show completion modal
-      showCompletionModal();
-    } else if (currentIndex < exercises.length - 1) {
-      // Auto-advance to next exercise with smooth scroll
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index: currentIndex + 1,
-          animated: true,
-        });
-      }, 500); // Small delay for better UX
+      // Haptic feedback
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Reload session to get updated data
+      await loadSession();
+
+      // Mark as completed locally
+      const updatedExercises = exercises.map((ex) =>
+        ex.exercise_id === exerciseId ? { ...ex, is_completed: true } : ex
+      );
+      setExercises(updatedExercises);
+
+      // Check if this was the last exercise
+      const allCompleted = updatedExercises.every((ex) => ex.is_completed);
+
+      if (allCompleted) {
+        // Last exercise → show completion modal
+        showCompletionModal();
+      } else if (currentIndex < exercises.length - 1) {
+        // Auto-advance to next exercise with smooth scroll
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({
+            index: currentIndex + 1,
+            animated: true,
+          });
+        }, 500); // Small delay for better UX
+      }
+    } catch (err) {
+      console.error("Fehler beim Speichern der Sets:", err);
+      Alert.alert("Fehler", "Sets konnten nicht gespeichert werden");
     }
   };
 
@@ -261,14 +329,37 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
    */
   const handleClose = () => {
     Alert.alert(
-      "Workout beenden?",
-      "Möchtest du das Workout wirklich beenden? Dein Fortschritt wird gespeichert.",
+      "Workout verlassen?",
+      "Möchtest du das Workout pausieren oder komplett abbrechen?",
       [
-        { text: "Abbrechen", style: "cancel" },
         {
-          text: "Beenden",
+          text: "Zurück",
+          style: "cancel"
+        },
+        {
+          text: "Pausieren",
+          onPress: async () => {
+            try {
+              await trainingService.pauseWorkoutSession(sessionId);
+              navigation.goBack();
+            } catch (error) {
+              console.error("Fehler beim Pausieren:", error);
+              Alert.alert("Fehler", "Workout konnte nicht pausiert werden");
+            }
+          },
+        },
+        {
+          text: "Abbrechen",
           style: "destructive",
-          onPress: () => navigation.goBack(),
+          onPress: async () => {
+            try {
+              await trainingService.cancelWorkoutSession(sessionId);
+              navigation.goBack();
+            } catch (error) {
+              console.error("Fehler beim Abbrechen:", error);
+              Alert.alert("Fehler", "Workout konnte nicht abgebrochen werden");
+            }
+          },
         },
       ]
     );
@@ -373,8 +464,8 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
               {exercise.sets} Sätze •{" "}
               {exercise.reps_min && exercise.reps_max
                 ? `${exercise.reps_min}-${exercise.reps_max} Wdh`
-                : exercise.target_reps
-                ? `${exercise.target_reps} Wdh`
+                : exercise.reps_target
+                ? `${exercise.reps_target} Wdh`
                 : "Wiederholungen"}
             </Text>
 
@@ -393,24 +484,25 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
                 const completedSet = exercise.completed_sets.find(
                   (s) => s.set_number === setNumber
                 );
+                const pendingSet = pendingSets[exercise.exercise_id]?.[setNumber];
 
                 return (
                   <SetRow
                     key={setNumber}
                     setNumber={setNumber}
-                    targetWeight={exercise.target_weight}
                     targetReps={
-                      exercise.target_reps || exercise.reps_min || exercise.reps_max
+                      exercise.reps_target || exercise.reps_min || exercise.reps_max
                     }
-                    rpeTarget={exercise.rpe_target}
+                    rirTarget={exercise.rir_target}
                     isExpanded={expandedSet === setNumber}
                     onToggle={() =>
                       setExpandedSet(expandedSet === setNumber ? null : setNumber)
                     }
-                    onLog={(weight, reps, rpe) =>
-                      handleSetLog(exercise.exercise_id, setNumber, weight, reps, rpe)
+                    onLog={(weight, reps, rir) =>
+                      handleSetLog(exercise.exercise_id, setNumber, weight, reps, rir)
                     }
                     completedSet={completedSet}
+                    pendingSet={pendingSet}
                   />
                 );
               })}
@@ -444,7 +536,7 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#4A90E2" />
+          <ActivityIndicator size="large" color="#3083FF" />
           <Text style={styles.loadingText}>Lade Workout...</Text>
         </View>
       </SafeAreaView>
@@ -476,7 +568,7 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
 
       {/* Progress Bar */}
       <View style={styles.progressContainer}>
-        <ProgressBar progress={progress} color="#4CAF50" height={6} />
+        <ProgressBar progress={progress} color="#70e0ba" height={8} />
         <Text style={styles.progressText}>
           {exercises.filter((ex) => ex.is_completed).length} / {exercises.length} Übungen
         </Text>
@@ -554,7 +646,7 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#F8F9FA",
   },
   centerContainer: {
     flex: 1,
@@ -568,10 +660,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   closeButton: {
     width: 40,
@@ -581,26 +676,29 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 24,
-    color: "#666",
+    color: "#3083FF",
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1a1a1a",
   },
   progressContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
     backgroundColor: "#fff",
     gap: 8,
   },
   progressText: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#3083FF",
     textAlign: "center",
   },
   carouselContainer: {
     paddingHorizontal: CARD_PADDING,
+    paddingTop: 16,
   },
   carouselCard: {
     width: CARD_WIDTH,
@@ -614,15 +712,17 @@ const styles = StyleSheet.create({
   },
   exerciseCard: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     gap: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: "#3083FF",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
     minHeight: 400,
+    borderWidth: 1,
+    borderColor: "#E8F0FE",
   },
   imageContainer: {
     width: "100%",
@@ -636,15 +736,16 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   exerciseName: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#333",
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#1a1a1a",
+    letterSpacing: -0.5,
   },
   alternativesHint: {
-    fontSize: 12,
-    color: "#4A90E2",
-    marginTop: 4,
-    fontStyle: "italic",
+    fontSize: 13,
+    color: "#3083FF",
+    marginTop: 6,
+    fontWeight: "500",
   },
   exerciseInfo: {
     fontSize: 16,
@@ -659,22 +760,29 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   completeButton: {
-    backgroundColor: "#4CAF50",
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: "#70e0ba",
+    borderRadius: 14,
+    padding: 18,
     alignItems: "center",
     marginTop: 8,
+    shadowColor: "#70e0ba",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   completedButton: {
     backgroundColor: "#E8F5E9",
+    shadowOpacity: 0,
   },
   completeButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 17,
+    fontWeight: "700",
     color: "#fff",
+    letterSpacing: 0.5,
   },
   completedButtonText: {
-    color: "#4CAF50",
+    color: "#70e0ba",
   },
   navigation: {
     flexDirection: "row",
@@ -687,11 +795,13 @@ const styles = StyleSheet.create({
     borderTopColor: "#E0E0E0",
   },
   loadingText: {
-    fontSize: 16,
-    color: "#666",
+    fontSize: 17,
+    fontWeight: "500",
+    color: "#3083FF",
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: "500",
     color: "#F44336",
     textAlign: "center",
     marginBottom: 16,

@@ -25,6 +25,14 @@ import {
   WorkoutSet,
   Exercise,
 } from "@/types/training.types";
+import {
+  scorePlanTemplate,
+  getTopRecommendations,
+  getBestRecommendation,
+  type UserProfile,
+  type PlanRecommendation
+} from "@/utils/planRecommendationScoring";
+import { getProfile } from "@/services/profile.service";
 
 // ============================================================================
 // Plan Management
@@ -98,12 +106,12 @@ async function getTrainingPlanDetails(
       throw new Error("Trainingsplan nicht gefunden");
     }
 
-    // Sort workouts by day_number and exercises by exercise_order
+    // Sort workouts by day_number and exercises by order_in_workout
     const sortedWorkouts = (data.workouts || [])
       .map((workout: any) => ({
         ...workout,
         exercises: (workout.exercises || []).sort(
-          (a: PlanExercise, b: PlanExercise) => a.exercise_order - b.exercise_order
+          (a: PlanExercise, b: PlanExercise) => a.order_in_workout - b.order_in_workout
         ),
       }))
       .sort((a: any, b: any) => a.day_number - b.day_number);
@@ -142,7 +150,7 @@ async function setActivePlan(userId: string, planId: string): Promise<void> {
     // Deaktiviere alle anderen Pläne des Users
     const { error: deactivateError } = await supabase
       .from("training_plans")
-      .update({ status: "inactive" })
+      .update({ status: "paused" as const })
       .eq("user_id", userId)
       .neq("id", planId);
 
@@ -268,12 +276,12 @@ async function getTemplateDetails(templateId: string): Promise<TemplateDetails> 
       throw new Error("Template nicht gefunden");
     }
 
-    // Sort workouts by day_number and exercises by exercise_order
+    // Sort workouts by day_number and exercises by order_in_workout
     const sortedWorkouts = (data.workouts || [])
       .map((workout: any) => ({
         ...workout,
         exercises: (workout.exercises || []).sort(
-          (a: TemplateExercise, b: TemplateExercise) => a.exercise_order - b.exercise_order
+          (a: TemplateExercise, b: TemplateExercise) => a.order_in_workout - b.order_in_workout
         ),
       }))
       .sort((a: any, b: any) => a.day_number - b.day_number);
@@ -318,7 +326,7 @@ async function createPlanFromTemplate(
     if (isActive) {
       const { error: deactivateError } = await supabase
         .from("training_plans")
-        .update({ status: "inactive" })
+        .update({ status: "paused" as const })
         .eq("user_id", userId);
 
       if (deactivateError) {
@@ -336,7 +344,7 @@ async function createPlanFromTemplate(
         name: planName,
         plan_type: template.plan_type,
         days_per_week: template.days_per_week,
-        status: isActive ? "active" : "inactive",
+        status: isActive ? "active" : "paused",
         start_date: startDate.toISOString(),
       })
       .select()
@@ -354,10 +362,10 @@ async function createPlanFromTemplate(
         .insert({
           plan_id: newPlan.id,
           source_template_workout_id: templateWorkout.id,
-          name: templateWorkout.name,
-          name_de: templateWorkout.name_de,
+          name: templateWorkout.name_de || templateWorkout.name,
           day_number: templateWorkout.day_number,
           week_number: templateWorkout.week_number,
+          order_in_week: templateWorkout.order_in_week,
           focus: templateWorkout.focus,
         })
         .select()
@@ -372,14 +380,12 @@ async function createPlanFromTemplate(
       const exercisesToInsert = templateWorkout.exercises.map((exercise) => ({
         workout_id: newWorkout.id,
         exercise_id: exercise.exercise_id,
-        exercise_order: exercise.exercise_order,
+        order_in_workout: exercise.order_in_workout,
         sets: exercise.sets,
         reps_min: exercise.reps_min,
         reps_max: exercise.reps_max,
-        rpe_target: exercise.rpe_target,
+        rir_target: exercise.rir_target,
         rest_seconds: exercise.rest_seconds,
-        is_optional: exercise.is_optional,
-        can_substitute: exercise.can_substitute,
       }));
 
       const { error: exercisesError } = await supabase
@@ -405,13 +411,13 @@ async function createPlanFromTemplate(
 
 /**
  * Startet eine neue Workout Session
- * Prüft zuerst ob bereits eine aktive Session existiert
+ * Prüft zuerst ob bereits eine aktive oder pausierte Session existiert
  *
  * @param userId - Die ID des Users
  * @param planId - Die ID des Trainingsplans
  * @param workoutId - Die ID des Workouts
  * @returns Die ID der neu erstellten Session
- * @throws Error wenn bereits eine aktive Session existiert
+ * @throws Error wenn bereits eine aktive oder pausierte Session existiert
  */
 async function startWorkoutSession(
   userId: string,
@@ -419,13 +425,33 @@ async function startWorkoutSession(
   workoutId: string
 ): Promise<string> {
   try {
-    // Prüfe ob bereits eine aktive Session existiert
-    const activeSession = await getActiveSession(userId);
+    // Prüfe beide Stati in einer Query (effizienter)
+    const { data: existingSessions, error: checkError } = await supabase
+      .from("workout_sessions")
+      .select("id, status")
+      .eq("user_id", userId)
+      .in("status", ["in_progress", "paused"])
+      .order("start_time", { ascending: false })
+      .limit(1);
 
-    if (activeSession) {
-      throw new Error(
-        "Es läuft bereits ein Workout. Bitte beende zuerst die aktive Session."
-      );
+    if (checkError) {
+      console.error("Fehler beim Prüfen auf existierende Sessions:", checkError);
+    }
+
+    if (existingSessions && existingSessions.length > 0) {
+      const existingSession = existingSessions[0];
+
+      if (existingSession.status === "in_progress") {
+        throw new Error(
+          "Es läuft bereits ein Workout. Bitte beende zuerst die aktive Session."
+        );
+      }
+
+      if (existingSession.status === "paused") {
+        throw new Error(
+          "Du hast ein unterbrochenes Workout. Bitte setze es fort oder breche es ab."
+        );
+      }
     }
 
     // Erstelle neue Session
@@ -436,7 +462,8 @@ async function startWorkoutSession(
         plan_id: planId,
         plan_workout_id: workoutId,
         status: "in_progress",
-        started_at: new Date().toISOString(),
+        start_time: new Date().toISOString(),
+        date: new Date().toISOString().split('T')[0],
       })
       .select()
       .single();
@@ -479,7 +506,7 @@ async function getActiveSession(
       )
       .eq("user_id", userId)
       .eq("status", "in_progress")
-      .order("started_at", { ascending: false })
+      .order("start_time", { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -506,7 +533,7 @@ async function completeWorkoutSession(sessionId: string): Promise<void> {
       .from("workout_sessions")
       .update({
         status: "completed",
-        completed_at: new Date().toISOString(),
+        end_time: new Date().toISOString(),
       })
       .eq("id", sessionId);
 
@@ -516,6 +543,141 @@ async function completeWorkoutSession(sessionId: string): Promise<void> {
     }
   } catch (error) {
     console.error("Fehler in completeWorkoutSession:", error);
+    throw error;
+  }
+}
+
+/**
+ * Pausiert eine Workout Session
+ * Wird aufgerufen wenn der User den Screen verlässt
+ *
+ * @param sessionId - Die ID der Session
+ */
+async function pauseWorkoutSession(sessionId: string): Promise<void> {
+  try {
+    // Erst Session laden um Status zu prüfen
+    const { data: session, error: fetchError } = await supabase
+      .from("workout_sessions")
+      .select("status")
+      .eq("id", sessionId)
+      .single();
+
+    if (fetchError) {
+      console.error("Fehler beim Laden der Session:", fetchError);
+      throw new Error("Session konnte nicht geladen werden");
+    }
+
+    // Nur pausieren wenn Status "in_progress" ist
+    if (session.status !== "in_progress") {
+      console.log(`Session ist bereits ${session.status}, überspringe Pause`);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("workout_sessions")
+      .update({
+        status: "paused",
+      })
+      .eq("id", sessionId)
+      .eq("status", "in_progress"); // Nur pausieren wenn noch in_progress
+
+    if (error) {
+      console.error("Fehler beim Pausieren der Session:", error);
+      throw new Error("Session konnte nicht pausiert werden");
+    }
+  } catch (error) {
+    console.error("Fehler in pauseWorkoutSession:", error);
+    throw error;
+  }
+}
+
+/**
+ * Setzt eine pausierte Session fort
+ *
+ * @param sessionId - Die ID der Session
+ */
+async function resumeWorkoutSession(sessionId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("workout_sessions")
+      .update({
+        status: "in_progress",
+      })
+      .eq("id", sessionId);
+
+    if (error) {
+      console.error("Fehler beim Fortsetzen der Session:", error);
+      throw new Error("Session konnte nicht fortgesetzt werden");
+    }
+  } catch (error) {
+    console.error("Fehler in resumeWorkoutSession:", error);
+    throw error;
+  }
+}
+
+/**
+ * Lädt eine pausierte Workout Session eines Users (falls vorhanden)
+ *
+ * @param userId - Die ID des Users
+ * @returns Die pausierte Session oder null
+ */
+async function getPausedSession(
+  userId: string
+): Promise<WorkoutSession | null> {
+  try {
+    const { data, error } = await supabase
+      .from("workout_sessions")
+      .select(
+        `
+        *,
+        workout:plan_workouts(
+          *,
+          exercises:plan_exercises(
+            *,
+            exercise:exercises(*)
+          )
+        )
+      `
+      )
+      .eq("user_id", userId)
+      .eq("status", "paused")
+      .order("start_time", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Fehler beim Laden der pausierten Session:", error);
+      throw new Error("Pausierte Session konnte nicht geladen werden");
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Fehler in getPausedSession:", error);
+    throw error;
+  }
+}
+
+/**
+ * Bricht eine Session ab und setzt den Status auf "skipped"
+ *
+ * @param sessionId - Die ID der Session
+ */
+async function cancelWorkoutSession(sessionId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("workout_sessions")
+      .update({
+        status: "skipped",
+        end_time: new Date().toISOString(),
+      })
+      .eq("id", sessionId);
+
+    if (error) {
+      console.error("Fehler beim Abbrechen der Session:", error);
+      throw new Error("Session konnte nicht abgebrochen werden");
+    }
+  } catch (error) {
+    console.error("Fehler in cancelWorkoutSession:", error);
     throw error;
   }
 }
@@ -583,9 +745,9 @@ async function getSessionExercises(
       };
     });
 
-    // Sortiere nach exercise_order
+    // Sortiere nach order_in_workout
     return sessionExercises.sort(
-      (a, b) => a.exercise_order - b.exercise_order
+      (a, b) => a.order_in_workout - b.order_in_workout
     );
   } catch (error) {
     console.error("Fehler in getSessionExercises:", error);
@@ -606,7 +768,7 @@ async function getSessionExercises(
  * @param setNumber - Nummer des Sets (1-basiert)
  * @param weight - Gewicht in kg
  * @param reps - Anzahl Wiederholungen
- * @param rpe - Optional: Rate of Perceived Exertion (1-10)
+ * @param rir - Optional: Reps in Reserve (0-5)
  */
 async function logSet(
   sessionId: string,
@@ -614,7 +776,7 @@ async function logSet(
   setNumber: number,
   weight: number,
   reps: number,
-  rpe?: number
+  rir?: number
 ): Promise<void> {
   try {
     const { error } = await supabase.from("workout_sets").upsert(
@@ -622,9 +784,9 @@ async function logSet(
         session_id: sessionId,
         exercise_id: exerciseId,
         set_number: setNumber,
-        weight_kg: weight,
+        weight: weight,
         reps: reps,
-        rpe: rpe,
+        rir: rir,
       },
       {
         onConflict: "session_id,exercise_id,set_number",
@@ -681,7 +843,7 @@ async function addExtraSet(
       session_id: sessionId,
       exercise_id: exerciseId,
       set_number: nextSetNumber,
-      weight_kg: weight,
+      weight: weight,
       reps: reps,
     });
 
@@ -766,6 +928,199 @@ async function getExerciseAlternatives(
 }
 
 // ============================================================================
+// Plan Recommendations (Scoring System)
+// ============================================================================
+
+/**
+ * Simple in-memory cache for plan templates
+ * Reduces DB queries for frequently accessed templates
+ */
+interface TemplateCache {
+  data: PlanTemplate[] | null;
+  timestamp: number;
+}
+
+const templateCache: TemplateCache = {
+  data: null,
+  timestamp: 0,
+};
+
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Invalidates the template cache
+ * Should be called when templates are added, updated, or deleted
+ */
+export function invalidateTemplateCache(): void {
+  console.log('[TemplateCache] Cache invalidated');
+  templateCache.data = null;
+  templateCache.timestamp = 0;
+}
+
+/**
+ * Lädt Plan-Empfehlungen für einen User basierend auf seinem Profil
+ *
+ * OPTIMIZED VERSION - Uses pre-computed DB fields and minimal SELECT
+ *
+ * Verwendet das Scoring-System um die am besten passenden Templates zu finden.
+ * Berücksichtigt Fitness-Level, Trainingstage, Trainingserfahrung und Ziel.
+ *
+ * @param userId - Die ID des Users
+ * @param limit - Maximale Anzahl der Empfehlungen (Standard: 3)
+ * @returns Liste der top Empfehlungen mit Scores
+ */
+async function getRecommendations(
+  userId: string,
+  limit: number = 3
+): Promise<PlanRecommendation[]> {
+  const startTime = Date.now();
+
+  try {
+    // 1. Lade User-Profil
+    const profileStart = Date.now();
+    const { profile, error: profileError } = await getProfile(userId);
+    if (profileError || !profile) {
+      throw new Error('Profil konnte nicht geladen werden');
+    }
+    const profileDuration = Date.now() - profileStart;
+
+    // 2. Check cache first
+    let templates: PlanTemplate[];
+    let queryDuration = 0;
+    const now = Date.now();
+
+    if (
+      templateCache.data &&
+      now - templateCache.timestamp < CACHE_DURATION
+    ) {
+      console.log('[getRecommendations] Using cached templates', {
+        age: `${Math.round((now - templateCache.timestamp) / 1000)}s`,
+        count: templateCache.data.length,
+      });
+      templates = templateCache.data;
+    } else {
+      // OPTIMIZED QUERY - fetch only what we need with new computed fields
+      const queryStart = Date.now();
+      const { data: fetchedTemplates, error: templatesError } = await supabase
+        .from('plan_templates')
+        .select(`
+          id,
+          name,
+          name_de,
+          description,
+          description_de,
+          plan_type,
+          fitness_level,
+          days_per_week,
+          duration_weeks,
+          primary_goal,
+          min_training_experience_months,
+          estimated_sets_per_week,
+          exercises_per_workout,
+          completion_status
+        `)
+        .eq('is_active', true)
+        .order('completion_status', { ascending: false }) // Complete programs first
+        .order('popularity_score', { ascending: false });
+
+      queryDuration = Date.now() - queryStart;
+
+      if (templatesError) {
+        console.error('Fehler beim Laden der Templates:', templatesError);
+        throw new Error('Templates konnten nicht geladen werden');
+      }
+
+      if (!fetchedTemplates || fetchedTemplates.length === 0) {
+        console.log('[getRecommendations] No templates found');
+        return [];
+      }
+
+      // Update cache
+      templateCache.data = fetchedTemplates;
+      templateCache.timestamp = now;
+      templates = fetchedTemplates;
+
+      console.log('[getRecommendations] Templates fetched and cached', {
+        count: templates.length,
+        duration: `${queryDuration}ms`,
+      });
+    }
+
+    // 3. Erstelle UserProfile für Scoring
+    // Map profile.primary_goal zu scoring system goals
+    let mappedGoal: UserProfile['primary_goal'] = 'general_fitness';
+    if (profile.primary_goal === 'strength' ||
+        profile.primary_goal === 'hypertrophy' ||
+        profile.primary_goal === 'general_fitness') {
+      mappedGoal = profile.primary_goal;
+    }
+    // Map 'endurance' und 'weight_loss' zu 'general_fitness'
+    // Map 'both' goals werden als 'general_fitness' behandelt
+
+    const userProfile: UserProfile = {
+      fitness_level: profile.fitness_level || 'beginner',
+      training_experience_months: profile.training_experience_months || 0,
+      available_training_days: profile.available_training_days || 3,
+      primary_goal: mappedGoal,
+    };
+
+    // 4. Hole Top-Empfehlungen via Scoring-System
+    const scoringStart = Date.now();
+    const recommendations = getTopRecommendations(
+      userProfile,
+      templates,
+      limit
+    );
+    const scoringDuration = Date.now() - scoringStart;
+
+    const totalDuration = Date.now() - startTime;
+
+    // Performance logging
+    console.log('[getRecommendations] Performance:', {
+      total: `${totalDuration}ms`,
+      profile: `${profileDuration}ms`,
+      query: `${queryDuration}ms`,
+      scoring: `${scoringDuration}ms`,
+      templates: templates.length,
+      recommendations: recommendations.length,
+    });
+
+    if (totalDuration > 1000) {
+      console.warn('⚠️ [getRecommendations] Slow performance detected!', {
+        userId,
+        duration: totalDuration,
+      });
+    }
+
+    return recommendations;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error('[getRecommendations] Failed', { duration, error });
+    throw error;
+  }
+}
+
+/**
+ * Lädt die beste Plan-Empfehlung für einen User
+ *
+ * Praktisch für direkten Plan-Vorschlag nach Onboarding.
+ *
+ * @param userId - Die ID des Users
+ * @returns Die beste Empfehlung oder null
+ */
+async function getBestPlanRecommendation(
+  userId: string
+): Promise<PlanRecommendation | null> {
+  try {
+    const recommendations = await getRecommendations(userId, 1);
+    return recommendations[0] || null;
+  } catch (error) {
+    console.error('Fehler in getBestPlanRecommendation:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
 // Next Workout & Planning
 // ============================================================================
 
@@ -813,11 +1168,11 @@ async function getNextWorkout(userId: string): Promise<NextWorkout | null> {
     // Lade zuletzt abgeschlossenes Workout
     const { data: lastSession, error: sessionError } = await supabase
       .from("workout_sessions")
-      .select("plan_workout_id, completed_at")
+      .select("plan_workout_id, end_time")
       .eq("user_id", userId)
       .eq("plan_id", activePlan.id)
       .eq("status", "completed")
-      .order("completed_at", { ascending: false })
+      .order("end_time", { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -893,7 +1248,7 @@ async function getUpcomingWorkouts(
     return (workouts || []).map((workout: any): PlanWorkout => ({
       ...workout,
       exercises: (workout.exercises || []).sort(
-        (a: PlanExercise, b: PlanExercise) => a.exercise_order - b.exercise_order
+        (a: PlanExercise, b: PlanExercise) => a.order_in_workout - b.order_in_workout
       ),
     }));
   } catch (error) {
@@ -917,13 +1272,21 @@ export const trainingService = {
   findMatchingTemplates,
   getTemplateDetails,
 
+  // Plan Recommendations (Scoring System)
+  getRecommendations,
+  getBestPlanRecommendation,
+
   // Plan Creation
   createPlanFromTemplate,
 
   // Workout Session Management
   startWorkoutSession,
   getActiveSession,
+  getPausedSession,
   completeWorkoutSession,
+  pauseWorkoutSession,
+  resumeWorkoutSession,
+  cancelWorkoutSession,
   getSessionExercises,
 
   // Exercise Tracking

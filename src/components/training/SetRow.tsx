@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   Platform,
   UIManager,
 } from "react-native";
-import { Button } from "@/components/ui/Button";
 import type { WorkoutSet } from "@/types/training.types";
 
 if (
@@ -23,56 +22,94 @@ interface SetRowProps {
   setNumber: number;
   targetWeight?: number;
   targetReps?: number;
-  rpeTarget?: number;
+  rirTarget?: number;
   isExpanded: boolean;
   onToggle: () => void;
-  onLog: (weight: number, reps: number, rpe?: number) => void;
+  onLog: (weight: number, reps: number, rir?: number) => void;
   completedSet?: WorkoutSet;
+  pendingSet?: { weight: number; reps: number; rir?: number };
 }
 
 export const SetRow: React.FC<SetRowProps> = ({
   setNumber,
   targetWeight,
   targetReps,
-  rpeTarget,
+  rirTarget,
   isExpanded,
   onToggle,
   onLog,
   completedSet,
+  pendingSet,
 }) => {
   const [weight, setWeight] = useState(
-    completedSet?.weight_kg?.toString() || targetWeight?.toString() || ""
+    completedSet?.weight?.toString() ||
+    pendingSet?.weight?.toString() ||
+    (targetWeight !== null && targetWeight !== undefined ? targetWeight.toString() : "") ||
+    ""
   );
   const [reps, setReps] = useState(
-    completedSet?.reps.toString() || targetReps?.toString() || ""
+    completedSet?.reps?.toString() ||
+    pendingSet?.reps?.toString() ||
+    (targetReps !== null && targetReps !== undefined ? targetReps.toString() : "") ||
+    ""
   );
-  const [rpe, setRpe] = useState(
-    completedSet?.rpe?.toString() || rpeTarget?.toString() || ""
+  const [rir, setRir] = useState(
+    completedSet?.rir?.toString() ||
+    pendingSet?.rir?.toString() ||
+    (rirTarget !== null && rirTarget !== undefined ? rirTarget.toString() : "") ||
+    ""
   );
+
+  const previouslyExpanded = useRef(isExpanded);
+
+  // Auto-save when collapsing (switching to next set)
+  useEffect(() => {
+    if (previouslyExpanded.current && !isExpanded && !completedSet) {
+      // Only auto-save if we have valid data and it's not already completed
+      if (weight && reps) {
+        const weightNum = parseFloat(weight);
+        const repsNum = parseInt(reps);
+        const rirNum = rir ? parseInt(rir) : undefined;
+
+        if (!isNaN(weightNum) && !isNaN(repsNum)) {
+          onLog(weightNum, repsNum, rirNum);
+        }
+      }
+    }
+    previouslyExpanded.current = isExpanded;
+  }, [isExpanded, weight, reps, rir, completedSet, onLog]);
 
   const handleToggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     onToggle();
   };
 
-  const handleSave = () => {
+  // Auto-save on blur (when leaving input fields)
+  const handleAutoSave = () => {
+    if (completedSet) return; // Don't auto-save if already completed
     if (!weight || !reps) return;
 
     const weightNum = parseFloat(weight);
     const repsNum = parseInt(reps);
-    const rpeNum = rpe ? parseFloat(rpe) : undefined;
+    const rirNum = rir ? parseInt(rir) : undefined;
 
-    onLog(weightNum, repsNum, rpeNum);
-    handleToggle(); // Collapse after save
+    if (!isNaN(weightNum) && !isNaN(repsNum)) {
+      onLog(weightNum, repsNum, rirNum);
+    }
   };
 
   const isCompleted = !!completedSet;
+  const isPending = !!pendingSet && !completedSet;
 
   return (
     <View style={styles.container}>
       {/* Header (always visible) */}
       <TouchableOpacity
-        style={[styles.header, isCompleted && styles.headerCompleted]}
+        style={[
+          styles.header,
+          isCompleted && styles.headerCompleted,
+          isPending && styles.headerPending,
+        ]}
         onPress={handleToggle}
       >
         <View style={styles.headerContent}>
@@ -81,16 +118,25 @@ export const SetRow: React.FC<SetRowProps> = ({
           {isCompleted ? (
             <View style={styles.completedInfo}>
               <Text style={styles.completedText}>
-                ✓ {completedSet.weight_kg}kg × {completedSet.reps}
+                ✓ {completedSet.weight}kg × {completedSet.reps}
               </Text>
-              {completedSet.rpe && (
-                <Text style={styles.rpeText}>RPE {completedSet.rpe}</Text>
+              {completedSet.rir !== undefined && (
+                <Text style={styles.rirText}>RiR {completedSet.rir}</Text>
+              )}
+            </View>
+          ) : isPending ? (
+            <View style={styles.completedInfo}>
+              <Text style={styles.pendingText}>
+                ○ {pendingSet!.weight}kg × {pendingSet!.reps}
+              </Text>
+              {pendingSet!.rir !== undefined && (
+                <Text style={styles.rirText}>RiR {pendingSet!.rir}</Text>
               )}
             </View>
           ) : (
             <Text style={styles.targetText}>
-              Soll: {targetWeight}kg × {targetReps}
-              {rpeTarget && ` @ ${rpeTarget}`}
+              Soll: {targetWeight ?? 0}kg × {targetReps ?? 0}
+              {rirTarget !== undefined && rirTarget !== null && ` @ RiR ${rirTarget}`}
             </Text>
           )}
         </View>
@@ -104,8 +150,8 @@ export const SetRow: React.FC<SetRowProps> = ({
           <View style={styles.targetInfo}>
             <Text style={styles.label}>Ziel:</Text>
             <Text style={styles.value}>
-              {targetWeight}kg × {targetReps}
-              {rpeTarget && ` @ RPE ${rpeTarget}`}
+              {targetWeight ?? 0}kg × {targetReps ?? 0}
+              {rirTarget !== undefined && rirTarget !== null && ` @ RiR ${rirTarget}`}
             </Text>
           </View>
 
@@ -115,6 +161,7 @@ export const SetRow: React.FC<SetRowProps> = ({
               <TextInput
                 value={weight}
                 onChangeText={setWeight}
+                onBlur={handleAutoSave}
                 keyboardType="numeric"
                 placeholder="0"
                 style={styles.input}
@@ -128,6 +175,7 @@ export const SetRow: React.FC<SetRowProps> = ({
               <TextInput
                 value={reps}
                 onChangeText={setReps}
+                onBlur={handleAutoSave}
                 keyboardType="numeric"
                 placeholder="0"
                 style={styles.input}
@@ -135,22 +183,17 @@ export const SetRow: React.FC<SetRowProps> = ({
             </View>
           </View>
 
-          {rpeTarget && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>RPE (optional)</Text>
-              <TextInput
-                value={rpe}
-                onChangeText={setRpe}
-                keyboardType="numeric"
-                placeholder={rpeTarget.toString()}
-                style={[styles.input, styles.rpeInput]}
-              />
-            </View>
-          )}
-
-          <Button onPress={handleSave} disabled={!weight || !reps} size="small">
-            Speichern
-          </Button>
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>RiR - Reps in Reserve (optional)</Text>
+            <TextInput
+              value={rir}
+              onChangeText={setRir}
+              onBlur={handleAutoSave}
+              keyboardType="numeric"
+              placeholder={rirTarget !== null && rirTarget !== undefined ? rirTarget.toString() : "0-5"}
+              style={[styles.input, styles.rirInput]}
+            />
+          </View>
         </View>
       )}
     </View>
@@ -166,11 +209,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     padding: 16,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#F8F9FA",
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
   },
   headerCompleted: {
     backgroundColor: "#E8F5E9",
+    borderColor: "#70e0ba",
+  },
+  headerPending: {
+    backgroundColor: "#E3F2FD",
+    borderColor: "#3083FF",
   },
   headerContent: {
     flex: 1,
@@ -188,14 +238,19 @@ const styles = StyleSheet.create({
   },
   completedText: {
     fontSize: 14,
-    color: "#4CAF50",
-    fontWeight: "500",
+    color: "#70e0ba",
+    fontWeight: "600",
+  },
+  pendingText: {
+    fontSize: 14,
+    color: "#3083FF",
+    fontWeight: "600",
   },
   targetText: {
     fontSize: 14,
     color: "#666",
   },
-  rpeText: {
+  rirText: {
     fontSize: 12,
     color: "#666",
     fontStyle: "italic",
@@ -244,7 +299,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: "#fff",
   },
-  rpeInput: {
+  rirInput: {
     flex: 0,
     width: 80,
   },

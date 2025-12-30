@@ -13,6 +13,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { TrainingStackParamList } from '../../navigation/types';
 import { supabase } from '../../lib/supabase';
+import {
+  calculateAndSaveWorkoutCalories,
+  WorkoutCalorieCalculation
+} from '../../services/calorieCalculationService';
+import CalorieCard from '../../components/training/CalorieCard';
+import ExerciseCalorieBreakdown from '../../components/training/ExerciseCalorieBreakdown';
 
 type WorkoutSummaryScreenNavigationProp = NativeStackNavigationProp<
   TrainingStackParamList,
@@ -45,10 +51,26 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
   const { sessionId } = route.params;
   const [stats, setStats] = useState<WorkoutStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [calorieData, setCalorieData] = useState<WorkoutCalorieCalculation | null>(null);
+  const [isLoadingCalories, setIsLoadingCalories] = useState(true);
 
   useEffect(() => {
     calculateStats();
+    loadCalories();
   }, [sessionId]);
+
+  const loadCalories = async () => {
+    try {
+      setIsLoadingCalories(true);
+      const data = await calculateAndSaveWorkoutCalories(sessionId);
+      setCalorieData(data);
+    } catch (error) {
+      console.error('Fehler beim Laden der Kalorien:', error);
+      // Don't show error to user, just log it
+    } finally {
+      setIsLoadingCalories(false);
+    }
+  };
 
   const calculateStats = async () => {
     try {
@@ -57,7 +79,7 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
       // Fetch session data
       const { data: session, error: sessionError } = await supabase
         .from('workout_sessions')
-        .select('started_at, completed_at')
+        .select('start_time, end_time')
         .eq('id', sessionId)
         .single();
 
@@ -69,16 +91,14 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
         .select(
           `
           id,
-          weight_kg,
+          weight,
           reps,
-          workout_exercises!inner (
-            exercises!inner (
-              name_de
-            )
+          exercise:exercises!inner (
+            name_de
           )
         `
         )
-        .eq('workout_exercises.session_id', sessionId);
+        .eq('session_id', sessionId);
 
       if (setsError) throw setsError;
 
@@ -99,7 +119,7 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
       let maxVolume = 0;
 
       sets.forEach((set: any) => {
-        const weight = set.weight_kg || 0;
+        const weight = set.weight || 0;
         const reps = set.reps || 0;
         const volume = weight * reps;
 
@@ -109,7 +129,7 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
         if (volume > maxVolume && weight > 0) {
           maxVolume = volume;
           bestSet = {
-            exerciseName: set.workout_exercises.exercises.name_de,
+            exerciseName: set.exercise.name_de,
             weight,
             reps,
             volume,
@@ -119,9 +139,9 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
 
       // Calculate duration
       let duration = 0;
-      if (session?.started_at && session?.completed_at) {
-        const startTime = new Date(session.started_at).getTime();
-        const endTime = new Date(session.completed_at).getTime();
+      if (session?.start_time && session?.end_time) {
+        const startTime = new Date(session.start_time).getTime();
+        const endTime = new Date(session.end_time).getTime();
         duration = Math.round((endTime - startTime) / 1000 / 60); // Convert to minutes
       }
 
@@ -263,6 +283,23 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
             </View>
           )}
         </View>
+
+        {/* Calorie Card */}
+        {calorieData && (
+          <>
+            <CalorieCard
+              totalCalories={calorieData.totalCalories}
+              activeTimeMinutes={calorieData.activeTimeMinutes}
+              averageMET={calorieData.averageMET}
+              isLoading={isLoadingCalories}
+            />
+
+            <ExerciseCalorieBreakdown
+              breakdown={calorieData.breakdown}
+              totalCalories={calorieData.totalCalories}
+            />
+          </>
+        )}
 
         {/* Finish Button */}
         <TouchableOpacity

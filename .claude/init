@@ -1,94 +1,399 @@
 # Lifestyle App - Fitness & Nutrition Tracker
 
+**Last Updated:** 2025-12-30
+**Project Type:** React Native (Expo) Lifestyle Application
+**Branch:** feature/training-section
+**Status:** Active Development
+
+---
+
 ## Projekt-Übersicht
 
 React Native (Expo) App für Training, Ernährung und Supplements.
+Eine umfassende Lifestyle-Anwendung mit Training Management, Recovery Tracking, Nutrition Tracking und User Profile Management. Die App nutzt Supabase als Backend und folgt einer modularen, feature-basierten Architektur.
+
 Zielgruppe: Fitness-Enthusiasten, wissenschaftlich fundiert.
+
+---
 
 ## Tech Stack
 
-- **Frontend**: React Native + Expo (TypeScript)
+- **Frontend**: React Native 0.81.5 + Expo ~54.0.30 (TypeScript 5.9.2)
 - **Backend**: Supabase (PostgreSQL + Auth)
-- **Navigation**: React Navigation
-- **State**: React Hooks (kein Redux)
-- **Styling**: React Native StyleSheet (kein Tailwind/NativeWind)
+- **Navigation**: React Navigation 7.x (Native Stack + Bottom Tabs)
+- **UI Library**: React Native Paper 5.14.5
+- **State Management**: React Context API + AsyncStorage
+- **Testing**: tsx 4.19.2 für TypeScript test execution
+
+---
 
 ## Projekt-Struktur
 
 ```
-src/
-├── lib/              # Third-party library configs
-│   └── supabase.ts   # ✅ Supabase client mit AsyncStorage
-├── services/         # Business logic
-│   ├── auth.service.ts     # ✅ Authentication service
-│   ├── profile.service.ts  # ✅ Profile & onboarding service
-│   └── recovery.service.ts # ✅ Recovery tracking service (2025-12-28)
-├── contexts/         # React Context providers
-│   └── OnboardingContext.tsx  # ✅ 6-step onboarding state
-├── utils/            # Utilities
-│   └── validation.ts    # ✅ Form validation functions
-├── hooks/            # Custom React hooks
-│   └── useForm.ts       # ✅ Form state management
-├── screens/          # Screen components
-│   ├── onboarding/   # ✅ 6 Onboarding Screens + Summary (2025-12-26)
-│   ├── app/          # ✅ Main app screens (2025-12-28)
-│   │   ├── HomeScreen.tsx        # ✅ Dashboard/Landing with recovery status
-│   │   ├── ProfileScreen.tsx     # ✅ Profile display with Edit button
-│   │   ├── ProfileEditScreen.tsx # ✅ Profile edit form (2025-12-27)
-│   │   └── DailyCheckinScreen.tsx # ✅ Daily recovery check-in (2025-12-28)
-│   ├── auth/         # ⏸️ Login, Register
-│   ├── training/     # ⏸️ Training screens
-│   └── nutrition/    # ⏸️ Nutrition screens
-├── components/       # Reusable UI components
-│   └── ui/           # ✅ 13 UI Components (2025-12-26)
-├── types/            # ⏸️ TypeScript types
-├── tests/            # Test files
-│   ├── auth.test.simple.ts   # ✅ Auth tests
-│   └── validation.test.ts    # ✅ Validation tests (59 tests)
-└── navigation/       # ✅ Complete navigation system (2025-12-26)
-    ├── AppNavigator.tsx          # ✅ Root navigator (Auth/Onboarding/Main routing)
-    ├── OnboardingNavigator.tsx   # ✅ Onboarding flow coordinator
-    ├── MainNavigator.tsx         # ✅ Main app navigation (Home/Profile)
-    ├── AuthNavigator.tsx         # ⏸️ Auth flow (Login/Register)
-    ├── types.ts                  # ✅ Navigation type definitions
-    └── index.ts                  # ✅ Navigation exports
+lifestyle-app/
+├── src/
+│   ├── app/                    # App entry points
+│   ├── lib/                    # Third-party library configs
+│   │   └── supabase.ts         # ✅ Supabase client mit AsyncStorage
+│   ├── components/
+│   │   ├── ui/                 # ✅ 13 UI Components (Reusable)
+│   │   └── training/           # ✅ Training feature components (NEW)
+│   ├── screens/
+│   │   ├── Training/           # ✅ Training screens (NEW)
+│   │   ├── onboarding/         # ✅ 6 Onboarding Screens + Summary
+│   │   ├── app/                # ✅ Main app screens (Home, Profile, DailyCheckin)
+│   │   ├── auth/               # ⏸️ Login, Register
+│   │   └── nutrition/          # ⏸️ Nutrition screens
+│   ├── services/               # Business logic & API services
+│   │   ├── auth.service.ts     # ✅ Authentication service
+│   │   ├── profile.service.ts  # ✅ Profile & onboarding service
+│   │   ├── recovery.service.ts # ✅ Recovery tracking service
+│   │   ├── trainingService.ts  # ✅ Training service with caching
+│   │   └── calorieCalculationService.ts  # ✅ Calorie calculations (NEW)
+│   ├── utils/                  # Utility functions & helpers
+│   │   ├── validation.ts       # ✅ Form validation functions
+│   │   ├── planRecommendationScoring.ts  # ✅ 4D Scoring Algorithm (NEW)
+│   │   └── recommendationAnalytics.ts    # ✅ Analytics System (NEW)
+│   ├── contexts/               # React Context providers
+│   │   └── OnboardingContext.tsx  # ✅ 6-step onboarding state
+│   ├── hooks/                  # Custom React hooks
+│   │   └── useForm.ts          # ✅ Form state management
+│   ├── types/                  # TypeScript type definitions
+│   │   └── training.types.ts   # ✅ Training types (NEW)
+│   ├── tests/                  # Test files
+│   │   ├── auth.test.simple.ts # ✅ Auth tests
+│   │   └── validation.test.ts  # ✅ Validation tests (59 tests)
+│   └── navigation/             # ✅ Complete navigation system
+│       ├── AppNavigator.tsx    # ✅ Root navigator (Auth/Onboarding/Main routing)
+│       ├── OnboardingNavigator.tsx  # ✅ Onboarding flow coordinator
+│       ├── MainNavigator.tsx   # ✅ Main app navigation
+│       ├── types.ts            # ✅ Navigation type definitions
+│       └── index.ts            # ✅ Navigation exports
+├── .claude/                    # AI agent definitions & documentation
+│   ├── agents/                 # Specialized AI agents
+│   ├── deliverables/           # Feature implementation summaries
+│   ├── migrations/             # Architecture migration guides
+│   ├── research/               # Technical research & optimization docs
+│   └── test-reports/           # Test execution reports
+├── docs/                       # Integration guides
+├── scripts/                    # Utility scripts
+├── sql/                        # Database migrations
+└── supabase/                   # Supabase configuration
 ```
+
+---
+
+## Recent Major Changes (December 2024 - January 2025)
+
+### Training Section Enhancement (Feature Branch: feature/training-section)
+
+**Date:** 2024-12-28 to 2025-12-30
+
+Eine umfassende Überarbeitung des Training-Moduls mit intelligenten Plan-Empfehlungen, Kalorienverfolgung, Fitness-Statistiken und erweiterten Scoring-Algorithmen.
+
+#### 1. New Training Components
+
+**Location:** `src/components/training/`
+
+- **CalorieCard.tsx**
+  - Zeigt Kalorienverbrauch für Workouts
+  - Echtzeit-Kalorienberechnung Integration
+
+- **ExerciseCalorieBreakdown.tsx**
+  - Detaillierte Kalorienaufschlüsselung pro Übung
+  - Visuelle Darstellung des Energieverbrauchs
+
+- **FitnessStats.tsx**
+  - Umfassendes Fitness-Statistik Dashboard
+  - Tracking von Progress-Metriken und Performance-Indikatoren
+
+- **PausedSessionCard.tsx**
+  - Verwaltung und Anzeige pausierter Training Sessions
+  - Quick Resume Funktionalität
+
+- **PlanRecommendationCard.tsx**
+  - Professionelle Empfehlungskarten mit Scoring-Breakdown
+  - Interaktives UI mit erweiterbaren Score-Details
+  - Badge-System für Empfehlungsqualität
+  - Integration Guide: `docs/INTEGRATION_GUIDE.md`
+
+- **ScoreBreakdownChart.tsx** ⭐ PRODUCTION READY
+  - **Status:** ✅ Production Ready (2024-12-29)
+  - **Lines of Code:** 446 lines + 1779 lines total (mit Tests & Docs)
+  - **Features:**
+    - Animierte Bar Charts (0 → Zielwert, 800ms mit 100ms Stagger)
+    - 4 Score-Kategorien mit farbcodierter Visualisierung
+    - Collapsible/Expandable Interface
+    - Interaktive Info-Buttons mit Modal Dialogs
+    - Accessibility-ready (WCAG 2.1 AA compliant)
+    - 60fps smooth animations mit React.memo Optimierung
+  - **Documentation:**
+    - ScoreBreakdownChart.README.md - Komplette Usage Guide
+    - ScoreBreakdownChart.SUMMARY.md - Implementation Summary
+    - ScoreBreakdownChart.accessibility.md - WCAG Compliance Details
+    - ScoreBreakdownChart.ANIMATION.md - Animation Specifications
+  - **Testing:**
+    - Comprehensive Test Suite: `__tests__/ScoreBreakdownChart.test.tsx`
+    - Demo Component: `ScoreBreakdownChart.demo.tsx` (8 Szenarien)
+    - Coverage: Rendering, Scores, Interactions, Accessibility, Edge Cases
+  - **Accessibility:**
+    - Color Contrast Ratios erfüllen alle WCAG 2.1 AA (4.5:1+)
+    - Screen Reader Support (VoiceOver + TalkBack)
+    - Touch Targets ≥44pt
+    - Semantische Labels und Hints
+  - **Known Issues:**
+    - Kein Reduced Motion Support (medium priority)
+    - Kein RTL Support (medium priority)
+    - Keine Dark Mode Optimierung (medium priority)
+
+**Component Index:** Alle Components exportiert via `src/components/training/index.ts`
+
+#### 2. Updated Training Components
+
+Die folgenden existierenden Components wurden signifikant erweitert:
+
+- **ActivePlanCard.tsx** - Enhanced Plan Display mit neuen Metriken
+- **AlternativesModal.tsx** - Verbesserte Exercise Alternative Selection
+- **InactivePlanCard.tsx** - Aktualisierte Inactive Plan Visualisierung
+- **QuickWorkoutAction.tsx** - Streamlined Quick Workout Initiation
+- **SetRow.tsx** - Enhanced Set Tracking UI
+
+#### 3. Training Screens Updates
+
+**Location:** `src/screens/Training/`
+
+Alle Training Screens wurden aktualisiert um neue Features zu integrieren:
+
+- **TrainingDashboardScreen.tsx**
+  - Zentrale Hub für Training Activities
+  - Zeigt Active Plans, Paused Sessions, Fitness Stats
+
+- **GuidedPlanFlowScreen.tsx**
+  - Intelligenter Plan-Empfehlungsflow
+  - Integration mit PlanRecommendationCard
+  - User Profile-basiertes Plan Matching
+
+- **CustomPlanFlowScreen.tsx**
+  - Custom Plan Creation Workflow
+  - Enhanced Validation und UX
+
+- **TrainingPlanDetailScreen.tsx**
+  - Detaillierte Plan-Ansicht mit allen Metriken
+  - Calorie Tracking Integration
+
+- **WorkoutSessionScreen.tsx**
+  - Aktives Workout Tracking
+  - Echtzeit-Kalorienberechnung
+  - Pause/Resume Funktionalität
+
+- **WorkoutSummaryScreen.tsx**
+  - Post-Workout Summary mit detaillierten Analytics
+  - Calorie Burn Summary und Exercise Breakdown
+
+- **HomeScreen.tsx** (app level)
+  - Aktualisiert für Training Module Changes
+  - Quick Access zu Training Features
+
+#### 4. Services & Business Logic
+
+**Location:** `src/services/`
+
+- **trainingService.ts** - Enhanced Training Logic
+  - **Template Caching:** 5-Minuten In-Memory Cache für Plan Templates
+  - **Optimierte Queries:** Explicit SELECT Lists, reduzierter Data Transfer
+  - **Sorting:** Nach completion_status und popularity_score
+  - **Neue Methods:**
+    - `getPlanTemplates()` - Fetch all plan templates mit Caching
+    - `clearTemplateCache()` - Cache Invalidation
+    - `createPlanFromTemplate()` - Plan Creation von Recommendations
+  - **Performance:** Drastisch reduzierter Database Access durch Caching
+
+- **calorieCalculationService.ts** - Neuer Service
+  - Echtzeit-Kalorienberechnung basierend auf Exercises
+  - MET (Metabolic Equivalent of Task) Calculations
+  - User Profile Integration (Weight, Age, Fitness Level)
+  - Per-Exercise und Total Workout Calorie Tracking
+
+**Testing:**
+- Service Tests: `src/services/__tests__/`
+- Test Scripts verfügbar in package.json
+
+#### 5. Utilities & Algorithms
+
+**Location:** `src/utils/`
+
+- **planRecommendationScoring.ts** ⭐ CORE ALGORITHM
+  - **Intelligenter Plan Matching Algorithmus**
+  - **4 Scoring Dimensions:**
+    1. **Experience Score** (0-100): Matches User Fitness Level und Training Experience
+    2. **Frequency Score** (0-100): Matches verfügbare Training Days
+    3. **Goal Score** (0-100): Matches Primary Fitness Goals
+    4. **Volume Score** (0-100): Matches Training Volume Capacity
+  - **Total Score:** Gewichteter Durchschnitt aller Dimensionen
+  - **Completeness Tracking:** Identifiziert incomplete Plan Templates
+  - **Optimizations:**
+    - Nutzt `exercises_per_workout` direkt aus Database
+    - Optimierte Volume Calculation: `calculateVolumeMatchOptimized()`
+    - Fallback Support für Backwards Compatibility
+  - **Functions:**
+    - `getTopRecommendations()` - Returns Top N Recommendations
+    - `calculateRecommendationScore()` - Main Scoring Engine
+  - **Documentation:**
+    - `.claude/research/scoring-optimization-summary.md`
+
+- **recommendationAnalytics.ts** ⭐ ANALYTICS SYSTEM
+  - **Comprehensive Analytics & Monitoring**
+  - **Event Tracking:**
+    - `recommendations_loaded` - Wenn Recommendations angezeigt werden
+    - `plan_selected` - User wählt einen Plan
+    - `plan_created` - Plan erfolgreich erstellt
+    - `incomplete_warning_shown` - Warning angezeigt
+    - `incomplete_plan_accepted` - User akzeptiert incomplete Plan
+    - `recommendations_error` - System Errors
+  - **Features:**
+    - Session Management für Flow Analysis
+    - Konfigurierbare Sampling Rate (0.0 - 1.0)
+    - GDPR-Compliant mit User Consent Checks
+    - Health Monitoring und Real-time Alerts
+    - Fail-Safe: Crasht die App nie
+  - **Health Checks:**
+    - Low Recommendation Quality Alerts (Score < 60)
+    - All Recommendations Incomplete Warnings
+    - No Recommendations Available Alerts
+    - Slow Loading Detection (> 2 Sekunden)
+    - Large Score Gap Detection
+  - **Database Integration:**
+    - Events gespeichert in Supabase
+    - SQL Dashboards für Insights
+    - Migration: `supabase/migrations/20241229_create_recommendation_events.sql`
+  - **Documentation:**
+    - `.claude/research/analytics-implementation-report.md`
+
+**Utility Testing:**
+- Tests: `src/utils/__tests__/`
+- Run: `npm run test:scoring` oder `npm run test:scoring:all`
+
+**Exports:** Alle Utilities exportiert via `src/utils/index.ts`
+
+#### 6. Type System Updates
+
+**Location:** `src/types/training.types.ts`
+
+Enhanced TypeScript Definitionen inklusive:
+- Plan Recommendation Types
+- Score Breakdown Types
+- Calorie Tracking Types
+- Workout Session Types
+- Fitness Statistics Types
+
+#### 7. Database Schema Changes
+
+**Neue Felder zu plan_templates hinzugefügt:**
+- `estimated_sets_per_week` - Pre-calculated Total Sets per Week
+- `exercises_per_workout` - Average Exercises per Workout Session
+- `completion_status` - Plan Completeness Indicator ('complete' | 'incomplete')
+- `popularity_score` - Plan Popularity Metric für Sorting
+
+**Benefits:**
+- Eliminiert Runtime Calculations während Scoring
+- Ermöglicht Dynamic Completeness Management
+- Verbessert Query Performance
+
+#### 8. Testing Infrastructure (Training)
+
+**Neue Test Files:**
+- `src/components/training/__tests__/ScoreBreakdownChart.test.tsx`
+- `src/services/__tests__/`
+- `src/utils/__tests__/planRecommendationScoring.test.ts`
+
+**Test Reports:**
+- `.claude/test-reports/`
+  - SUMMARY.md - Overall Test Summary
+  - EXECUTIVE-SUMMARY.md - High-Level Overview
+  - HOW-TO-RUN-TESTS.md - Test Execution Guide
+  - README.md - Test Documentation
+  - scoring-system-e2e-test-report.md - End-to-End Scoring Tests
+
+**Test Scripts (package.json):**
+```json
+{
+  "test": "tsx src/utils/__tests__/planRecommendationScoring.test.ts",
+  "test:scoring": "tsx src/utils/__tests__/planRecommendationScoring.test.ts",
+  "test:scoring:e2e": "tsx scripts/e2e-scoring-test-simple.ts",
+  "test:scoring:all": "npm run test:scoring && npm run test:scoring:e2e",
+  "test:auth": "tsx src/tests/auth.test.ts --quick",
+  "test:auth:all": "tsx src/tests/auth.test.ts --all",
+  "test:validation": "tsx src/tests/validation.test.ts"
+}
+```
+
+#### 9. Documentation (Training)
+
+**Neue Documentation Files:**
+
+- **Integration Guides:**
+  - `docs/INTEGRATION_GUIDE.md`
+    - PlanRecommendationCard Integration Guide
+    - Step-by-Step Implementation
+    - Analytics Event Tracking
+    - Error Handling Patterns
+
+- **Research & Optimization:**
+  - `.claude/research/analytics-implementation-report.md`
+    - Analytics System Architecture
+    - Event Tracking Specifications
+    - Database Schema Details
+    - Health Monitoring Configuration
+
+  - `.claude/research/scoring-optimization-summary.md`
+    - Scoring Algorithm Optimizations
+    - Performance Improvements
+    - Caching Strategies
+    - Database Query Optimizations
+
+  - `.claude/research/trainingsplan-entscheidungsbaum-optimierung.md`
+    - Training Plan Decision Tree Optimization
+    - Recommendation Logic Refinement
+
+- **Deliverables:**
+  - `.claude/deliverables/PlanRecommendationCard-Integration-Summary.md`
+  - `.claude/deliverables/VISUAL_GUIDE.md`
+
+- **Component Documentation:**
+  - ScoreBreakdownChart.README.md - Component Usage Guide
+  - ScoreBreakdownChart.SUMMARY.md - Implementation Details
+  - ScoreBreakdownChart.accessibility.md - Accessibility Compliance
+  - ScoreBreakdownChart.ANIMATION.md - Animation Specifications
+
+- **Migration Guides:**
+  - `.claude/migrations/README.md`
+  - `.claude/migrations/QUICK_START.md`
+  - `.claude/migrations/guided-flow-to-recommendations-migration.md`
+
+- **Test Documentation:**
+  - `.claude/tests/test-guided-plan-flow-recommendations.md`
+
+---
 
 ## Supabase Schema
 
 **18 Tabellen, alle erstellt:**
 
 - Core: profiles, exercises (6 rows), intolerances_catalog (8 rows)
-- Training: training_plans, plan_workouts, plan_exercises, workout_sessions, workout_sets, user_1rm
+- Training: training_plans, plan_workouts, plan_exercises, workout_sessions, workout_sets, user_1rm, plan_templates
 - Nutrition: nutrition_goals, meal_plans, meals, meal_items, food_items, daily_nutrition_log
 - Supplements: supplements, user_supplements
+- Analytics: recommendation_events (NEW)
+
+**Wichtige Schema-Änderungen:**
+- `plan_templates` enhanced mit: `estimated_sets_per_week`, `exercises_per_workout`, `completion_status`, `popularity_score`
+- `recommendation_events` für Analytics
 
 **RLS aktiviert** auf allen User-Tabellen.
 
-## Wichtige Dateien
+---
 
-- `.env`: EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY
-- `src/lib/supabase.ts`: Supabase client setup (✅ implementiert mit AsyncStorage)
-- `src/services/auth.service.ts`: Auth logic (✅ komplett mit 7 Funktionen)
-- `src/services/profile.service.ts`: Profile & onboarding logic (✅ komplett mit 8 Funktionen)
-- `src/services/recovery.service.ts`: Recovery tracking logic (✅ komplett, 2025-12-28)
-- `src/contexts/OnboardingContext.tsx`: 6-step onboarding state management (✅ implementiert)
-- `src/utils/validation.ts`: Form validation utilities (✅ implementiert)
-- `src/hooks/useForm.ts`: Custom form hook (✅ implementiert)
-- `src/components/ui/`: 13 UI Components (✅ implementiert 2025-12-26)
-- `src/screens/onboarding/`: 6 Onboarding Screens + Summary (✅ implementiert 2025-12-26)
-- `src/screens/app/`: Main app screens (✅ implementiert 2025-12-28)
-  - `HomeScreen.tsx`: Dashboard/Landing with recovery status display
-  - `ProfileScreen.tsx`: Profile display with Edit button + useFocusEffect refresh
-  - `ProfileEditScreen.tsx`: Comprehensive profile edit form (✅ implementiert 2025-12-27)
-  - `DailyCheckinScreen.tsx`: Daily recovery check-in form (✅ implementiert 2025-12-28)
-- `src/navigation/`: Complete navigation system (✅ implementiert 2025-12-26, updated 2025-12-28)
-  - `AppNavigator.tsx`: Root navigator with auth/onboarding/main flow routing
-  - `OnboardingNavigator.tsx`: Onboarding flow manager
-  - `MainNavigator.tsx`: Main app stack navigator (includes ProfileEdit, DailyCheckin routes)
-  - `types.ts`: TypeScript navigation parameter lists (includes ProfileEdit, DailyCheckin)
-
-## Implementierte Features (Stand: 2025-12-28)
+## Implementierte Features (Stand: 2025-12-30)
 
 ### 1. Authentication System (✅ Komplett)
 
@@ -192,24 +497,6 @@ const { values, errors, isSubmitting, handleChange, handleSubmit, reset } = useF
 - Integration mit Supabase (profiles + user_intolerances tables)
 - Wiederverwendbare Funktionen für verschiedene Screens
 
-**Beispiel-Verwendung**:
-```typescript
-import { createProfile, getProfile } from '@/services/profile.service';
-
-// Profil erstellen nach Onboarding
-const result = await createProfile({
-  gender: 'male',
-  age: 28,
-  height: 180,
-  weight: 75,
-  goal: 'muscle_gain',
-  intolerances: ['lactose', 'gluten']
-});
-
-// Profil laden
-const profile = await getProfile(userId);
-```
-
 **Response Format**: `{ data: T | null, error: string | null }`
 
 ### 5. Onboarding Screens (✅ Komplett - 2025-12-26)
@@ -269,23 +556,6 @@ const profile = await getProfile(userId);
 - Screen 5: `getIntolerancesCatalog()` lädt Optionen
 - Summary: `submitOnboarding()` → `createProfile()` → Profil in DB
 
-**Export Structure**:
-```typescript
-// src/screens/onboarding/index.tsx
-export { default as OnboardingScreen1 } from './OnboardingScreen1';
-export { default as OnboardingScreen2 } from './OnboardingScreen2';
-// ... etc
-```
-
-**Usage Example**:
-```typescript
-import { OnboardingScreen1 } from '@/screens/onboarding';
-
-<OnboardingProvider>
-  <OnboardingScreen1 />
-</OnboardingProvider>
-```
-
 **Dokumentation**: `src/screens/onboarding/README.md`
 
 ### 6. Onboarding Context (✅ Komplett - 2025-12-26)
@@ -326,53 +596,12 @@ import { OnboardingScreen1 } from '@/screens/onboarding';
 - `SET_SUBMITTING` - Loading state
 - `RESET` - Zurücksetzen
 
-**Provider Usage**:
-```typescript
-<OnboardingProvider>
-  <OnboardingScreen />
-</OnboardingProvider>
-```
-
-**Hook Usage**:
-```typescript
-const {
-  state,
-  updateField,
-  nextScreen,
-  previousScreen,
-  submitOnboarding,
-  progress
-} = useOnboarding();
-
-// Update field
-updateField('age', 28);
-
-// Navigate
-await nextScreen(); // Validiert automatisch
-
-// Submit
-await submitOnboarding(); // Calls ProfileService
-```
-
 **Validation**:
 - Screen-spezifische Validation vor Navigation
 - Deutsche Fehlermeldungen
 - Automatisches Error-Clearing bei Field-Update
 
-**Integration mit ProfileService**:
-```typescript
-// In submitOnboarding()
-const result = await createProfile({
-  gender: state.data.gender!,
-  age: state.data.age!,
-  height: state.data.height!,
-  weight: state.data.weight!,
-  goal: state.data.goal!,
-  intolerances: state.data.intolerances
-});
-```
-
-### 6.1 Profile Edit System (✅ Komplett - 2025-12-27)
+### 7. Profile Edit System (✅ Komplett - 2025-12-27)
 
 **Location**: `src/screens/app/ProfileEditScreen.tsx`, `src/screens/app/ProfileScreen.tsx`
 
@@ -404,12 +633,7 @@ const result = await createProfile({
    - Home Equipment (MultiSelectChips, conditional on no gym access)
 
 3. **Trainingsziel** (Section 3)
-   - Primary Goal (GoalCards mit Icons):
-     - 💪 Kraft aufbauen
-     - 🏋️ Muskeln aufbauen
-     - 🔥 Gewicht verlieren
-     - 🏃 Ausdauer
-     - ✨ Allgemeine Fitness
+   - Primary Goal (GoalCards mit Icons)
 
 4. **Lifestyle** (Section 4)
    - Sleep Hours (Slider: 3-12h mit 0.5h steps)
@@ -418,57 +642,14 @@ const result = await createProfile({
 5. **Unverträglichkeiten** (Section 5)
    - Checkboxes für Intolerances aus Katalog
    - Severity Picker (Mild/Moderate/Severe/Life-threatening) per Intolerance
-   - Lädt Katalog via `getIntolerancesCatalog()`
-
-**State Management**:
-```typescript
-interface ProfileFormData {
-  age: number | null;
-  weight: number | null;
-  height: number | null;
-  gender: 'male' | 'female' | 'other' | null;
-  fitness_level: 'beginner' | 'intermediate' | 'advanced' | null;
-  training_experience_months: number | null;
-  available_training_days: number | null;
-  has_gym_access: boolean;
-  home_equipment: string[];
-  primary_goal: 'strength' | 'hypertrophy' | 'endurance' | 'weight_loss' | 'general_fitness' | null;
-  sleep_hours_avg: number | null;
-  stress_level: number | null;
-}
-
-// Separate state for intolerances
-const [intolerances, setIntolerances] = useState<UserIntoleranceInput[]>([]);
-```
 
 **Input Handling Strategy**:
 - **Numeric Fields**: Separate `inputStrings` state preserves comma/period during typing
 - **Reason**: Prevents value disappearing when user types "75," for weight
-- **Implementation**:
-```typescript
-const [inputStrings, setInputStrings] = useState({
-  age: '',
-  weight: '',
-  height: '',
-  training_experience_months: '',
-});
-
-const handleNumericInput = (field, text) => {
-  const displayText = text.replace(',', '.');
-  setInputStrings(prev => ({ ...prev, [field]: displayText }));
-  const numericValue = displayText === '' ? null : parseFloat(displayText) || null;
-  updateField(field, numericValue);
-};
-```
 
 **Validation**:
 - Client-side validation via `validateForm()` before save
-- Field-level validations:
-  - Age: 13-120
-  - Weight/Height: > 0
-  - Training Days: 1-7
-  - Sleep: 3-12 hours
-  - Stress: 1-10
+- Field-level validations
 - German error messages
 - Validation errors displayed in error banner
 
@@ -478,40 +659,12 @@ const handleNumericInput = (field, text) => {
 3. **Save**: `handleSave()` → `validateForm()` → `updateProfile()` + `saveUserIntolerances()` → Navigate back
 4. **Cancel**: `handleCancel()` → `navigation.goBack()` (no save)
 
-**Loading States**:
-- Initial load: ActivityIndicator während Profile-Fetch
-- Save: Button disabled + loading prop während Update
-- Success: Green success message + auto-navigation nach 1.5s
-
-**Error Handling**:
-- Try-catch in allen async Funktionen
-- Deutsche Fehlermeldungen in error banner
-- Validation errors vor Supabase-Call
-- Network/DB errors angezeigt mit Retry-Option
-
 **UI/UX Features**:
 - ✅ Section Headers für klare Struktur
 - ✅ Error/Success Banners (rot/grün mit farbigem Hintergrund)
 - ✅ Disabled states während Save
-- ✅ Success Message mit Checkmark "Profil erfolgreich gespeichert!"
+- ✅ Success Message mit Checkmark
 - ✅ Auto-Navigation zurück zu ProfileScreen nach Success
-- ✅ ScrollView für alle Inhalte (responsive)
-- ✅ Consistent Styling mit Onboarding Screens
-
-**Supabase Integration**:
-```typescript
-// Load profile
-const { profile, error } = await getProfile(user.id);
-
-// Update profile
-const { error: profileError } = await updateProfile(user.id, formData);
-
-// Update intolerances
-const { error: intolerancesError } = await saveUserIntolerances(
-  user.id,
-  intolerances
-);
-```
 
 #### ProfileScreen Updates
 
@@ -519,124 +672,22 @@ const { error: intolerancesError } = await saveUserIntolerances(
 
 **Neue Features**:
 
-1. **Edit Button** (Header):
-```typescript
-<Button
-  title="Bearbeiten"
-  variant="outline"
-  size="small"
-  onPress={() => navigation.navigate('ProfileEdit')}
-/>
-```
-
+1. **Edit Button** (Header)
 2. **Auto-Refresh via useFocusEffect**:
 ```typescript
-import { useFocusEffect } from '@react-navigation/native';
-
 useFocusEffect(
   useCallback(() => {
     loadProfile(); // Reload when screen comes into focus
   }, [])
 );
 ```
-- **Zweck**: Zeigt aktualisierte Daten automatisch nach Rückkehr von ProfileEdit
-- **Trigger**: Jedes Mal wenn ProfileScreen fokussiert wird
-- **Benefit**: Keine manuellen Refresh-Buttons nötig
 
 **Navigation Flow**:
 ```
-ProfileScreen
-    ↓ (Press "Bearbeiten")
-ProfileEditScreen
-    ↓ (Load existing data)
-User edits fields
-    ↓ (Press "Speichern")
-Validate → Save to Supabase
-    ↓ (Success)
-Navigate back (navigation.goBack())
-    ↓
-ProfileScreen (useFocusEffect triggers)
-    ↓
-loadProfile() fetches updated data
-    ✅ Display updated profile
+ProfileScreen → ProfileEditScreen → Edit → Save → Navigate back → Auto-Refresh
 ```
 
-#### Navigation Integration
-
-**MainNavigator.tsx Updates**:
-```typescript
-<Stack.Screen
-  name="ProfileEdit"
-  component={ProfileEditScreen}
-  options={{
-    title: "Profil bearbeiten",
-    headerBackTitle: "Zurück",
-  }}
-/>
-```
-
-**Navigation Types Updates** (`src/navigation/types.ts`):
-```typescript
-export type MainStackParamList = {
-  Home: undefined;
-  Profile: undefined;
-  ProfileEdit: undefined; // Added 2025-12-27
-  Settings: undefined;
-};
-```
-
-**Type-Safe Navigation**:
-```typescript
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { MainStackParamList } from '../../navigation/types';
-
-type ProfileScreenNavigationProp = NativeStackNavigationProp<
-  MainStackParamList,
-  'Profile'
->;
-
-const navigation = useNavigation<ProfileScreenNavigationProp>();
-navigation.navigate('ProfileEdit'); // Type-safe!
-```
-
-**Design-Entscheidungen**:
-
-1. **Single-Page Form vs Tabs**:
-   - **Entscheidung**: Single ScrollView mit Sections
-   - **Grund**: Einfacher zu implementieren, übersichtlich für ~15 Felder
-   - **Future**: Bei mehr Feldern könnte Tab-Interface sinnvoll sein
-
-2. **Input String Preservation**:
-   - **Problem**: Native Input löscht Wert bei "75," (trailing comma)
-   - **Lösung**: Separate `inputStrings` state für Display
-   - **Benefit**: Bessere UX beim Tippen von Dezimalzahlen
-
-3. **useFocusEffect vs Manual Refresh**:
-   - **Entscheidung**: Automatisches Reload via useFocusEffect
-   - **Grund**: Bessere UX, keine Refresh-Button nötig
-   - **Trade-off**: Minimaler Performance-Impact (akzeptabel für Profile Screen)
-
-4. **Validation Strategy**:
-   - **Client-Side First**: Schnelles Feedback ohne Network-Call
-   - **Server-Side als Backup**: RLS + DB Constraints als Sicherheitsnetz
-   - **German Messages**: Alle Fehler in Deutsch für Zielgruppe
-
-**Reused Components**:
-- Input (from `src/components/ui/Input.tsx`)
-- Button (from `src/components/ui/Button.tsx`)
-- RadioGroup (from `src/components/ui/RadioGroup.tsx`)
-- NumberPicker (from `src/components/ui/NumberPicker.tsx`)
-- MultiSelectChips (from `src/components/ui/MultiSelectChips.tsx`)
-- GoalCard (from `src/components/ui/GoalCard.tsx`)
-- Slider (from `src/components/ui/Slider.tsx`)
-
-**Component Consistency**:
-- Alle UI Components identisch zu Onboarding Screens
-- Consistent COLORS, SPACING, FONT_SIZES
-- Identische Validation-Logik
-- Gleiche Error-Handling Pattern
-
-### 7. Daily Recovery Tracking System (✅ Komplett - 2025-12-28)
+### 8. Daily Recovery Tracking System (✅ Komplett - 2025-12-28)
 
 **Dateien**: `src/services/recovery.service.ts`, `src/screens/app/DailyCheckinScreen.tsx`
 
@@ -718,63 +769,39 @@ getRecommendation(score: number): string
 - Auto-navigation nach successful save
 
 **UI Design**:
-- Color-coded Recovery Score:
-  - Green (80-100): Excellent
-  - Blue (60-79): Good
-  - Yellow (40-59): Moderate
-  - Orange (20-39): Poor
-  - Red (0-19): Critical
+- Color-coded Recovery Score (Green/Blue/Yellow/Orange/Red)
 - Slider-based inputs für intuitive entry
 - Toggle für optional fields
 - ScrollView layout mit KeyboardAvoidingView
 
-**User Flow**:
-1. Navigate from HomeScreen via "Log Today's Recovery" button
-2. Fill core recovery metrics (all required)
-3. Optionally toggle and fill additional metrics
-4. View real-time score calculation
-5. Save with haptic feedback
-6. Auto-navigate back to HomeScreen
-7. See updated recovery status on HomeScreen
-
-#### Integration
-
-**HomeScreen Updates**:
-- Displays current recovery status
-- Shows today's recovery score if logged
-- Prompts for daily check-in if not logged
+**Integration**:
+- HomeScreen displays current recovery status
 - Auto-refresh on screen focus
 - Navigation to DailyCheckinScreen
 
-**Navigation**:
-- Added `DailyCheckin` route to MainNavigator
-- Navigation types updated:
-```typescript
-export type MainStackParamList = {
-  Home: undefined;
-  Profile: undefined;
-  ProfileEdit: undefined;
-  DailyCheckin: { date?: string; logId?: string }; // NEW
-};
-```
+### 9. Training Module (✅ Major Features Implementiert - 2024-12-28 to 2025-12-30)
 
-**Dependencies Added**:
-- `expo-haptics: ^13.0.1` - Haptic feedback für save operations
+**Status**: Production-Ready Components, Active Development für Screens
 
-**Technical Patterns**:
-- Service Layer Pattern für data management
-- AsyncStorage für local persistence
-- Full TypeScript typing
-- Validation in service layer
-- German error messages
+**Key Features**:
+- ✅ Intelligent plan recommendations mit 4-dimensional scoring
+- ✅ Calorie tracking and calculation
+- ✅ Fitness statistics dashboard
+- ✅ Workout session management mit pause/resume
+- ✅ Exercise alternatives
+- ✅ Custom and guided plan creation flows
+- ✅ Comprehensive analytics and monitoring
+- ✅ Real-time health checks and alerts
 
-### 8. Navigation System (✅ Komplett - 2025-12-26)
+**Core Components**: Siehe "Recent Major Changes - Training Section Enhancement" oben
+
+### 10. Navigation System (✅ Komplett - 2025-12-26, updated 2025-12-28)
 
 **Location**: `src/navigation/`
 
 **Architektur**: Drei-Schicht Navigation (Auth → Onboarding → Main App)
 
-#### 7.1 AppNavigator (Root Navigator)
+#### AppNavigator (Root Navigator)
 
 **Datei**: `src/navigation/AppNavigator.tsx`
 
@@ -783,29 +810,13 @@ export type MainStackParamList = {
 **Features**:
 - ✅ Authentication State Management via `onAuthStateChange()`
 - ✅ Onboarding Completion Check via `isOnboardingCompleted()`
-- ✅ Automatic Flow Routing basierend auf User Status:
-  - Not authenticated → `AuthNavigator`
-  - Authenticated + Onboarding incomplete → `OnboardingNavigator`
-  - Authenticated + Onboarding complete → `MainNavigator`
+- ✅ Automatic Flow Routing basierend auf User Status
 - ✅ Loading State während Auth/Onboarding Check
 - ✅ Deep Link Configuration für Email Confirmation & Password Reset
-- ✅ NavigationContainer Integration
 
 **State Logic**:
 ```typescript
-// 1. Check auth on mount
-useEffect(() => checkAuthAndOnboarding() }, []);
-
-// 2. Listen to auth changes
-useEffect(() => {
-  const unsubscribe = onAuthStateChange(async (authUser) => {
-    setUser(authUser);
-    await checkAuthAndOnboarding();
-  });
-  return () => unsubscribe();
-}, []);
-
-// 3. Route to correct navigator
+// Route to correct navigator
 if (!user) return <AuthNavigator />;
 if (!hasCompletedOnboarding) return <OnboardingNavigator />;
 return <MainNavigator />;
@@ -815,16 +826,10 @@ return <MainNavigator />;
 - `lifestyleapp://auth/callback` - Email Confirmation
 - `lifestyleapp://auth/forgot-password` - Password Reset
 - `lifestyleapp://login` - Login Screen
-- `lifestyleapp://register` - Register Screen
 - `lifestyleapp://home` - Home Screen
 - `lifestyleapp://profile` - Profile Screen
 
-**Integration**:
-- Importiert in `App.tsx` als Root Component
-- Wrapped in `NavigationContainer`
-- Services: `auth.service.ts`, `profile.service.ts`
-
-#### 7.2 OnboardingNavigator
+#### OnboardingNavigator
 
 **Datei**: `src/navigation/OnboardingNavigator.tsx`
 
@@ -834,13 +839,6 @@ return <MainNavigator />;
 - State-based Navigation (nicht Stack-based)
 - OnboardingContext managed `currentStep` (1-6)
 - Switch-Statement rendert passenden Screen basierend auf Step
-
-**Implementation**:
-```typescript
-<OnboardingProvider>
-  <OnboardingScreens />  {/* Renders screen based on currentStep */}
-</OnboardingProvider>
-```
 
 **Screen Mapping**:
 - Step 1 → OnboardingScreen1 (Basisdaten)
@@ -853,22 +851,19 @@ return <MainNavigator />;
 **Navigation Methods**:
 - `nextStep()` - Nächster Screen (mit Validation)
 - `previousStep()` - Vorheriger Screen
-- `goToStep(n)` - Direkter Sprung zu Screen (für Edit-Links in Summary)
+- `goToStep(n)` - Direkter Sprung zu Screen
 
-**Exit Flow**:
-- Nach Success in `submitOnboarding()` → AppNavigator checkt `isOnboardingCompleted()` → Auto-Route zu MainNavigator
-
-#### 7.3 MainNavigator
+#### MainNavigator
 
 **Datei**: `src/navigation/MainNavigator.tsx`
 
 **Zweck**: React Navigation Stack für Main App Screens
 
 **Stack Screens**:
-- Home (`src/screens/app/HomeScreen.tsx`) - Dashboard/Landing with recovery status
-- Profile (`src/screens/app/ProfileScreen.tsx`) - User Profile Display (Read-only with Edit button)
-- ProfileEdit (`src/screens/app/ProfileEditScreen.tsx`) - Profile Editing Form (2025-12-27)
-- DailyCheckin (`src/screens/app/DailyCheckinScreen.tsx`) - Daily Recovery Check-in (2025-12-28)
+- Home (`src/screens/app/HomeScreen.tsx`) - Dashboard/Landing mit recovery status
+- Profile (`src/screens/app/ProfileScreen.tsx`) - User Profile Display
+- ProfileEdit (`src/screens/app/ProfileEditScreen.tsx`) - Profile Editing Form
+- DailyCheckin (`src/screens/app/DailyCheckinScreen.tsx`) - Daily Recovery Check-in
 
 **Configuration**:
 ```typescript
@@ -885,17 +880,17 @@ return <MainNavigator />;
 - ✅ Native Stack Navigator (performanter als Stack)
 - ✅ iOS Large Title Support
 - ✅ Slide Animation
-- ✅ Header shown by default
-- ✅ Profile Edit Flow with automatic data refresh (2025-12-27)
-- ✅ Daily Recovery Check-in Flow (2025-12-28)
+- ✅ Profile Edit Flow mit automatic data refresh
+- ✅ Daily Recovery Check-in Flow
 
 **Future Screens** (geplant):
-- Training
+- Training Dashboard
+- Training Plan Detail
+- Workout Session
 - Nutrition
 - Progress/Stats
-- Settings
 
-#### 7.4 Navigation Types
+#### Navigation Types
 
 **Datei**: `src/navigation/types.ts`
 
@@ -911,61 +906,14 @@ export type AuthStackParamList = {
   AuthCallback: undefined;
 };
 
-// Onboarding Flow (State-based, keine Params)
-export type OnboardingStackParamList = {
-  OnboardingStep1: undefined;
-  OnboardingStep2: undefined;
-  OnboardingStep3: undefined;
-  OnboardingStep4: undefined;
-  OnboardingStep5: undefined;
-  OnboardingSummary: undefined;
-};
-
 // Main App Flow
 export type MainStackParamList = {
   Home: undefined;
   Profile: undefined;
-  ProfileEdit: undefined;  // Added 2025-12-27
-  DailyCheckin: { date?: string; logId?: string };  // Added 2025-12-28
+  ProfileEdit: undefined;
+  DailyCheckin: { date?: string; logId?: string };
   Settings: undefined;
 };
-
-// Root Level
-export type RootStackParamList = {
-  Auth: undefined;
-  App: undefined;
-};
-```
-
-**Usage in Screens**:
-```typescript
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { MainStackParamList } from '@/navigation/types';
-
-type HomeScreenProps = NativeStackScreenProps<MainStackParamList, 'Home'>;
-
-const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  navigation.navigate('Profile'); // Type-safe!
-};
-```
-
-#### 7.5 Navigation Exports
-
-**Datei**: `src/navigation/index.ts`
-
-**Zentrale Exports**:
-```typescript
-export { AppNavigator } from './AppNavigator';
-export { OnboardingNavigator } from './OnboardingNavigator';
-export { MainNavigator } from './MainNavigator';
-export * from './types';
-```
-
-**Usage**:
-```typescript
-import { AppNavigator } from '@/navigation';
-// oder
-import { MainStackParamList } from '@/navigation';
 ```
 
 #### Navigation Flow Diagram
@@ -982,45 +930,109 @@ AppNavigator (Root)
 │                  │                     │                  │
 ↓                  ↓                     ↓
 AuthNavigator      OnboardingNavigator   MainNavigator
-(Login, Register)  (6 Screens)          (Home, Profile)
+(Login, Register)  (6 Screens)          (Home, Profile, DailyCheckin)
     ↓                     ↓
 Sign In/Up         submitOnboarding()
     ↓                     ↓
 OnboardingNavigator  → MainNavigator
 ```
 
-**Design-Entscheidung**: State-Based Onboarding statt Stack
-- **Warum**: Bessere UX für Multi-Step Forms (keine Back-Stack Confusion)
-- **Wie**: OnboardingContext managed `currentStep`, Navigator rendert Screen via Switch
-- **Vorteil**: `goToStep()` erlaubt direkten Sprung (z.B. Edit-Links in Summary)
-- **Trade-off**: Kein nativer Back-Button Support (muss `previousStep()` nutzen)
+---
 
-## Aktuelle Phase: MVP
+## Architecture Patterns
+
+### Component Organization
+- **Feature-based structure:** Components organized by feature (training, recovery, nutrition)
+- **Index exports:** Each feature directory has an index.ts for clean imports
+- **Separation of concerns:** UI components, services, and utilities clearly separated
+
+### State Management
+- **React Context API:** For global app state
+- **Local component state:** For UI-specific state
+- **AsyncStorage:** For persistent data caching
+- **Service layer caching:** 5-minute TTL for frequently accessed data
+
+### Data Flow
+1. **User Input** → Screen Component
+2. **Screen Component** → Service Layer
+3. **Service Layer** → Supabase API / Local Cache
+4. **Response** → Service Layer (with caching)
+5. **Service Layer** → Screen Component
+6. **Screen Component** → UI Components
+
+### Performance Optimizations
+- **Template Caching:** 5-minute in-memory cache for plan templates
+- **React.memo:** Used for expensive components (e.g., ScoreBreakdownChart)
+- **Optimized Queries:** Explicit SELECT lists, only necessary fields
+- **Lazy Loading:** Components and data loaded on demand
+- **Animation Performance:** 60fps target, staggered animations
+
+### Accessibility Standards
+- **WCAG 2.1 AA Compliance:** Target for all new components
+- **Color Contrast:** Minimum 4.5:1 for text, 3:1 for UI components
+- **Touch Targets:** Minimum 44×44pt for all interactive elements
+- **Screen Reader Support:** Semantic labels, hints, and roles
+- **Keyboard Navigation:** Full keyboard accessibility
+
+---
+
+## AI Agent System
+
+The project uses specialized AI agents for different development tasks:
+
+**Location:** `.claude/agents/`
+
+### Active Agents
+
+- **context-manager.md** - Maintains this documentation file
+- **training-planner-agent.md** - Training feature development
+- **training-service-builder.md** - Training service layer
+- **training-screens-builder.md** - Training screen development
+- **training-navigation-builder.md** - Training navigation
+- **training-ui-components-builder.md** - Training UI components
+- **unit-test-generator.md** - Test generation
+- **recovery-schema-builder.md** - Recovery feature schema
+- **recovery-service-builder.md** - Recovery service layer
+- **profile-service-builder.md** - Profile management
+- **profile-edit-screen-builder.md** - Profile editing
+- **daily-checkin-screen-builder.md** - Daily check-in feature
+- **onboarding-screens-builder.md** - Onboarding flow
+- **onboarding-navigation-builder.md** - Onboarding navigation
+- **onboarding-context-builder.md** - Onboarding state
+- **auth-logic-builder.md** - Authentication logic
+- **auth-screens-builder.md** - Authentication screens
+- **form-validation-builder.md** - Form validation
+- **ui-components-builder.md** - General UI components
+- **supplement-agent.md** - Supplement tracking
+- **github-repo-manager.md** - Repository management
+
+---
+
+## Aktuelle Phase: MVP + Training Module
 
 **Abgeschlossen**:
 - ✅ Authentication Service
 - ✅ Form Validation System
-- ✅ UI Components (13 Components - 2025-12-26)
+- ✅ UI Components (13 Components)
 - ✅ Testing Setup
-- ✅ Profile Service (2025-12-26)
-- ✅ Onboarding Context (2025-12-26)
-- ✅ Onboarding Screens (6 Screens + Summary - 2025-12-26)
-- ✅ **Navigation System** (2025-12-26):
+- ✅ Profile Service
+- ✅ Onboarding Context
+- ✅ Onboarding Screens (6 Screens + Summary)
+- ✅ **Navigation System**:
   - ✅ AppNavigator (Root with Auth/Onboarding/Main routing)
   - ✅ OnboardingNavigator (State-based 6-screen flow)
-  - ✅ MainNavigator (Home/Profile/DailyCheckin stack)
+  - ✅ MainNavigator (Home/Profile/ProfileEdit/DailyCheckin stack)
   - ✅ Navigation Types (TypeScript param lists)
-- ✅ Main App Screens (Home, Profile - 2025-12-26)
-- ✅ **Profile Edit System** (2025-12-27):
-  - ✅ ProfileEditScreen (Comprehensive edit form)
-  - ✅ ProfileScreen integration (Edit button + auto-refresh)
-  - ✅ Navigation updates (ProfileEdit route)
-- ✅ **Daily Recovery Tracking System** (2025-12-28):
-  - ✅ Recovery Service (CRUD, Analytics, Score Calculation)
-  - ✅ DailyCheckinScreen (Interactive form with real-time score)
-  - ✅ HomeScreen integration (Recovery status display)
-  - ✅ Navigation updates (DailyCheckin route)
-  - ✅ Haptic feedback integration
+- ✅ Main App Screens (Home, Profile)
+- ✅ **Profile Edit System**
+- ✅ **Daily Recovery Tracking System**
+- ✅ **Training Module** (Major Features):
+  - ✅ Training Components (CalorieCard, ScoreBreakdownChart, etc.)
+  - ✅ Training Services (trainingService, calorieCalculationService)
+  - ✅ Training Utilities (4D Scoring Algorithm, Analytics)
+  - ✅ Training Screens (Dashboard, Guided Flow, Custom Flow, etc.)
+  - ✅ Testing Infrastructure
+  - ✅ Comprehensive Documentation
 
 **In Arbeit**:
 - 🔄 Login & Registrierung Screens
@@ -1029,9 +1041,11 @@ OnboardingNavigator  → MainNavigator
 
 **Nächste Schritte**:
 - ⏸️ Auth Screens fertigstellen (Login, Register, ForgotPassword)
-- ⏸️ Trainingsplan-Generator
-- ⏸️ Workout Tracking
+- ⏸️ Training Module Integration Testing
 - ⏸️ Nutrition Tracking
+- ⏸️ Production Deployment Vorbereitung
+
+---
 
 ## Architektur-Entscheidungen
 
@@ -1059,7 +1073,7 @@ OnboardingNavigator  → MainNavigator
 **Entscheidung**: Separate `services/` für Business Logic
 **Grund**: Trennung von UI und Logik, bessere Testbarkeit
 **Example**: `auth.service.ts` kann ohne UI getestet werden
-**Update 2025-12-26**: `profile.service.ts` für Onboarding-Daten hinzugefügt
+**Update**: Erweitert um Training, Recovery, Profile Services
 
 ### 6. Context + Reducer für Multi-Step Forms
 **Entscheidung**: React Context + useReducer für Onboarding-Flow
@@ -1069,143 +1083,119 @@ OnboardingNavigator  → MainNavigator
 - Einfaches Progress-Tracking
 - Kein Redux für MVP nötig
 **Implementation**: `OnboardingContext.tsx` mit 7 Actions
-**Alternative erwogen**: Zustand Library (zu viel für MVP)
-**Future**: Bei mehr komplexen Flows könnte Zustand sinnvoll sein
 
 ### 7. Component-Based UI ohne externe UI Library
-**Entscheidung**: Eigene UI Components in `src/components/ui/` statt Library (NativeBase, React Native Paper, etc.)
+**Entscheidung**: Eigene UI Components in `src/components/ui/` statt Library
 **Grund**:
 - Volle Design-Kontrolle
 - Kleinerer Bundle Size
 - Keine Breaking Changes durch Library Updates
 - Native Performance (kein Web-Bridge)
-- Einfach zu customizen für spezifische Use Cases
 **Implementation**: 13 Components mit consistentem Design System
-**Trade-off**: Mehr Entwicklungszeit initial, aber langfristig flexibler
-**Future**: Bei sehr komplexen Components könnte Headless UI (z.B. React Native ARIA) sinnvoll sein
 
 ### 8. Multi-Step Onboarding Pattern
 **Entscheidung**: 6 separate Screens statt Single-Page Form
 **Grund**:
-- Bessere UX auf Mobile (weniger overwhelming)
-- Klare Progress-Indication (ProgressBar)
+- Bessere UX auf Mobile
+- Klare Progress-Indication
 - Screen-spezifische Validation möglich
-- Einfacher zu navigieren (zurück zu einzelnem Screen)
-- Kleinere Code-Dateien pro Screen
-**Implementation**:
-- Jeder Screen ist eigenständige Component
-- OnboardingContext managed State zentral
-- `goToStep()` für direkte Navigation (z.B. von Summary zurück)
-**Data Flow**: User Input → updateData() → nextStep() validiert → Success: Wechsel → Summary: submitOnboarding() → Supabase
-**Alternative erwogen**: Wizard Component mit Steps (zu eingeschränkt für komplexe Flows)
+- Einfacher zu navigieren
+**Implementation**: State-based Navigation via OnboardingContext
 
 ### 9. Three-Tier Navigation Architecture
-**Entscheidung**: Drei separate Navigator-Schichten (Auth, Onboarding, Main) mit Root-Level Routing
+**Entscheidung**: Drei separate Navigator-Schichten (Auth, Onboarding, Main)
 **Grund**:
-- **Klare Trennung**: Jeder Flow hat eigenen Navigator mit eigener Logik
-- **Zustandsbasierte Navigation**: Root Navigator entscheidet basierend auf Auth + Onboarding Status
-- **Einfache Flow-Kontrolle**: Ein Check in AppNavigator routet zu korrektem Flow
-- **Bessere Performance**: Nur benötigte Screens werden geladen
-- **Type Safety**: Separate ParamLists für jeden Flow
-**Implementation**:
-- `AppNavigator`: Root mit conditionalem Rendering (`!user` → Auth, `!onboarding` → Onboarding, else → Main)
-- `OnboardingNavigator`: State-based (Context `currentStep`) statt Stack
-- `MainNavigator`: Standard React Navigation Stack
-**Alternative erwogen**: Single Stack mit Conditional Screens (zu komplex, schlechtere Type Safety)
-**Trade-off**: Mehr Boilerplate initial, aber langfristig wartbarer
+- Klare Trennung
+- Zustandsbasierte Navigation
+- Einfache Flow-Kontrolle
+- Bessere Performance
+- Type Safety
+**Implementation**: AppNavigator mit conditional rendering
 
 ### 10. State-Based vs Stack-Based Navigation für Onboarding
-**Entscheidung**: State-Based Navigation (OnboardingContext `currentStep`) für Onboarding
+**Entscheidung**: State-Based Navigation für Onboarding
 **Grund**:
-- **UX**: Kein Back-Stack der User verwirrt (nicht zurück außerhalb von Onboarding)
-- **Progress Control**: `goToStep(n)` erlaubt direkten Sprung (Edit-Links in Summary)
-- **Validation Flow**: Screen-Wechsel nur via `nextStep()` mit Validation-Gate
-- **State Persistence**: Context hält alle Daten zentral (kein Param-Passing zwischen Screens)
-**Implementation**:
-```typescript
-// OnboardingNavigator.tsx
-const OnboardingScreens = () => {
-  const { currentStep } = useOnboarding();
-  switch (currentStep) {
-    case 1: return <OnboardingScreen1 />;
-    case 2: return <OnboardingScreen2 />;
-    // ...
-  }
-};
-```
-**Alternative erwogen**: Stack Navigator mit 6 Screens (komplexere Back-Handling, kein direkter Step-Jump)
-**Trade-off**: Kein nativer Back-Button Support (Android), muss `previousStep()` Button in UI haben
+- Bessere UX (kein Back-Stack Confusion)
+- `goToStep(n)` erlaubt direkten Sprung
+- Screen-Wechsel nur via `nextStep()` mit Validation
+**Trade-off**: Kein nativer Back-Button Support
 
-### 11. Profile Edit with Input String Preservation (2025-12-27)
-**Entscheidung**: Separate `inputStrings` state für numeric inputs zusätzlich zu parsed values
-**Problem**: React Native TextInput löscht Value bei trailing comma/period (z.B. "75," wird zu "")
+### 11. Profile Edit with Input String Preservation
+**Entscheidung**: Separate `inputStrings` state für numeric inputs
+**Problem**: React Native TextInput löscht Value bei trailing comma
+**Grund**: Bessere UX beim Tippen von Dezimalzahlen
+**Trade-off**: Mehr State-Management, aber deutlich bessere UX
+
+### 12. useFocusEffect für Auto-Refresh
+**Entscheidung**: useFocusEffect Hook statt manueller Refresh-Button
 **Grund**:
-- Bessere UX beim Tippen von Dezimalzahlen
-- User kann "75," tippen ohne dass Wert verschwindet
-- Comma wird automatisch zu Period konvertiert
-**Implementation**:
-```typescript
-const [formData, setFormData] = useState({ weight: null });
-const [inputStrings, setInputStrings] = useState({ weight: '' });
-
-const handleNumericInput = (field, text) => {
-  const displayText = text.replace(',', '.');
-  setInputStrings(prev => ({ ...prev, [field]: displayText }));
-  const numericValue = parseFloat(displayText) || null;
-  updateField(field, numericValue);
-};
-```
-**Trade-off**: Mehr State-Management, aber deutlich bessere User Experience
-
-### 12. useFocusEffect für Auto-Refresh (2025-12-27)
-**Entscheidung**: useFocusEffect Hook statt manueller Refresh-Button in ProfileScreen
-**Grund**:
-- Automatisches Reload der Profil-Daten nach Rückkehr von ProfileEdit
-- Bessere UX (keine manuellen Actions nötig)
+- Automatisches Reload nach Rückkehr von ProfileEdit
+- Bessere UX
 - Stellt sicher dass User immer aktuelle Daten sieht
-**Implementation**:
-```typescript
-import { useFocusEffect } from '@react-navigation/native';
+**Trade-off**: Minimaler Performance-Impact (akzeptabel)
 
-useFocusEffect(
-  useCallback(() => {
-    loadProfile();
-  }, [])
-);
-```
-**Alternative erwogen**: Navigation Parameter zum Trigger Reload (komplizierter, weniger elegant)
-**Trade-off**: Minimaler Performance-Impact bei jedem Focus (akzeptabel für Profile Screen)
-
-### 13. Recovery Score Algorithm (2025-12-28)
+### 13. Recovery Score Algorithm
 **Entscheidung**: Weighted Score mit 6 Core Metrics (0-100 normalized)
 **Grund**:
-- Balanced Representation: Sleep (40% combined), Energy/Stress/Soreness (15% each), Readiness (15%)
-- Inverted Scoring für negative Faktoren (Stress, Soreness)
-- Industry-Standard Ranges für Interpretation
-- Real-time Calculation für instant Feedback
-**Implementation**:
-- Normalization: Jede Metrik auf 0-100 scale
-- Weighted Sum: Gewichtete Summierung
-- Sleep Hours optimal: 7-9h (bell curve scoring)
-**Trade-off**: Simpler als ML-based Scoring, aber ausreichend für MVP und transparent für User
+- Balanced Representation
+- Inverted Scoring für negative Faktoren
+- Industry-Standard Ranges
+- Real-time Calculation
+**Trade-off**: Simpler als ML-based, aber ausreichend für MVP
 
-### 14. AsyncStorage für Recovery Data (2025-12-28)
+### 14. AsyncStorage für Recovery Data
 **Entscheidung**: AsyncStorage statt Supabase für Recovery Logs
 **Grund**:
-- **Offline-First**: Logs müssen auch ohne Internet funktionieren
-- **Performance**: Keine Network-Latency für tägliches Logging
-- **Privacy**: Recovery-Daten bleiben lokal (sensible Health-Daten)
-- **MVP-Speed**: Schneller implementiert ohne Backend-Schema
-**Implementation**:
-- Key Structure: `recovery_log_${userId}_${date}`
-- JSON Serialization für complex objects
-- Date-based retrieval (ISO format YYYY-MM-DD)
-**Future**: Migration zu Supabase für cloud sync & cross-device
-**Trade-off**: Keine Cloud-Backup, aber bessere UX und Privacy für MVP
+- Offline-First
+- Keine Network-Latency
+- Privacy (sensible Health-Daten bleiben lokal)
+- MVP-Speed
+**Future**: Migration zu Supabase für cloud sync
+**Trade-off**: Keine Cloud-Backup, aber bessere UX für MVP
 
-## Coding Standards
+### 15. Template Caching für Training Plans
+**Entscheidung**: 5-Minuten In-Memory Cache für Plan Templates
+**Grund**:
+- Drastisch reduzierte Database Calls
+- Bessere Performance
+- Templates ändern sich selten
+**Implementation**: `trainingService.ts` mit TTL-based cache
+**Trade-off**: Potential stale data, aber akzeptabel bei 5-min TTL
 
-- TypeScript strict mode
+### 16. 4-Dimensional Scoring Algorithm
+**Entscheidung**: Experience + Frequency + Goal + Volume Scoring
+**Grund**:
+- Holistische Plan-Bewertung
+- Berücksichtigt User-Profil vollständig
+- Transparente Score-Breakdown für User
+- Optimierbar durch Database Pre-Calculations
+**Implementation**: `planRecommendationScoring.ts`
+**Trade-off**: Komplexer als simple Matching, aber viel präziser
+
+### 17. GDPR-Compliant Analytics
+**Entscheidung**: Built-in Analytics mit User Consent Checks
+**Grund**:
+- GDPR-Compliance von Anfang an
+- User Privacy First
+- Fail-Safe (crasht nie die App)
+- Konfigurierbare Sampling Rate
+**Implementation**: `recommendationAnalytics.ts`
+
+---
+
+## Development Guidelines
+
+### Code Style
+- **TypeScript:** Strict mode enabled, all files must be fully typed
+- **Naming Conventions:**
+  - Components: PascalCase (e.g., `PlanRecommendationCard.tsx`)
+  - Services: camelCase with .ts extension (e.g., `trainingService.ts`)
+  - Utilities: camelCase (e.g., `planRecommendationScoring.ts`)
+  - Types: PascalCase interfaces and types (e.g., `PlanRecommendation`)
+- **File Organization:**
+  - One component per file
+  - Co-located tests in `__tests__/` directories
+  - Documentation files alongside components when needed
 - Functional components + Hooks (keine Classes)
 - Async/await (keine Promises.then)
 - Descriptive variable names (deutsch ok)
@@ -1213,35 +1203,143 @@ useFocusEffect(
 - Comments nur wenn nötig
 - Alle Dateien mit absoluten Pfaden referenzieren in Dokumentation
 
-## Testing Infrastructure
+### Testing Requirements
+- **Unit Tests:** For utilities and services
+- **Component Tests:** For complex UI components
+- **E2E Tests:** For critical user flows
+- **Coverage Goals:** Focus on business logic and critical paths
+- **Test Location:** `__tests__/` directories alongside source files
 
-**Setup**:
-- `tsx` für TypeScript execution (kein Jest/Vitest)
-- `dotenv` für Environment variables
-- Simple console-based assertions
+### Documentation Requirements
+- **Component README:** For complex components (see ScoreBreakdownChart)
+- **API Documentation:** For services and utilities
+- **Migration Guides:** For architectural changes
+- **Integration Guides:** For feature implementations
 
-**Test Commands**:
+---
+
+## Known Issues & Technical Debt
+
+### Training Module
+1. **ScoreBreakdownChart:**
+   - ⚠️ No reduced motion support (medium priority)
+   - ⚠️ No RTL support for Arabic/Hebrew (medium priority)
+   - ⚠️ No dark mode color optimization (medium priority)
+   - Multi-language support needed (currently German only)
+
+2. **Performance:**
+   - Monitor template cache hit rates
+   - Consider implementing request debouncing for rapid profile changes
+
+3. **Analytics:**
+   - Need to implement sampling rate configuration for high traffic
+   - Add A/B testing framework for recommendation algorithm
+
+### General
+- Auth Screens noch nicht implementiert
+- Nutrition Module noch nicht begonnen
+- Supplement Tracking in Planung
+
+### Future Enhancements
+- Reduced motion accessibility support
+- RTL language support
+- Dark mode optimization
+- Multi-language internationalization (i18n)
+- Offline mode support
+- Social features (plan sharing, leaderboards)
+- Cloud sync für Recovery Logs
+- Advanced analytics dashboard
+
+---
+
+## Build & Run
+
+### Development
 ```bash
-npm run test:auth:simple    # Authentication service tests
-npm run test:validation     # Validation tests (59 tests, all passing)
+npm start          # Start Expo development server
+npm run android    # Run on Android
+npm run ios        # Run on iOS
+npm run web        # Run in web browser
 ```
 
-**Test Files**:
-- `src/tests/auth.test.simple.ts` - Auth service functions
-- `src/tests/validation.test.ts` - Alle Validation utilities
+### Testing
+```bash
+npm test                  # Run all tests
+npm run test:scoring      # Run scoring algorithm tests
+npm run test:scoring:e2e  # Run end-to-end scoring tests
+npm run test:scoring:all  # Run all scoring tests
+npm run test:auth         # Run auth tests (quick)
+npm run test:auth:all     # Run all auth tests
+npm run test:validation   # Run validation tests
+npm run lint              # TypeScript type checking
+```
 
-**Manual Testing**:
-- iOS Simulator / Android Emulator
-- Nach jedem Screen testen
-- Validierung testen (leere Felder, wrong format)
+---
+
+## Dependencies
+
+### Production Dependencies
+- React 19.1.0
+- React Native 0.81.5
+- Expo ~54.0.30
+- Supabase JS Client 2.89.0
+- React Navigation 7.x
+- React Native Paper 5.14.5
+- AsyncStorage 2.2.0
+- Expo Linear Gradient 15.0.8
+- Expo Haptics 15.0.8
+
+### Development Dependencies
+- TypeScript 5.9.2
+- tsx 4.19.2 (TypeScript execution)
+- ts-node 10.9.2
+- dotenv 16.4.7
+
+---
 
 ## Git Workflow
 
-- `main` = stable
-- Feature branches: `features/feature-name` (aktuell: `features/ui`)
-- Pull bevor du arbeitest
-- Kleine, häufige Commits
+### Branch Strategy
+- `main` - Production-ready code
+- `feature/*` - Feature development branches
+- Current: `feature/training-section`
+
+### Commit Messages
+Follow conventional commits format:
+- `feat:` - New features
+- `fix:` - Bug fixes
+- `refactor:` - Code refactoring
+- `docs:` - Documentation changes
+- `test:` - Test additions/changes
+- `chore:` - Maintenance tasks
+
+### Recent Commits
+- d0ae4d74 - Trainings feature begonnen
+- f7ecd5c7 - Merge branch 'feature/recovery' into main
+- 4e12a665 - feat: implement daily recovery tracking system
+- 6a2234b4 - feat: add profile edit system with comprehensive form and auto-refresh
+- 205643cd - Merge branch 'features/onboarding' into main
+
+---
+
+## Additional Resources
+
+### Testing Guides
+- `TRAINING_MODULE_TESTING.md`
+- `CUSTOM_PLAN_FLOW_TESTING.md`
+
+### Component Documentation
+All major components have dedicated documentation in their respective directories.
+
+### AI Agent Documentation
+Refer to `.claude/agents/` for specialized agent capabilities and usage.
+
+---
 
 ## Supabase Access
 
 Via MCP Server - direkte DB-Zugriffe möglich.
+
+---
+
+**Note:** This document is actively maintained by the context-manager agent and should be updated whenever significant changes are made to the project architecture, features, or development practices.

@@ -161,6 +161,51 @@ export const TrainingDashboardScreen: React.FC = () => {
     navigation.navigate("PlanConfiguration");
   }, [navigation]);
 
+  /**
+   * Handle deleting a training plan
+   * - Shows confirmation dialog
+   * - Deletes plan from backend
+   * - Reloads plans
+   */
+  const handleDeletePlan = useCallback(
+    async (planId: string) => {
+      try {
+        // Haptic feedback
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+        // Get current user
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          Alert.alert("Fehler", "Du musst angemeldet sein.");
+          return;
+        }
+
+        // Delete the plan
+        await trainingService.deletePlan(planId);
+
+        // Reload plans
+        await loadPlans();
+
+        // Success feedback
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success
+        );
+
+        Alert.alert("Erfolg", "Plan wurde gelöscht.");
+      } catch (error) {
+        console.error("Fehler beim Löschen des Plans:", error);
+        Alert.alert(
+          "Fehler",
+          "Plan konnte nicht gelöscht werden. Bitte versuche es erneut."
+        );
+      }
+    },
+    [loadPlans]
+  );
+
   // Load plans on screen focus
   useFocusEffect(
     useCallback(() => {
@@ -195,6 +240,7 @@ export const TrainingDashboardScreen: React.FC = () => {
             <ActivePlanCard
               plan={activePlan}
               onNavigateToPlan={handleNavigateToPlan}
+              onDelete={handleDeletePlan}
             />
           </View>
         )}
@@ -208,6 +254,7 @@ export const TrainingDashboardScreen: React.FC = () => {
                 key={plan.id}
                 plan={plan}
                 onToggle={handleTogglePlan}
+                onDelete={handleDeletePlan}
               />
             ))}
           </View>

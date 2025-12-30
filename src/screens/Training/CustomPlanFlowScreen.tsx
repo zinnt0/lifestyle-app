@@ -3,13 +3,12 @@
  *
  * Multi-step form for creating fully custom training plans:
  * 1. Select number of training days per week (2-6)
- * 2. Select muscle groups to train
- * 3. Select exercises for each muscle group (with equipment filter)
- * 4. Configure sets & reps for each exercise
- * 5. Preview and create plan
+ * 2. Select which days and times (optional)
+ * 3. Configure each day with carousel view
+ * 4. Preview and create plan
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -20,6 +19,8 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   TextInput,
+  Dimensions,
+  FlatList,
 } from "react-native";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -28,15 +29,28 @@ import { supabase } from "@/lib/supabase";
 import type { Exercise } from "@/types/training.types";
 import * as Haptics from "expo-haptics";
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
 // ============================================================================
 // Types
 // ============================================================================
 
+interface DaySchedule {
+  dayOfWeek: string; // "Montag", "Dienstag", etc.
+  time?: string; // "18:00"
+}
+
+interface DayConfiguration {
+  dayNumber: number;
+  schedule: DaySchedule;
+  muscleGroups: MuscleGroup[];
+  selectedExercisesByGroup: Record<string, SelectedExercise[]>; // groupId -> exercises
+}
+
 interface CustomPlanState {
   daysPerWeek: number | null;
   planName: string;
-  selectedMuscleGroups: MuscleGroup[];
-  selectedExercises: SelectedExercise[];
+  dayConfigurations: DayConfiguration[];
 }
 
 interface MuscleGroup {
@@ -51,10 +65,9 @@ interface SelectedExercise {
   sets: number;
   repsMin: number;
   repsMax: number;
-  muscleGroup: string;
 }
 
-type Step = "days" | "muscleGroups" | "exercises" | "configure" | "preview";
+type Step = "days" | "schedule" | "configureDays" | "preview";
 
 // ============================================================================
 // Constants
@@ -69,9 +82,11 @@ const COLORS = {
   selected: "#E3F2FD",
   selectedBorder: "#4A90E2",
   border: "#E5E5EA",
+  white: "#FFFFFF",
 };
 
 const SPACING = {
+  xs: 4,
   sm: 8,
   md: 16,
   lg: 24,
@@ -87,6 +102,17 @@ const MUSCLE_GROUPS: MuscleGroup[] = [
   { id: "core", name: "Core", name_de: "Rumpf", icon: "⭕" },
 ];
 
+const WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+
+const MUSCLE_GROUP_DB_MAPPING: Record<string, string[]> = {
+  chest: ["chest"],
+  back: ["lats", "middle_back", "rhomboids", "erectors", "traps"],
+  shoulders: ["anterior_deltoid", "lateral_deltoid", "posterior_deltoid"],
+  arms: ["biceps", "triceps", "forearms"],
+  legs: ["quadriceps", "quads", "hamstrings", "glutes", "calves"],
+  core: ["core", "obliques"],
+};
+
 const DEFAULT_SETS = 3;
 const DEFAULT_REPS_MIN = 8;
 const DEFAULT_REPS_MAX = 12;
@@ -97,6 +123,7 @@ const DEFAULT_REPS_MAX = 12;
 
 export const CustomPlanFlowScreen: React.FC = () => {
   const navigation = useTrainingNavigation();
+  const carouselRef = useRef<FlatList>(null);
 
   // State
   const [currentStep, setCurrentStep] = useState<Step>("days");
@@ -104,28 +131,57 @@ export const CustomPlanFlowScreen: React.FC = () => {
   const [planState, setPlanState] = useState<CustomPlanState>({
     daysPerWeek: null,
     planName: "",
-    selectedMuscleGroups: [],
-    selectedExercises: [],
+    dayConfigurations: [],
   });
 
-  // Exercise selection state
+  // Day configuration state
+  const [currentDayIndex, setCurrentDayIndex] = useState(0);
+  const [currentMuscleGroupTab, setCurrentMuscleGroupTab] = useState<string | null>(null);
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
-  const [equipmentFilter, setEquipmentFilter] = useState<string[]>([]);
-  const [currentMuscleGroup, setCurrentMuscleGroup] = useState<MuscleGroup | null>(null);
+  const [loadingExercises, setLoadingExercises] = useState(false);
+  const [equipmentFilter, setEquipmentFilter] = useState<string>('all');
 
   // Calculate progress
   const calculateProgress = (): number => {
     const stepProgress: Record<Step, number> = {
-      days: 0.2,
-      muscleGroups: 0.4,
-      exercises: 0.6,
-      configure: 0.8,
+      days: 0.25,
+      schedule: 0.5,
+      configureDays: 0.75,
       preview: 1.0,
     };
     return stepProgress[currentStep];
   };
 
   const progress = calculateProgress();
+
+  // Equipment filter options
+  const EQUIPMENT_OPTIONS = [
+    { id: 'all', label: 'Alle Übungen', values: [] as string[] },
+    { id: 'dumbbell', label: 'Kurzhantel', values: ['dumbbell', 'dumbbells'] },
+    { id: 'barbell', label: 'Langhantel', values: ['barbell', 'ez_bar', 'trap_bar'] },
+    { id: 'cable', label: 'Kabel', values: ['cable', 'cable_machine'] },
+    { id: 'bodyweight', label: 'Körpergewicht', values: ['none'] },
+    { id: 'machine', label: 'Maschine', values: ['machine', 'leg_press_machine', 'leg_curl_machine', 'leg_extension_machine', 'calf_raise_machine'] },
+  ];
+
+  // Initialize day configurations when days are selected
+  useEffect(() => {
+    if (planState.daysPerWeek && planState.dayConfigurations.length === 0) {
+      const configs: DayConfiguration[] = [];
+      for (let i = 0; i < planState.daysPerWeek; i++) {
+        configs.push({
+          dayNumber: i + 1,
+          schedule: {
+            dayOfWeek: WEEKDAYS[i] || `Tag ${i + 1}`,
+            time: undefined,
+          },
+          muscleGroups: [],
+          selectedExercisesByGroup: {},
+        });
+      }
+      setPlanState({ ...planState, dayConfigurations: configs });
+    }
+  }, [planState.daysPerWeek]);
 
   // ============================================================================
   // Step 1: Days Per Week Selection
@@ -136,40 +192,46 @@ export const CustomPlanFlowScreen: React.FC = () => {
 
     return (
       <View style={styles.stepContainer}>
-        <Text style={styles.stepTitle}>
-          Wie viele Tage pro Woche möchtest du trainieren?
-        </Text>
-        <Text style={styles.stepSubtitle}>
-          Wähle eine realistische Anzahl, die zu deinem Zeitplan passt
-        </Text>
+        <ScrollView
+          style={styles.stepScrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.stepScrollContent}
+        >
+          <Text style={styles.stepTitle}>
+            Wie viele Tage pro Woche möchtest du trainieren?
+          </Text>
+          <Text style={styles.stepSubtitle}>
+            Wähle eine realistische Anzahl, die zu deinem Zeitplan passt
+          </Text>
 
-        <View style={styles.optionsContainer}>
-          {daysOptions.map((days) => (
-            <Card
-              key={days}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setPlanState({ ...planState, daysPerWeek: days });
-              }}
-              padding="large"
-              elevation={planState.daysPerWeek === days ? "large" : "medium"}
-              style={[
-                styles.optionCard,
-                planState.daysPerWeek === days && styles.optionCardSelected,
-              ]}
-            >
-              <Text style={styles.daysNumber}>{days}</Text>
-              <Text style={styles.daysLabel}>
-                {days === 1 ? "Tag" : "Tage"} pro Woche
-              </Text>
-              {planState.daysPerWeek === days && (
-                <View style={styles.checkmark}>
-                  <Text style={styles.checkmarkText}>✓</Text>
-                </View>
-              )}
-            </Card>
-          ))}
-        </View>
+          <View style={styles.optionsContainer}>
+            {daysOptions.map((days) => (
+              <Card
+                key={days}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setPlanState({ ...planState, daysPerWeek: days, dayConfigurations: [] });
+                }}
+                padding="large"
+                elevation={planState.daysPerWeek === days ? "large" : "medium"}
+                style={[
+                  styles.optionCard,
+                  planState.daysPerWeek === days && styles.optionCardSelected,
+                ]}
+              >
+                <Text style={styles.daysNumber}>{days}</Text>
+                <Text style={styles.daysLabel}>
+                  {days === 1 ? "Tag" : "Tage"} pro Woche
+                </Text>
+                {planState.daysPerWeek === days && (
+                  <View style={styles.checkmark}>
+                    <Text style={styles.checkmarkText}>✓</Text>
+                  </View>
+                )}
+              </Card>
+            ))}
+          </View>
+        </ScrollView>
 
         <View style={styles.navigationButtons}>
           <Button
@@ -181,7 +243,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
           </Button>
           <Button
             variant="primary"
-            onPress={() => setCurrentStep("muscleGroups")}
+            onPress={() => setCurrentStep("schedule")}
             disabled={planState.daysPerWeek === null}
             style={styles.navButton}
           >
@@ -193,67 +255,77 @@ export const CustomPlanFlowScreen: React.FC = () => {
   };
 
   // ============================================================================
-  // Step 2: Muscle Groups Selection
+  // Step 2: Schedule Selection
   // ============================================================================
 
-  const handleToggleMuscleGroup = (group: MuscleGroup) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    const isSelected = planState.selectedMuscleGroups.some((g) => g.id === group.id);
-
-    if (isSelected) {
-      setPlanState({
-        ...planState,
-        selectedMuscleGroups: planState.selectedMuscleGroups.filter(
-          (g) => g.id !== group.id
-        ),
-      });
-    } else {
-      setPlanState({
-        ...planState,
-        selectedMuscleGroups: [...planState.selectedMuscleGroups, group],
-      });
-    }
+  const updateDaySchedule = (dayIndex: number, field: keyof DaySchedule, value: string) => {
+    const updatedConfigs = [...planState.dayConfigurations];
+    updatedConfigs[dayIndex].schedule = {
+      ...updatedConfigs[dayIndex].schedule,
+      [field]: value,
+    };
+    setPlanState({ ...planState, dayConfigurations: updatedConfigs });
   };
 
-  const renderMuscleGroupsStep = () => {
+  const renderScheduleStep = () => {
     return (
       <View style={styles.stepContainer}>
-        <Text style={styles.stepTitle}>
-          Welche Muskelgruppen möchtest du trainieren?
-        </Text>
-        <Text style={styles.stepSubtitle}>
-          Wähle alle Muskelgruppen aus, die in deinem Plan enthalten sein sollen
-        </Text>
+        <ScrollView
+          style={styles.stepScrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.stepScrollContent}
+        >
+          <Text style={styles.stepTitle}>Welche Tage und wann?</Text>
+          <Text style={styles.stepSubtitle}>
+            Optionale Angabe - wichtig für spätere Kalenderanbindung
+          </Text>
 
-        <View style={styles.muscleGroupsGrid}>
-          {MUSCLE_GROUPS.map((group) => {
-            const isSelected = planState.selectedMuscleGroups.some(
-              (g) => g.id === group.id
-            );
+          {planState.dayConfigurations.map((dayConfig, index) => (
+            <Card key={index} padding="medium" style={styles.scheduleCard}>
+              <Text style={styles.scheduleCardTitle}>Tag {index + 1}</Text>
 
-            return (
-              <Card
-                key={group.id}
-                onPress={() => handleToggleMuscleGroup(group)}
-                padding="medium"
-                elevation={isSelected ? "large" : "medium"}
-                style={[
-                  styles.muscleGroupCard,
-                  isSelected && styles.muscleGroupCardSelected,
-                ]}
-              >
-                <Text style={styles.muscleGroupIcon}>{group.icon}</Text>
-                <Text style={styles.muscleGroupName}>{group.name_de}</Text>
-                {isSelected && (
-                  <View style={styles.muscleGroupCheck}>
-                    <Text style={styles.checkmarkText}>✓</Text>
-                  </View>
-                )}
-              </Card>
-            );
-          })}
-        </View>
+              <View style={styles.scheduleInputGroup}>
+                <Text style={styles.inputLabel}>Wochentag</Text>
+                <View style={styles.weekdaySelector}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {WEEKDAYS.map((day) => (
+                      <TouchableOpacity
+                        key={day}
+                        onPress={() => updateDaySchedule(index, "dayOfWeek", day)}
+                        style={[
+                          styles.weekdayChip,
+                          dayConfig.schedule.dayOfWeek === day && styles.weekdayChipSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.weekdayChipText,
+                            dayConfig.schedule.dayOfWeek === day &&
+                              styles.weekdayChipTextSelected,
+                          ]}
+                        >
+                          {day.substring(0, 2)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+
+              <View style={styles.scheduleInputGroup}>
+                <Text style={styles.inputLabel}>Uhrzeit (optional)</Text>
+                <TextInput
+                  style={styles.timeInput}
+                  placeholder="z.B. 18:00"
+                  value={dayConfig.schedule.time || ""}
+                  onChangeText={(text) => updateDaySchedule(index, "time", text)}
+                  placeholderTextColor={COLORS.textSecondary}
+                  keyboardType="default"
+                />
+              </View>
+            </Card>
+          ))}
+        </ScrollView>
 
         <View style={styles.navigationButtons}>
           <Button
@@ -266,17 +338,9 @@ export const CustomPlanFlowScreen: React.FC = () => {
           <Button
             variant="primary"
             onPress={() => {
-              if (planState.selectedMuscleGroups.length === 0) {
-                Alert.alert(
-                  "Hinweis",
-                  "Bitte wähle mindestens eine Muskelgruppe aus."
-                );
-                return;
-              }
-              setCurrentMuscleGroup(planState.selectedMuscleGroups[0]);
-              setCurrentStep("exercises");
+              setCurrentDayIndex(0);
+              setCurrentStep("configureDays");
             }}
-            disabled={planState.selectedMuscleGroups.length === 0}
             style={styles.navButton}
           >
             Weiter
@@ -287,23 +351,47 @@ export const CustomPlanFlowScreen: React.FC = () => {
   };
 
   // ============================================================================
-  // Step 3: Exercise Selection
+  // Step 3: Configure Days with Carousel
   // ============================================================================
 
-  useEffect(() => {
-    if (currentStep === "exercises" && currentMuscleGroup) {
-      loadExercisesForMuscleGroup(currentMuscleGroup);
-    }
-  }, [currentStep, currentMuscleGroup]);
+  const currentDayConfig = planState.dayConfigurations[currentDayIndex];
 
-  const loadExercisesForMuscleGroup = async (muscleGroup: MuscleGroup) => {
-    setLoading(true);
+  // Load exercises when muscle groups change or tab changes
+  useEffect(() => {
+    if (currentStep === "configureDays" && currentDayConfig && currentMuscleGroupTab) {
+      loadExercisesForMuscleGroup(currentMuscleGroupTab);
+    }
+  }, [currentStep, currentMuscleGroupTab]);
+
+  // Set first muscle group as active tab when muscle groups change
+  useEffect(() => {
+    if (currentDayConfig?.muscleGroups.length > 0 && !currentMuscleGroupTab) {
+      setCurrentMuscleGroupTab(currentDayConfig.muscleGroups[0].id);
+    } else if (currentDayConfig?.muscleGroups.length === 0) {
+      setCurrentMuscleGroupTab(null);
+    }
+  }, [currentDayConfig?.muscleGroups]);
+
+  const loadExercisesForMuscleGroup = async (groupId: string) => {
+    setLoadingExercises(true);
     try {
-      // Load exercises that target this muscle group
+      const dbMuscles = MUSCLE_GROUP_DB_MAPPING[groupId] || [groupId];
+
+      const orConditions = dbMuscles
+        .filter((muscle) => muscle && muscle.trim().length > 0)
+        .map((muscle) => `primary_muscles.cs.{${muscle}}`)
+        .join(",");
+
+      if (!orConditions) {
+        setAvailableExercises([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("exercises")
         .select("*")
-        .contains("primary_muscles", [muscleGroup.name])
+        .or(orConditions)
+        .eq("is_active", true)
         .order("name_de");
 
       if (error) {
@@ -317,367 +405,497 @@ export const CustomPlanFlowScreen: React.FC = () => {
       console.error("Fehler in loadExercisesForMuscleGroup:", error);
       Alert.alert("Fehler", "Ein unerwarteter Fehler ist aufgetreten.");
     } finally {
-      setLoading(false);
+      setLoadingExercises(false);
     }
+  };
+
+  // Filter exercises based on selected equipment
+  const getFilteredExercises = (): Exercise[] => {
+    if (equipmentFilter === 'all') {
+      return availableExercises;
+    }
+
+    // Find the selected equipment option
+    const selectedOption = EQUIPMENT_OPTIONS.find(opt => opt.id === equipmentFilter);
+    if (!selectedOption || selectedOption.values.length === 0) {
+      return availableExercises;
+    }
+
+    // Filter by specific equipment type
+    return availableExercises.filter(exercise => {
+      const requiredEquipment = exercise.equipment_required || [];
+
+      // Check if the exercise uses any of the selected equipment values
+      return requiredEquipment.some(equipment =>
+        selectedOption.values.includes(equipment)
+      );
+    });
+  };
+
+  const handleToggleMuscleGroup = (group: MuscleGroup) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const updatedDayConfigs = [...planState.dayConfigurations];
+    const dayConfig = updatedDayConfigs[currentDayIndex];
+
+    const isSelected = dayConfig.muscleGroups.some((g) => g.id === group.id);
+
+    if (isSelected) {
+      // Remove muscle group and its exercises
+      dayConfig.muscleGroups = dayConfig.muscleGroups.filter((g) => g.id !== group.id);
+      delete dayConfig.selectedExercisesByGroup[group.id];
+
+      // Switch to another tab if current tab was removed
+      if (currentMuscleGroupTab === group.id) {
+        setCurrentMuscleGroupTab(dayConfig.muscleGroups[0]?.id || null);
+      }
+    } else {
+      // Add muscle group
+      dayConfig.muscleGroups = [...dayConfig.muscleGroups, group];
+      dayConfig.selectedExercisesByGroup[group.id] = [];
+
+      // Switch to the new tab
+      setCurrentMuscleGroupTab(group.id);
+    }
+
+    setPlanState({ ...planState, dayConfigurations: updatedDayConfigs });
   };
 
   const handleToggleExercise = (exercise: Exercise) => {
+    if (!currentMuscleGroupTab) return;
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const isSelected = planState.selectedExercises.some(
-      (e) => e.exercise.id === exercise.id
-    );
+    const updatedDayConfigs = [...planState.dayConfigurations];
+    const dayConfig = updatedDayConfigs[currentDayIndex];
+    const exercises = dayConfig.selectedExercisesByGroup[currentMuscleGroupTab] || [];
+
+    const isSelected = exercises.some((e) => e.exercise.id === exercise.id);
 
     if (isSelected) {
-      setPlanState({
-        ...planState,
-        selectedExercises: planState.selectedExercises.filter(
-          (e) => e.exercise.id !== exercise.id
-        ),
-      });
+      dayConfig.selectedExercisesByGroup[currentMuscleGroupTab] = exercises.filter(
+        (e) => e.exercise.id !== exercise.id
+      );
     } else {
-      setPlanState({
-        ...planState,
-        selectedExercises: [
-          ...planState.selectedExercises,
-          {
-            exercise,
-            sets: DEFAULT_SETS,
-            repsMin: DEFAULT_REPS_MIN,
-            repsMax: DEFAULT_REPS_MAX,
-            muscleGroup: currentMuscleGroup!.id,
-          },
-        ],
-      });
+      dayConfig.selectedExercisesByGroup[currentMuscleGroupTab] = [
+        ...exercises,
+        {
+          exercise,
+          sets: DEFAULT_SETS,
+          repsMin: DEFAULT_REPS_MIN,
+          repsMax: DEFAULT_REPS_MAX,
+        },
+      ];
     }
+
+    setPlanState({ ...planState, dayConfigurations: updatedDayConfigs });
   };
-
-  const goToNextMuscleGroup = () => {
-    const currentIndex = planState.selectedMuscleGroups.findIndex(
-      (g) => g.id === currentMuscleGroup?.id
-    );
-
-    if (currentIndex < planState.selectedMuscleGroups.length - 1) {
-      // Go to next muscle group
-      setCurrentMuscleGroup(planState.selectedMuscleGroups[currentIndex + 1]);
-    } else {
-      // Done with all muscle groups, go to configure
-      setCurrentStep("configure");
-    }
-  };
-
-  const goToPreviousMuscleGroup = () => {
-    const currentIndex = planState.selectedMuscleGroups.findIndex(
-      (g) => g.id === currentMuscleGroup?.id
-    );
-
-    if (currentIndex > 0) {
-      // Go to previous muscle group
-      setCurrentMuscleGroup(planState.selectedMuscleGroups[currentIndex - 1]);
-    } else {
-      // Back to muscle group selection
-      setCurrentStep("muscleGroups");
-    }
-  };
-
-  const renderExercisesStep = () => {
-    if (!currentMuscleGroup) return null;
-
-    const currentMuscleGroupIndex = planState.selectedMuscleGroups.findIndex(
-      (g) => g.id === currentMuscleGroup.id
-    );
-
-    const selectedForCurrentGroup = planState.selectedExercises.filter(
-      (e) => e.muscleGroup === currentMuscleGroup.id
-    );
-
-    // Filter exercises by equipment if filter is active
-    const filteredExercises =
-      equipmentFilter.length > 0
-        ? availableExercises.filter((ex) =>
-            ex.equipment.some((eq) => equipmentFilter.includes(eq))
-          )
-        : availableExercises;
-
-    return (
-      <View style={styles.stepContainer}>
-        <Text style={styles.stepTitle}>
-          Übungen für {currentMuscleGroup.name_de}
-        </Text>
-        <Text style={styles.stepSubtitle}>
-          Muskelgruppe {currentMuscleGroupIndex + 1} von{" "}
-          {planState.selectedMuscleGroups.length}
-        </Text>
-
-        {/* Equipment Filter */}
-        <View style={styles.filterContainer}>
-          <Text style={styles.filterLabel}>Equipment Filter:</Text>
-          <View style={styles.filterChips}>
-            {["Barbell", "Dumbbell", "Cable", "Bodyweight"].map((equipment) => {
-              const isActive = equipmentFilter.includes(equipment);
-              return (
-                <TouchableOpacity
-                  key={equipment}
-                  onPress={() => {
-                    if (isActive) {
-                      setEquipmentFilter(equipmentFilter.filter((e) => e !== equipment));
-                    } else {
-                      setEquipmentFilter([...equipmentFilter, equipment]);
-                    }
-                  }}
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      isActive && styles.filterChipTextActive,
-                    ]}
-                  >
-                    {equipment}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {loading ? (
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        ) : (
-          <ScrollView style={styles.exercisesList} showsVerticalScrollIndicator={false}>
-            {filteredExercises.map((exercise) => {
-              const isSelected = planState.selectedExercises.some(
-                (e) => e.exercise.id === exercise.id
-              );
-
-              return (
-                <Card
-                  key={exercise.id}
-                  onPress={() => handleToggleExercise(exercise)}
-                  padding="medium"
-                  elevation={isSelected ? "large" : "small"}
-                  style={[
-                    styles.exerciseCard,
-                    isSelected && styles.exerciseCardSelected,
-                  ]}
-                >
-                  <View style={styles.exerciseCardContent}>
-                    <View style={styles.exerciseInfo}>
-                      <Text style={styles.exerciseName}>{exercise.name_de}</Text>
-                      <Text style={styles.exerciseEquipment}>
-                        {exercise.equipment.join(", ")}
-                      </Text>
-                    </View>
-                    {isSelected && (
-                      <View style={styles.smallCheckmark}>
-                        <Text style={styles.checkmarkText}>✓</Text>
-                      </View>
-                    )}
-                  </View>
-                </Card>
-              );
-            })}
-          </ScrollView>
-        )}
-
-        <View style={styles.selectionInfo}>
-          <Text style={styles.selectionInfoText}>
-            {selectedForCurrentGroup.length} Übung(en) ausgewählt
-          </Text>
-        </View>
-
-        <View style={styles.navigationButtons}>
-          <Button
-            variant="secondary"
-            onPress={goToPreviousMuscleGroup}
-            style={styles.navButton}
-          >
-            Zurück
-          </Button>
-          <Button
-            variant="primary"
-            onPress={() => {
-              if (selectedForCurrentGroup.length === 0) {
-                Alert.alert(
-                  "Hinweis",
-                  `Bitte wähle mindestens eine Übung für ${currentMuscleGroup.name_de} aus.`
-                );
-                return;
-              }
-              goToNextMuscleGroup();
-            }}
-            disabled={selectedForCurrentGroup.length === 0}
-            style={styles.navButton}
-          >
-            {currentMuscleGroupIndex < planState.selectedMuscleGroups.length - 1
-              ? "Weiter"
-              : "Fertig"}
-          </Button>
-        </View>
-      </View>
-    );
-  };
-
-  // ============================================================================
-  // Step 4: Configure Sets & Reps
-  // ============================================================================
 
   const updateExerciseConfig = (
     exerciseId: string,
     field: "sets" | "repsMin" | "repsMax",
     value: number
   ) => {
-    setPlanState({
-      ...planState,
-      selectedExercises: planState.selectedExercises.map((ex) =>
-        ex.exercise.id === exerciseId ? { ...ex, [field]: value } : ex
-      ),
-    });
+    if (!currentMuscleGroupTab) return;
+
+    const updatedDayConfigs = [...planState.dayConfigurations];
+    const dayConfig = updatedDayConfigs[currentDayIndex];
+    const exercises = dayConfig.selectedExercisesByGroup[currentMuscleGroupTab] || [];
+
+    dayConfig.selectedExercisesByGroup[currentMuscleGroupTab] = exercises.map((ex) =>
+      ex.exercise.id === exerciseId ? { ...ex, [field]: value } : ex
+    );
+
+    setPlanState({ ...planState, dayConfigurations: updatedDayConfigs });
   };
 
-  const renderConfigureStep = () => {
+  const getTotalExercisesForDay = (dayConfig: DayConfiguration): number => {
+    return Object.values(dayConfig.selectedExercisesByGroup).reduce(
+      (sum, exercises) => sum + exercises.length,
+      0
+    );
+  };
+
+  const goToNextDay = () => {
+    if (currentDayConfig.muscleGroups.length === 0) {
+      Alert.alert(
+        "Hinweis",
+        `Bitte wähle mindestens eine Muskelgruppe für ${currentDayConfig.schedule.dayOfWeek} aus.`
+      );
+      return;
+    }
+
+    if (getTotalExercisesForDay(currentDayConfig) === 0) {
+      Alert.alert(
+        "Hinweis",
+        `Bitte wähle mindestens eine Übung für ${currentDayConfig.schedule.dayOfWeek} aus.`
+      );
+      return;
+    }
+
+    if (currentDayIndex < planState.dayConfigurations.length - 1) {
+      setCurrentDayIndex(currentDayIndex + 1);
+      setCurrentMuscleGroupTab(null);
+      carouselRef.current?.scrollToIndex({ index: currentDayIndex + 1, animated: true });
+    } else {
+      setCurrentStep("preview");
+    }
+  };
+
+  const goToPreviousDay = () => {
+    if (currentDayIndex > 0) {
+      setCurrentDayIndex(currentDayIndex - 1);
+      setCurrentMuscleGroupTab(null);
+      carouselRef.current?.scrollToIndex({ index: currentDayIndex - 1, animated: true });
+    } else {
+      setCurrentStep("schedule");
+    }
+  };
+
+  const renderDayCarouselItem = ({ item, index }: { item: DayConfiguration; index: number }) => {
+    const isActive = index === currentDayIndex;
+    if (!isActive) return <View style={{ width: SCREEN_WIDTH - 32 }} />;
+
+    const currentGroupExercises =
+      currentMuscleGroupTab && item.selectedExercisesByGroup[currentMuscleGroupTab]
+        ? item.selectedExercisesByGroup[currentMuscleGroupTab]
+        : [];
+
+    return (
+      <View style={styles.carouselPage}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.carouselScrollContent}
+        >
+          <Text style={styles.carouselDayTitle}>{item.schedule.dayOfWeek}</Text>
+          {item.schedule.time && (
+            <Text style={styles.carouselDayTime}>🕐 {item.schedule.time}</Text>
+          )}
+
+          {/* Muscle Groups Selection */}
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Muskelgruppen</Text>
+            <View style={styles.muscleGroupsGrid}>
+              {MUSCLE_GROUPS.map((group) => {
+                const isSelected = item.muscleGroups.some((g) => g.id === group.id);
+
+                return (
+                  <Card
+                    key={group.id}
+                    onPress={() => handleToggleMuscleGroup(group)}
+                    padding="small"
+                    elevation={isSelected ? "large" : "medium"}
+                    style={[
+                      styles.muscleGroupCard,
+                      isSelected && styles.muscleGroupCardSelected,
+                    ]}
+                  >
+                    <Text style={styles.muscleGroupIcon}>{group.icon}</Text>
+                    <Text style={styles.muscleGroupName}>{group.name_de}</Text>
+                    {isSelected && (
+                      <View style={styles.muscleGroupCheck}>
+                        <Text style={styles.checkmarkText}>✓</Text>
+                      </View>
+                    )}
+                  </Card>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Muscle Group Tabs */}
+          {item.muscleGroups.length > 0 && (
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Übungen</Text>
+
+              {/* Tabs for multiple muscle groups */}
+              {item.muscleGroups.length > 1 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.muscleTabsContainer}
+                >
+                  {item.muscleGroups.map((group) => {
+                    const isActiveTab = currentMuscleGroupTab === group.id;
+                    const exerciseCount =
+                      item.selectedExercisesByGroup[group.id]?.length || 0;
+
+                    return (
+                      <TouchableOpacity
+                        key={group.id}
+                        onPress={() => setCurrentMuscleGroupTab(group.id)}
+                        style={[
+                          styles.muscleTab,
+                          isActiveTab && styles.muscleTabActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.muscleTabText,
+                            isActiveTab && styles.muscleTabTextActive,
+                          ]}
+                        >
+                          {group.name_de}
+                        </Text>
+                        {exerciseCount > 0 && (
+                          <View style={styles.muscleTabBadge}>
+                            <Text style={styles.muscleTabBadgeText}>{exerciseCount}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+
+              {/* Equipment Filter - Always show if exercises are loaded */}
+              {availableExercises.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.equipmentFilterContainer}
+                >
+                  {EQUIPMENT_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      onPress={() => setEquipmentFilter(option.id)}
+                      style={[
+                        styles.filterChip,
+                        equipmentFilter === option.id && styles.filterChipActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          equipmentFilter === option.id && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Exercise List */}
+              {loadingExercises ? (
+                <ActivityIndicator size="large" color={COLORS.primary} />
+              ) : (
+                <>
+                  <View style={styles.exercisesList}>
+                    {getFilteredExercises().map((exercise) => {
+                      const isSelected = currentGroupExercises.some(
+                        (e) => e.exercise.id === exercise.id
+                      );
+
+                      return (
+                        <Card
+                          key={exercise.id}
+                          onPress={() => handleToggleExercise(exercise)}
+                          padding="medium"
+                          elevation={isSelected ? "large" : "small"}
+                          style={[
+                            styles.exerciseCard,
+                            isSelected && styles.exerciseCardSelected,
+                          ]}
+                        >
+                          <View style={styles.exerciseCardContent}>
+                            <View style={styles.exerciseInfo}>
+                              <Text style={styles.exerciseName}>{exercise.name_de}</Text>
+                              <Text style={styles.exerciseEquipment}>
+                                {(exercise.equipment_required || []).join(", ")}
+                              </Text>
+                            </View>
+                            {isSelected && (
+                              <View style={styles.smallCheckmark}>
+                                <Text style={styles.checkmarkText}>✓</Text>
+                              </View>
+                            )}
+                          </View>
+                        </Card>
+                      );
+                    })}
+                  </View>
+
+                  {/* Configure Sets & Reps */}
+                  {currentGroupExercises.length > 0 && (
+                    <View style={styles.sectionContainer}>
+                      <Text style={styles.sectionTitle}>Sets & Wiederholungen</Text>
+                      {currentGroupExercises.map((selectedEx) => (
+                        <Card
+                          key={selectedEx.exercise.id}
+                          padding="medium"
+                          style={styles.configCard}
+                        >
+                          <Text style={styles.configExerciseName}>
+                            {selectedEx.exercise.name_de}
+                          </Text>
+
+                          <View style={styles.configInputs}>
+                            {/* Sets */}
+                            <View style={styles.configInputGroup}>
+                              <Text style={styles.configLabel}>Sätze</Text>
+                              <View style={styles.numberInput}>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    updateExerciseConfig(
+                                      selectedEx.exercise.id,
+                                      "sets",
+                                      Math.max(1, selectedEx.sets - 1)
+                                    )
+                                  }
+                                  style={styles.numberButton}
+                                >
+                                  <Text style={styles.numberButtonText}>-</Text>
+                                </TouchableOpacity>
+                                <Text style={styles.numberValue}>{selectedEx.sets}</Text>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    updateExerciseConfig(
+                                      selectedEx.exercise.id,
+                                      "sets",
+                                      Math.min(10, selectedEx.sets + 1)
+                                    )
+                                  }
+                                  style={styles.numberButton}
+                                >
+                                  <Text style={styles.numberButtonText}>+</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+
+                            {/* Reps Min */}
+                            <View style={styles.configInputGroup}>
+                              <Text style={styles.configLabel}>Wdh Min</Text>
+                              <View style={styles.numberInput}>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    updateExerciseConfig(
+                                      selectedEx.exercise.id,
+                                      "repsMin",
+                                      Math.max(1, selectedEx.repsMin - 1)
+                                    )
+                                  }
+                                  style={styles.numberButton}
+                                >
+                                  <Text style={styles.numberButtonText}>-</Text>
+                                </TouchableOpacity>
+                                <Text style={styles.numberValue}>{selectedEx.repsMin}</Text>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    updateExerciseConfig(
+                                      selectedEx.exercise.id,
+                                      "repsMin",
+                                      Math.min(selectedEx.repsMax, selectedEx.repsMin + 1)
+                                    )
+                                  }
+                                  style={styles.numberButton}
+                                >
+                                  <Text style={styles.numberButtonText}>+</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+
+                            {/* Reps Max */}
+                            <View style={styles.configInputGroup}>
+                              <Text style={styles.configLabel}>Wdh Max</Text>
+                              <View style={styles.numberInput}>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    updateExerciseConfig(
+                                      selectedEx.exercise.id,
+                                      "repsMax",
+                                      Math.max(selectedEx.repsMin, selectedEx.repsMax - 1)
+                                    )
+                                  }
+                                  style={styles.numberButton}
+                                >
+                                  <Text style={styles.numberButtonText}>-</Text>
+                                </TouchableOpacity>
+                                <Text style={styles.numberValue}>{selectedEx.repsMax}</Text>
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    updateExerciseConfig(
+                                      selectedEx.exercise.id,
+                                      "repsMax",
+                                      Math.min(50, selectedEx.repsMax + 1)
+                                    )
+                                  }
+                                  style={styles.numberButton}
+                                >
+                                  <Text style={styles.numberButtonText}>+</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          </View>
+                        </Card>
+                      ))}
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  const renderConfigureDaysStep = () => {
     return (
       <View style={styles.stepContainer}>
-        <Text style={styles.stepTitle}>Sets & Wiederholungen konfigurieren</Text>
-        <Text style={styles.stepSubtitle}>
-          Passe die Werte für jede Übung an (oder behalte die Standardwerte)
-        </Text>
+        {/* Day Indicator */}
+        <View style={styles.dayIndicatorContainer}>
+          <Text style={styles.dayIndicatorText}>
+            Tag {currentDayIndex + 1} von {planState.dayConfigurations.length}
+          </Text>
+          <View style={styles.dayDotsContainer}>
+            {planState.dayConfigurations.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dayDot,
+                  index === currentDayIndex && styles.dayDotActive,
+                  getTotalExercisesForDay(planState.dayConfigurations[index]) > 0 &&
+                    styles.dayDotCompleted,
+                ]}
+              />
+            ))}
+          </View>
+        </View>
 
-        <ScrollView style={styles.configureList} showsVerticalScrollIndicator={false}>
-          {planState.selectedExercises.map((selectedEx) => (
-            <Card key={selectedEx.exercise.id} padding="medium" style={styles.configCard}>
-              <Text style={styles.configExerciseName}>
-                {selectedEx.exercise.name_de}
-              </Text>
-              <Text style={styles.configMuscleGroup}>
-                {
-                  MUSCLE_GROUPS.find((g) => g.id === selectedEx.muscleGroup)
-                    ?.name_de
-                }
-              </Text>
+        {/* Carousel */}
+        <FlatList
+          ref={carouselRef}
+          data={planState.dayConfigurations}
+          renderItem={renderDayCarouselItem}
+          keyExtractor={(item) => item.dayNumber.toString()}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEnabled={false}
+          style={styles.carousel}
+          contentContainerStyle={styles.carouselContent}
+        />
 
-              <View style={styles.configInputs}>
-                {/* Sets */}
-                <View style={styles.configInputGroup}>
-                  <Text style={styles.configLabel}>Sätze</Text>
-                  <View style={styles.numberInput}>
-                    <TouchableOpacity
-                      onPress={() =>
-                        updateExerciseConfig(
-                          selectedEx.exercise.id,
-                          "sets",
-                          Math.max(1, selectedEx.sets - 1)
-                        )
-                      }
-                      style={styles.numberButton}
-                    >
-                      <Text style={styles.numberButtonText}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.numberValue}>{selectedEx.sets}</Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        updateExerciseConfig(
-                          selectedEx.exercise.id,
-                          "sets",
-                          Math.min(10, selectedEx.sets + 1)
-                        )
-                      }
-                      style={styles.numberButton}
-                    >
-                      <Text style={styles.numberButtonText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Reps Min */}
-                <View style={styles.configInputGroup}>
-                  <Text style={styles.configLabel}>Wdh Min</Text>
-                  <View style={styles.numberInput}>
-                    <TouchableOpacity
-                      onPress={() =>
-                        updateExerciseConfig(
-                          selectedEx.exercise.id,
-                          "repsMin",
-                          Math.max(1, selectedEx.repsMin - 1)
-                        )
-                      }
-                      style={styles.numberButton}
-                    >
-                      <Text style={styles.numberButtonText}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.numberValue}>{selectedEx.repsMin}</Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        updateExerciseConfig(
-                          selectedEx.exercise.id,
-                          "repsMin",
-                          Math.min(selectedEx.repsMax, selectedEx.repsMin + 1)
-                        )
-                      }
-                      style={styles.numberButton}
-                    >
-                      <Text style={styles.numberButtonText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Reps Max */}
-                <View style={styles.configInputGroup}>
-                  <Text style={styles.configLabel}>Wdh Max</Text>
-                  <View style={styles.numberInput}>
-                    <TouchableOpacity
-                      onPress={() =>
-                        updateExerciseConfig(
-                          selectedEx.exercise.id,
-                          "repsMax",
-                          Math.max(selectedEx.repsMin, selectedEx.repsMax - 1)
-                        )
-                      }
-                      style={styles.numberButton}
-                    >
-                      <Text style={styles.numberButtonText}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.numberValue}>{selectedEx.repsMax}</Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        updateExerciseConfig(
-                          selectedEx.exercise.id,
-                          "repsMax",
-                          Math.min(50, selectedEx.repsMax + 1)
-                        )
-                      }
-                      style={styles.numberButton}
-                    >
-                      <Text style={styles.numberButtonText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Card>
-          ))}
-        </ScrollView>
-
+        {/* Navigation */}
         <View style={styles.navigationButtons}>
-          <Button
-            variant="secondary"
-            onPress={() => {
-              setCurrentMuscleGroup(
-                planState.selectedMuscleGroups[
-                  planState.selectedMuscleGroups.length - 1
-                ]
-              );
-              setCurrentStep("exercises");
-            }}
-            style={styles.navButton}
-          >
+          <Button variant="secondary" onPress={goToPreviousDay} style={styles.navButton}>
             Zurück
           </Button>
           <Button
             variant="primary"
-            onPress={() => setCurrentStep("preview")}
+            onPress={goToNextDay}
+            disabled={
+              !currentDayConfig ||
+              currentDayConfig.muscleGroups.length === 0 ||
+              getTotalExercisesForDay(currentDayConfig) === 0
+            }
             style={styles.navButton}
           >
-            Weiter
+            {currentDayIndex < planState.dayConfigurations.length - 1
+              ? "Nächster Tag"
+              : "Zur Vorschau"}
           </Button>
         </View>
       </View>
@@ -685,7 +903,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
   };
 
   // ============================================================================
-  // Step 5: Preview & Create
+  // Step 4: Preview & Create
   // ============================================================================
 
   const handleCreatePlan = async () => {
@@ -696,7 +914,6 @@ export const CustomPlanFlowScreen: React.FC = () => {
 
     setLoading(true);
     try {
-      // Get user
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -708,11 +925,12 @@ export const CustomPlanFlowScreen: React.FC = () => {
       // Deactivate other plans
       const { error: deactivateError } = await supabase
         .from("training_plans")
-        .update({ status: "inactive" })
+        .update({ status: "paused" })
         .eq("user_id", user.id);
 
       if (deactivateError) {
-        console.error("Fehler beim Deaktivieren alter Pläne:", deactivateError);
+        console.error("Fehler beim Deaktivieren anderer Pläne:", deactivateError);
+        throw new Error("Andere Pläne konnten nicht deaktiviert werden");
       }
 
       // Create the plan
@@ -730,55 +948,58 @@ export const CustomPlanFlowScreen: React.FC = () => {
         .single();
 
       if (planError || !newPlan) {
+        console.error("Fehler beim Erstellen des Plans:", planError);
         throw new Error("Plan konnte nicht erstellt werden");
       }
 
-      // Distribute exercises across workouts intelligently
-      const workouts = distributeExercisesToWorkouts(
-        planState.selectedExercises,
-        planState.daysPerWeek!,
-        planState.selectedMuscleGroups
-      );
-
-      // Create workouts
-      for (let i = 0; i < workouts.length; i++) {
-        const workout = workouts[i];
+      // Create workouts for each day
+      for (const dayConfig of planState.dayConfigurations) {
+        const focusNames = dayConfig.muscleGroups.map((g) => g.name_de).join(" & ");
 
         const { data: newWorkout, error: workoutError } = await supabase
           .from("plan_workouts")
           .insert({
             plan_id: newPlan.id,
-            name: workout.name,
-            name_de: workout.name_de,
-            day_number: i + 1,
+            name: `${dayConfig.schedule.dayOfWeek}${
+              dayConfig.schedule.time ? ` (${dayConfig.schedule.time})` : ""
+            }`,
+            day_number: dayConfig.dayNumber,
             week_number: 1,
-            focus: workout.focus,
+            order_in_week: dayConfig.dayNumber,
+            focus: focusNames,
           })
           .select()
           .single();
 
         if (workoutError || !newWorkout) {
+          console.error("Workout Error Details:", workoutError);
           throw new Error("Workout konnte nicht erstellt werden");
         }
 
-        // Create exercises for this workout
-        const exercisesToInsert = workout.exercises.map((ex, index) => ({
+        // Create exercises for this workout from all muscle groups
+        const allExercises: SelectedExercise[] = [];
+        Object.values(dayConfig.selectedExercisesByGroup).forEach((exercises) => {
+          allExercises.push(...exercises);
+        });
+
+        const exercisesToInsert = allExercises.map((ex, index) => ({
           workout_id: newWorkout.id,
           exercise_id: ex.exercise.id,
-          exercise_order: index + 1,
+          order_in_workout: index + 1,
           sets: ex.sets,
           reps_min: ex.repsMin,
           reps_max: ex.repsMax,
-          is_optional: false,
-          can_substitute: true,
         }));
 
-        const { error: exercisesError } = await supabase
-          .from("plan_exercises")
-          .insert(exercisesToInsert);
+        if (exercisesToInsert.length > 0) {
+          const { error: exercisesError } = await supabase
+            .from("plan_exercises")
+            .insert(exercisesToInsert);
 
-        if (exercisesError) {
-          throw new Error("Übungen konnten nicht erstellt werden");
+          if (exercisesError) {
+            console.error("Fehler beim Erstellen der Exercises:", exercisesError);
+            throw new Error("Übungen konnten nicht erstellt werden");
+          }
         }
       }
 
@@ -800,7 +1021,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
       console.error("Fehler beim Erstellen des Plans:", error);
       Alert.alert(
         "Fehler",
-        "Plan konnte nicht erstellt werden. Bitte versuche es erneut."
+        error instanceof Error ? error.message : "Plan konnte nicht erstellt werden."
       );
     } finally {
       setLoading(false);
@@ -808,9 +1029,9 @@ export const CustomPlanFlowScreen: React.FC = () => {
   };
 
   const renderPreviewStep = () => {
-    const totalExercises = planState.selectedExercises.length;
-    const exercisesPerWorkout = Math.ceil(
-      totalExercises / (planState.daysPerWeek || 1)
+    const totalExercises = planState.dayConfigurations.reduce(
+      (sum, day) => sum + getTotalExercisesForDay(day),
+      0
     );
 
     return (
@@ -828,9 +1049,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
               style={styles.nameInput}
               placeholder="z.B. Mein Custom Plan"
               value={planState.planName}
-              onChangeText={(text) =>
-                setPlanState({ ...planState, planName: text })
-              }
+              onChangeText={(text) => setPlanState({ ...planState, planName: text })}
               placeholderTextColor={COLORS.textSecondary}
             />
           </Card>
@@ -840,53 +1059,56 @@ export const CustomPlanFlowScreen: React.FC = () => {
             <Text style={styles.previewSectionTitle}>Übersicht</Text>
             <View style={styles.statRow}>
               <Text style={styles.statLabel}>📅 Trainingstage:</Text>
-              <Text style={styles.statValue}>
-                {planState.daysPerWeek} pro Woche
-              </Text>
-            </View>
-            <View style={styles.statRow}>
-              <Text style={styles.statLabel}>💪 Muskelgruppen:</Text>
-              <Text style={styles.statValue}>
-                {planState.selectedMuscleGroups.length}
-              </Text>
+              <Text style={styles.statValue}>{planState.daysPerWeek} pro Woche</Text>
             </View>
             <View style={styles.statRow}>
               <Text style={styles.statLabel}>🏋️ Übungen gesamt:</Text>
               <Text style={styles.statValue}>{totalExercises}</Text>
             </View>
-            <View style={styles.statRow}>
-              <Text style={styles.statLabel}>📊 Übungen pro Workout:</Text>
-              <Text style={styles.statValue}>~{exercisesPerWorkout}</Text>
-            </View>
           </Card>
 
-          {/* Muscle Groups */}
-          <Card padding="large">
-            <Text style={styles.previewSectionTitle}>Muskelgruppen</Text>
-            <View style={styles.muscleGroupsList}>
-              {planState.selectedMuscleGroups.map((group) => {
-                const count = planState.selectedExercises.filter(
-                  (ex) => ex.muscleGroup === group.id
-                ).length;
+          {/* Day Breakdown */}
+          {planState.dayConfigurations.map((day) => {
+            const allExercises: SelectedExercise[] = [];
+            Object.values(day.selectedExercisesByGroup).forEach((exercises) => {
+              allExercises.push(...exercises);
+            });
 
-                return (
-                  <View key={group.id} style={styles.muscleGroupRow}>
-                    <Text style={styles.muscleGroupRowIcon}>{group.icon}</Text>
-                    <Text style={styles.muscleGroupRowName}>{group.name_de}</Text>
-                    <Text style={styles.muscleGroupRowCount}>
-                      {count} Übung{count !== 1 ? "en" : ""}
+            return (
+              <Card key={day.dayNumber} padding="large" style={{ marginBottom: SPACING.md }}>
+                <Text style={styles.previewSectionTitle}>{day.schedule.dayOfWeek}</Text>
+                {day.schedule.time && (
+                  <Text style={styles.previewDayTime}>🕐 {day.schedule.time}</Text>
+                )}
+                <View style={styles.statRow}>
+                  <Text style={styles.statLabel}>💪 Muskelgruppen:</Text>
+                  <Text style={styles.statValue}>
+                    {day.muscleGroups.map((g) => g.name_de).join(", ")}
+                  </Text>
+                </View>
+                <View style={styles.statRow}>
+                  <Text style={styles.statLabel}>🏋️ Übungen:</Text>
+                  <Text style={styles.statValue}>{allExercises.length}</Text>
+                </View>
+                <View style={styles.exercisePreviewList}>
+                  {allExercises.map((ex) => (
+                    <Text key={ex.exercise.id} style={styles.exercisePreviewItem}>
+                      • {ex.exercise.name_de} ({ex.sets}x{ex.repsMin}-{ex.repsMax})
                     </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </Card>
+                  ))}
+                </View>
+              </Card>
+            );
+          })}
         </ScrollView>
 
         <View style={styles.navigationButtons}>
           <Button
             variant="secondary"
-            onPress={() => setCurrentStep("configure")}
+            onPress={() => {
+              setCurrentDayIndex(planState.dayConfigurations.length - 1);
+              setCurrentStep("configureDays");
+            }}
             style={styles.navButton}
           >
             Zurück
@@ -917,107 +1139,22 @@ export const CustomPlanFlowScreen: React.FC = () => {
             <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
           </View>
           <Text style={styles.progressText}>
-            {currentStep === "days" && "Schritt 1 von 5"}
-            {currentStep === "muscleGroups" && "Schritt 2 von 5"}
-            {currentStep === "exercises" && "Schritt 3 von 5"}
-            {currentStep === "configure" && "Schritt 4 von 5"}
-            {currentStep === "preview" && "Schritt 5 von 5"}
+            {currentStep === "days" && "Schritt 1 von 4"}
+            {currentStep === "schedule" && "Schritt 2 von 4"}
+            {currentStep === "configureDays" && "Schritt 3 von 4"}
+            {currentStep === "preview" && "Schritt 4 von 4"}
           </Text>
         </View>
 
         {/* Step Content */}
         {currentStep === "days" && renderDaysStep()}
-        {currentStep === "muscleGroups" && renderMuscleGroupsStep()}
-        {currentStep === "exercises" && renderExercisesStep()}
-        {currentStep === "configure" && renderConfigureStep()}
+        {currentStep === "schedule" && renderScheduleStep()}
+        {currentStep === "configureDays" && renderConfigureDaysStep()}
         {currentStep === "preview" && renderPreviewStep()}
       </View>
     </SafeAreaView>
   );
 };
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Distributes exercises to workouts based on muscle groups and training frequency
- */
-function distributeExercisesToWorkouts(
-  exercises: SelectedExercise[],
-  daysPerWeek: number,
-  muscleGroups: MuscleGroup[]
-): Array<{
-  name: string;
-  name_de: string;
-  focus: string;
-  exercises: SelectedExercise[];
-}> {
-  const workouts: Array<{
-    name: string;
-    name_de: string;
-    focus: string;
-    exercises: SelectedExercise[];
-  }> = [];
-
-  // Group exercises by muscle group
-  const exercisesByMuscle: Record<string, SelectedExercise[]> = {};
-  exercises.forEach((ex) => {
-    if (!exercisesByMuscle[ex.muscleGroup]) {
-      exercisesByMuscle[ex.muscleGroup] = [];
-    }
-    exercisesByMuscle[ex.muscleGroup].push(ex);
-  });
-
-  // Create balanced workouts
-  if (daysPerWeek <= 3) {
-    // Full body workouts - distribute all muscle groups across workouts
-    for (let i = 0; i < daysPerWeek; i++) {
-      const workoutExercises: SelectedExercise[] = [];
-
-      muscleGroups.forEach((group) => {
-        const groupExercises = exercisesByMuscle[group.id] || [];
-        const exercisesPerWorkout = Math.ceil(groupExercises.length / daysPerWeek);
-        const start = i * exercisesPerWorkout;
-        const end = start + exercisesPerWorkout;
-
-        workoutExercises.push(...groupExercises.slice(start, end));
-      });
-
-      workouts.push({
-        name: `Full Body ${String.fromCharCode(65 + i)}`,
-        name_de: `Ganzkörper ${String.fromCharCode(65 + i)}`,
-        focus: "Full Body",
-        exercises: workoutExercises,
-      });
-    }
-  } else {
-    // Split workouts - assign muscle groups to specific days
-    const muscleGroupsPerDay = Math.ceil(muscleGroups.length / daysPerWeek);
-
-    for (let i = 0; i < daysPerWeek; i++) {
-      const start = i * muscleGroupsPerDay;
-      const end = start + muscleGroupsPerDay;
-      const dayMuscleGroups = muscleGroups.slice(start, end);
-
-      const workoutExercises: SelectedExercise[] = [];
-      dayMuscleGroups.forEach((group) => {
-        workoutExercises.push(...(exercisesByMuscle[group.id] || []));
-      });
-
-      const focusNames = dayMuscleGroups.map((g) => g.name_de).join(" & ");
-
-      workouts.push({
-        name: `Day ${i + 1}`,
-        name_de: `Tag ${i + 1}`,
-        focus: focusNames,
-        exercises: workoutExercises,
-      });
-    }
-  }
-
-  return workouts.filter((w) => w.exercises.length > 0);
-}
 
 // ============================================================================
 // Styles
@@ -1057,6 +1194,12 @@ const styles = StyleSheet.create({
   stepContainer: {
     flex: 1,
     paddingHorizontal: SPACING.md,
+  },
+  stepScrollView: {
+    flex: 1,
+  },
+  stepScrollContent: {
+    paddingBottom: SPACING.md,
   },
   stepTitle: {
     fontSize: 24,
@@ -1107,7 +1250,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checkmarkText: {
-    color: "#FFFFFF",
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: "700",
   },
@@ -1120,14 +1263,125 @@ const styles = StyleSheet.create({
   navButton: {
     flex: 1,
   },
+  // Schedule Step
+  scheduleCard: {
+    marginBottom: SPACING.md,
+  },
+  scheduleCardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+  },
+  scheduleInputGroup: {
+    marginBottom: SPACING.md,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+  },
+  weekdaySelector: {
+    marginBottom: SPACING.sm,
+  },
+  weekdayChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: "#E5E5EA",
+    marginRight: SPACING.sm,
+  },
+  weekdayChipSelected: {
+    backgroundColor: COLORS.primary,
+  },
+  weekdayChipText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+  weekdayChipTextSelected: {
+    color: COLORS.white,
+  },
+  timeInput: {
+    fontSize: 16,
+    color: COLORS.text,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  // Carousel
+  dayIndicatorContainer: {
+    alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  dayIndicatorText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+  },
+  dayDotsContainer: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+  },
+  dayDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#E5E5EA",
+  },
+  dayDotActive: {
+    backgroundColor: COLORS.primary,
+    width: 24,
+  },
+  dayDotCompleted: {
+    backgroundColor: COLORS.success,
+  },
+  carousel: {
+    flex: 1,
+  },
+  carouselContent: {
+    paddingHorizontal: 0,
+  },
+  carouselPage: {
+    width: SCREEN_WIDTH - 32,
+    paddingHorizontal: 0,
+  },
+  carouselScrollContent: {
+    paddingBottom: SPACING.md,
+  },
+  carouselDayTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  carouselDayTime: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.lg,
+  },
+  // Sections
+  sectionContainer: {
+    marginBottom: SPACING.lg,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+  },
   muscleGroupsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: SPACING.md,
-    marginBottom: SPACING.xl,
+    gap: SPACING.sm,
   },
   muscleGroupCard: {
-    width: "47%",
+    width: "31%",
     alignItems: "center",
     position: "relative",
   },
@@ -1137,60 +1391,66 @@ const styles = StyleSheet.create({
     borderColor: COLORS.selectedBorder,
   },
   muscleGroupIcon: {
-    fontSize: 40,
-    marginBottom: SPACING.sm,
+    fontSize: 28,
+    marginBottom: 4,
   },
   muscleGroupName: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "600",
     color: COLORS.text,
     textAlign: "center",
   },
   muscleGroupCheck: {
     position: "absolute",
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  filterContainer: {
+  // Muscle Group Tabs
+  muscleTabsContainer: {
     marginBottom: SPACING.md,
   },
-  filterLabel: {
+  muscleTab: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 20,
+    backgroundColor: "#E5E5EA",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    marginRight: SPACING.sm,
+  },
+  muscleTabActive: {
+    backgroundColor: COLORS.primary,
+  },
+  muscleTabText: {
     fontSize: 14,
     fontWeight: "600",
     color: COLORS.text,
-    marginBottom: SPACING.sm,
   },
-  filterChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SPACING.sm,
+  muscleTabTextActive: {
+    color: COLORS.white,
   },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "#E5E5EA",
+  muscleTabBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.success,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  filterChipActive: {
-    backgroundColor: COLORS.primary,
-  },
-  filterChipText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.text,
-  },
-  filterChipTextActive: {
-    color: "#FFFFFF",
+  muscleTabBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.white,
   },
   exercisesList: {
-    flex: 1,
-    marginBottom: SPACING.md,
+    gap: SPACING.sm,
   },
   exerciseCard: {
     marginBottom: SPACING.sm,
@@ -1226,19 +1486,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  selectionInfo: {
-    paddingVertical: SPACING.sm,
-    alignItems: "center",
-  },
-  selectionInfoText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textSecondary,
-  },
-  configureList: {
-    flex: 1,
-    marginBottom: SPACING.md,
-  },
   configCard: {
     marginBottom: SPACING.md,
   },
@@ -1246,11 +1493,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: COLORS.text,
-    marginBottom: 4,
-  },
-  configMuscleGroup: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
     marginBottom: SPACING.md,
   },
   configInputs: {
@@ -1281,7 +1523,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   numberButtonText: {
-    color: "#FFFFFF",
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: "700",
   },
@@ -1292,6 +1534,7 @@ const styles = StyleSheet.create({
     minWidth: 32,
     textAlign: "center",
   },
+  // Preview
   previewScroll: {
     flex: 1,
     marginBottom: SPACING.md,
@@ -1321,6 +1564,11 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: SPACING.md,
   },
+  previewDayTime: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.sm,
+  },
   statRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1334,29 +1582,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: COLORS.text,
+    flex: 1,
+    textAlign: "right",
   },
-  muscleGroupsList: {
-    gap: SPACING.sm,
+  exercisePreviewList: {
+    marginTop: SPACING.sm,
+    gap: 4,
   },
-  muscleGroupRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  exercisePreviewItem: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  // Equipment Filter
+  equipmentFilterContainer: {
+    marginBottom: SPACING.md,
+  },
+  filterChip: {
+    paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  muscleGroupRowIcon: {
-    fontSize: 20,
+    borderRadius: 20,
+    backgroundColor: "#E5E5EA",
+    alignItems: "center",
     marginRight: SPACING.sm,
   },
-  muscleGroupRowName: {
-    flex: 1,
-    fontSize: 14,
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterChipText: {
+    fontSize: 13,
     fontWeight: "600",
     color: COLORS.text,
   },
-  muscleGroupRowCount: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
+  filterChipTextActive: {
+    color: COLORS.white,
   },
 });

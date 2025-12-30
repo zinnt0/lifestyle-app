@@ -18,7 +18,9 @@ import {
 } from "../../services/recovery.service";
 import { trainingService } from "../../services/trainingService";
 import { QuickWorkoutAction } from "../../components/training/QuickWorkoutAction";
-import type { NextWorkout } from "../../types/training.types";
+import { FitnessStats } from "../../components/training/FitnessStats";
+import { PausedSessionCard } from "../../components/training/PausedSessionCard";
+import type { NextWorkout, WorkoutSession } from "../../types/training.types";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   MainStackParamList,
@@ -36,6 +38,8 @@ export const HomeScreen: React.FC = () => {
   const [hasLogged, setHasLogged] = useState(false);
   const [recoveryScore, setRecoveryScore] = useState<number | null>(null);
   const [nextWorkout, setNextWorkout] = useState<NextWorkout | null>(null);
+  const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   /**
    * Check if user has logged today and fetch recovery score
@@ -45,6 +49,9 @@ export const HomeScreen: React.FC = () => {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
+
+    // Set user ID for stats component
+    setUserId(user.id);
 
     const logged = await hasLoggedToday(user.id);
     setHasLogged(logged);
@@ -58,7 +65,7 @@ export const HomeScreen: React.FC = () => {
   }, []);
 
   /**
-   * Load next scheduled workout
+   * Load next scheduled workout and paused session
    */
   const loadNextWorkout = useCallback(async () => {
     try {
@@ -67,6 +74,11 @@ export const HomeScreen: React.FC = () => {
       } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Check for paused session first
+      const paused = await trainingService.getPausedSession(user.id);
+      setPausedSession(paused);
+
+      // Load next workout
       const workout = await trainingService.getNextWorkout(user.id);
       setNextWorkout(workout);
     } catch (error) {
@@ -100,13 +112,68 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  /**
+   * Handle resuming a paused workout session
+   */
+  const handleResumeSession = useCallback(async () => {
+    if (!pausedSession) return;
+
+    try {
+      await trainingService.resumeWorkoutSession(pausedSession.id);
+      // @ts-ignore - Navigation to nested navigator
+      navigation.navigate("TrainingTab", {
+        screen: "WorkoutSession",
+        params: { sessionId: pausedSession.id },
+      });
+    } catch (error) {
+      console.error("Error resuming session:", error);
+    }
+  }, [pausedSession, navigation]);
+
+  /**
+   * Handle canceling a paused workout session
+   */
+  const handleCancelSession = useCallback(async () => {
+    if (!pausedSession) return;
+
+    try {
+      await trainingService.cancelWorkoutSession(pausedSession.id);
+      await loadNextWorkout();
+    } catch (error) {
+      console.error("Error canceling session:", error);
+    }
+  }, [pausedSession, loadNextWorkout]);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Willkommen! 🎉</Text>
 
-      {/* Quick Workout Action - Prominent position */}
-      <QuickWorkoutAction workout={nextWorkout || undefined} />
+      {/* Fitness Section - Shows paused workout or next workout + stats */}
+      <View style={styles.fitnessSection}>
+        <Text style={styles.sectionTitle}>FITNESS</Text>
 
+        <View style={styles.fitnessContent}>
+          {/* Left: Paused Session or Next Workout */}
+          <View style={styles.workoutColumn}>
+            {pausedSession ? (
+              <PausedSessionCard
+                session={pausedSession}
+                onResume={handleResumeSession}
+                onCancel={handleCancelSession}
+              />
+            ) : (
+              <QuickWorkoutAction workout={nextWorkout || undefined} />
+            )}
+          </View>
+
+          {/* Right: Fitness Stats */}
+          <View style={styles.statsColumn}>
+            <FitnessStats userId={userId || undefined} />
+          </View>
+        </View>
+      </View>
+
+      {/* Recovery Section */}
       {hasLogged ? (
         <View style={styles.recoveryCard}>
           <Text style={styles.recoveryLabel}>Heutiger Recovery Score</Text>
@@ -152,6 +219,29 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: "center",
   },
+  // Fitness Section Styles
+  fitnessSection: {
+    width: "100%",
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 1,
+    color: "#8E8E93",
+    marginBottom: 12,
+  },
+  fitnessContent: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  workoutColumn: {
+    flex: 2,
+  },
+  statsColumn: {
+    flex: 1,
+  },
+  // Recovery Section Styles
   recoveryCard: {
     backgroundColor: "#F2F2F7",
     borderRadius: 16,

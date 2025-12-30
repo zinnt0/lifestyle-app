@@ -16,7 +16,7 @@ export interface TrainingPlan {
   name: string;
   plan_type: string;
   days_per_week: number;
-  status: "active" | "inactive" | "completed";
+  status: "active" | "paused" | "completed";
   start_date: string;
   created_at: string;
   template?: PlanTemplate;
@@ -32,9 +32,9 @@ export interface PlanWorkout {
   id: string;
   plan_id: string;
   name: string;
-  name_de: string;
   day_number: number;
   week_number?: number;
+  order_in_week: number;
   focus?: string;
   estimated_duration?: number;
   exercises: PlanExercise[];
@@ -44,16 +44,16 @@ export interface PlanExercise {
   id: string;
   workout_id: string;
   exercise_id: string;
-  exercise_order: number;
+  order_in_workout: number;
   sets: number;
   reps_min?: number;
   reps_max?: number;
-  target_reps?: number;
-  target_weight?: number;
-  rpe_target?: number;
+  reps_target?: number;
+  rir_target?: number;
+  percentage_1rm?: number;
   rest_seconds?: number;
-  is_optional: boolean;
-  can_substitute: boolean;
+  notes?: string;
+  superset_with?: string;
   exercise?: Exercise;
 }
 
@@ -65,7 +65,7 @@ export interface Exercise {
   id: string;
   name: string;
   name_de: string;
-  equipment: string[];
+  equipment_required: string[];
   movement_pattern: string;
   primary_muscles: string[];
   secondary_muscles: string[];
@@ -73,6 +73,7 @@ export interface Exercise {
   video_url?: string;
   instruction?: string;
   instruction_de?: string;
+  is_active?: boolean;
 }
 
 // ============================================================================
@@ -84,9 +85,13 @@ export interface WorkoutSession {
   user_id: string;
   plan_id: string;
   plan_workout_id: string;
-  status: "in_progress" | "completed" | "skipped";
-  started_at: string;
-  completed_at?: string;
+  status: "in_progress" | "completed" | "skipped" | "paused";
+  date: string;
+  start_time?: string;
+  end_time?: string;
+  duration_minutes?: number;
+  energy_level?: number;
+  sleep_quality?: number;
   notes?: string;
   workout?: PlanWorkout;
 }
@@ -101,9 +106,9 @@ export interface WorkoutSet {
   session_id: string;
   exercise_id: string;
   set_number: number;
-  weight_kg?: number;
+  weight?: number;
   reps: number;
-  rpe?: number;
+  rir?: number;
   notes?: string;
   created_at: string;
 }
@@ -125,6 +130,29 @@ export interface PlanTemplate {
   scientific_rationale?: string;
   requirements?: string;
   progression_type?: string;
+  min_training_experience_months?: number;
+  // Scoring System Fields (added 2024-12-29)
+  estimated_sets_per_week?: number;
+  exercises_per_workout?: number;
+  completion_status?: "complete" | "incomplete";
+  scoring_metadata?: ScoringMetadata;
+}
+
+/**
+ * Metadata for the plan scoring system
+ * Contains pre-computed metrics for faster plan recommendations
+ */
+export interface ScoringMetadata {
+  total_exercises?: number;
+  total_sets?: number;
+  avg_sets_per_exercise?: number;
+  workout_count?: number;
+  has_supersets?: boolean;
+  has_optional_exercises?: boolean;
+  complexity_score?: number; // 1=beginner, 2=intermediate, 3=advanced
+  last_calculated?: string;
+  incomplete?: boolean;
+  [key: string]: any; // Allow additional metadata fields
 }
 
 export interface TemplateDetails extends PlanTemplate {
@@ -138,6 +166,7 @@ export interface TemplateWorkout {
   name_de: string;
   day_number: number;
   week_number?: number;
+  order_in_week: number;
   focus?: string;
   exercises: TemplateExercise[];
 }
@@ -146,12 +175,17 @@ export interface TemplateExercise {
   id: string;
   workout_id: string;
   exercise_id: string;
-  exercise_order: number;
+  order_in_workout: number;
   sets: number;
   reps_min?: number;
   reps_max?: number;
-  rpe_target?: number;
+  reps_target?: number;
+  rir_target?: number;
+  percentage_1rm?: number;
   rest_seconds?: number;
+  notes?: string;
+  notes_de?: string;
+  superset_with?: string;
   is_optional: boolean;
   can_substitute: boolean;
   exercise?: Exercise;
@@ -185,7 +219,7 @@ export interface WorkoutHistoryItem {
 
 export interface ExerciseProgress {
   date: string;
-  weight_kg: number;
+  weight: number;
   reps: number;
   volume: number; // weight * reps * sets
   estimated_1rm?: number;
@@ -203,7 +237,7 @@ export type SubstitutionReason =
   | "other";
 
 export type PlanStatus = "active" | "inactive" | "completed";
-export type SessionStatus = "in_progress" | "completed" | "skipped";
+export type SessionStatus = "in_progress" | "completed" | "skipped" | "paused";
 export type FitnessLevel = "beginner" | "intermediate" | "advanced";
 export type PrimaryGoal = "strength" | "hypertrophy" | "both";
 export type Difficulty = "beginner" | "intermediate" | "advanced";

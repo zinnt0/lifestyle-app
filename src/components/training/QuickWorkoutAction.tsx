@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Alert } from "react-native";
+import { View, Text, StyleSheet, Alert, TouchableOpacity } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -70,7 +70,72 @@ export const QuickWorkoutAction: React.FC<QuickWorkoutActionProps> = ({
         return;
       }
 
-      // Start workout session
+      // Check for paused session first
+      const pausedSession = await trainingService.getPausedSession(user.id);
+
+      if (pausedSession) {
+        // Ask user if they want to resume or start new
+        Alert.alert(
+          "Unterbrochenes Workout gefunden",
+          "Du hast ein unterbrochenes Workout. Möchtest du dieses fortsetzen oder ein neues starten?",
+          [
+            { text: "Abbrechen", style: "cancel", onPress: () => setIsStarting(false) },
+            {
+              text: "Fortsetzen",
+              onPress: async () => {
+                try {
+                  await trainingService.resumeWorkoutSession(pausedSession.id);
+                  // @ts-ignore - Navigation to nested navigator
+                  navigation.navigate("TrainingTab", {
+                    screen: "WorkoutSession",
+                    params: { sessionId: pausedSession.id },
+                  });
+                  if (onWorkoutStarted) {
+                    onWorkoutStarted();
+                  }
+                } catch (err) {
+                  console.error("Error resuming session:", err);
+                  Alert.alert("Fehler", "Session konnte nicht fortgesetzt werden");
+                } finally {
+                  setIsStarting(false);
+                }
+              },
+            },
+            {
+              text: "Neu starten",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  // Cancel old session
+                  await trainingService.cancelWorkoutSession(pausedSession.id);
+                  // Start new session
+                  const sessionId = await trainingService.startWorkoutSession(
+                    user.id,
+                    workout.plan.id,
+                    workout.workout.id
+                  );
+                  // @ts-ignore - Navigation to nested navigator
+                  navigation.navigate("TrainingTab", {
+                    screen: "WorkoutSession",
+                    params: { sessionId },
+                  });
+                  if (onWorkoutStarted) {
+                    onWorkoutStarted();
+                  }
+                } catch (err) {
+                  console.error("Error starting new session:", err);
+                  Alert.alert("Fehler", "Neue Session konnte nicht gestartet werden");
+                } finally {
+                  setIsStarting(false);
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // No paused session - start new workout session
       const sessionId = await trainingService.startWorkoutSession(
         user.id,
         workout.plan.id,
@@ -130,43 +195,44 @@ export const QuickWorkoutAction: React.FC<QuickWorkoutActionProps> = ({
   const estimatedDuration = workout.workout.estimated_duration || 45; // Default 45min
 
   return (
-    <Card
-      gradient
-      gradientColors={["#4A90E2", "#7B68EE"]}
-      padding="large"
-      elevation="medium"
-      style={styles.card}
+    <TouchableOpacity
+      onPress={handleStartWorkout}
+      disabled={isStarting}
+      activeOpacity={0.9}
     >
-      <View style={styles.header}>
-        <Text style={styles.label}>Nächstes Workout</Text>
-        <Text style={styles.planName}>{workout.plan.name}</Text>
-      </View>
-
-      <Text style={styles.workoutName}>{workout.workout.name_de}</Text>
-
-      <View style={styles.info}>
-        <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>Übungen</Text>
-          <Text style={styles.infoValue}>{exerciseCount}</Text>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>Dauer</Text>
-          <Text style={styles.infoValue}>~{estimatedDuration} min</Text>
-        </View>
-      </View>
-
-      <Button
-        onPress={handleStartWorkout}
-        loading={isStarting}
-        disabled={isStarting}
-        variant="primary"
-        size="large"
-        style={styles.startButton}
+      <Card
+        gradient
+        gradientColors={["#4A90E2", "#7B68EE"]}
+        padding="large"
+        elevation="medium"
+        style={styles.card}
       >
-        ▶ Workout starten
-      </Button>
-    </Card>
+        <View style={styles.header}>
+          <Text style={styles.label}>Nächstes Workout</Text>
+          <Text style={styles.planName}>{workout.plan.name}</Text>
+        </View>
+
+        <Text style={styles.workoutName}>{workout.workout.name}</Text>
+
+        <View style={styles.info}>
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Übungen</Text>
+            <Text style={styles.infoValue}>{exerciseCount}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.infoItem}>
+            <Text style={styles.infoLabel}>Dauer</Text>
+            <Text style={styles.infoValue}>~{estimatedDuration} min</Text>
+          </View>
+        </View>
+
+        {isStarting && (
+          <View style={styles.loadingOverlay}>
+            <Text style={styles.loadingText}>Wird gestartet...</Text>
+          </View>
+        )}
+      </Card>
+    </TouchableOpacity>
   );
 };
 
@@ -224,8 +290,18 @@ const styles = StyleSheet.create({
     height: 40,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
-  startButton: {
-    backgroundColor: "#FFFFFF",
+  loadingOverlay: {
+    marginTop: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 8,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   // Empty state styles
   emptyTitle: {

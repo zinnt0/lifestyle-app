@@ -25,9 +25,13 @@ import {
   TrainingPlanDetails,
   NextWorkout,
   PlanWorkout,
+  WorkoutSession,
 } from "@/types/training.types";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { PausedSessionCard } from "@/components/training/PausedSessionCard";
+import * as Haptics from "expo-haptics";
+import { supabase } from "@/lib/supabase";
 
 // Design System Constants
 const COLORS = {
@@ -92,6 +96,7 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
   // State
   const [plan, setPlan] = useState<TrainingPlanDetails | null>(null);
   const [nextWorkout, setNextWorkout] = useState<PlanWorkout | null>(null);
+  const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(null);
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<PlanWorkout[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -104,9 +109,27 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
     try {
       setError(null);
 
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setError("Benutzer nicht authentifiziert");
+        return;
+      }
+
       // Load plan details with workouts
       const planDetails = await trainingService.getTrainingPlanDetails(planId);
       setPlan(planDetails);
+
+      // Check for paused session for this plan
+      const paused = await trainingService.getPausedSession(user.id);
+      // Only show paused session if it belongs to this plan
+      if (paused && paused.plan_id === planId) {
+        setPausedSession(paused);
+      } else {
+        setPausedSession(null);
+      }
 
       // Determine next workout
       // For now, we'll use the first workout from the plan
@@ -175,6 +198,38 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
       );
     }
   };
+
+  /**
+   * Handle resuming a paused workout session
+   */
+  const handleResumeSession = useCallback(async () => {
+    if (!pausedSession) return;
+
+    try {
+      await trainingService.resumeWorkoutSession(pausedSession.id);
+      navigation.navigate("WorkoutSession", { sessionId: pausedSession.id });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Error resuming session:", error);
+      Alert.alert("Fehler", "Session konnte nicht fortgesetzt werden");
+    }
+  }, [pausedSession, navigation]);
+
+  /**
+   * Handle canceling a paused workout session
+   */
+  const handleCancelSession = useCallback(async () => {
+    if (!pausedSession) return;
+
+    try {
+      await trainingService.cancelWorkoutSession(pausedSession.id);
+      await loadPlanDetails();
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error("Error canceling session:", error);
+      Alert.alert("Fehler", "Session konnte nicht abgebrochen werden");
+    }
+  }, [pausedSession, loadPlanDetails]);
 
   /**
    * Render loading state
@@ -250,8 +305,17 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
           </View>
         </View>
 
-        {/* Next Workout Section */}
-        {nextWorkout && (
+        {/* Paused or Next Workout Section */}
+        {pausedSession ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>UNTERBROCHENES WORKOUT</Text>
+            <PausedSessionCard
+              session={pausedSession}
+              onResume={handleResumeSession}
+              onCancel={handleCancelSession}
+            />
+          </View>
+        ) : nextWorkout ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>NÄCHSTES WORKOUT</Text>
             <NextWorkoutCard
@@ -259,7 +323,7 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
               onStart={handleStartWorkout}
             />
           </View>
-        )}
+        ) : null}
 
         {/* Upcoming Workouts Section */}
         {upcomingWorkouts.length > 0 && (
@@ -342,7 +406,7 @@ const NextWorkoutCard: React.FC<NextWorkoutCardProps> = ({
       padding="large"
       elevation="medium"
     >
-      <Text style={styles.nextWorkoutName}>{workout.name_de}</Text>
+      <Text style={styles.nextWorkoutName}>{workout.name}</Text>
       <Text style={styles.nextWorkoutInfo}>
         {exerciseCount} Übungen • ~{estimatedDuration} min
       </Text>
@@ -397,7 +461,7 @@ const UpcomingWorkoutCard: React.FC<UpcomingWorkoutCardProps> = ({
       style={styles.upcomingCard}
       onPress={onPress}
     >
-      <Text style={styles.upcomingWorkoutName}>{workout.name_de}</Text>
+      <Text style={styles.upcomingWorkoutName}>{workout.name}</Text>
       <Text style={styles.upcomingWorkoutDate}>
         {dayName} {dateStr}
       </Text>
