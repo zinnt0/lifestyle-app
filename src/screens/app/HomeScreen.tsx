@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useCallback } from "react";
-import { View, Text, StyleSheet, Button, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, Button, TouchableOpacity, ScrollView } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "../../navigation/types";
@@ -146,61 +146,67 @@ export const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Willkommen! 🎉</Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Willkommen! 🎉</Text>
 
-      {/* Fitness Section - Shows paused workout or next workout + stats */}
-      <View style={styles.fitnessSection}>
-        <Text style={styles.sectionTitle}>FITNESS</Text>
+        {/* Fitness Section - Shows paused workout or next workout + stats */}
+        <View style={styles.fitnessSection}>
+          <Text style={styles.sectionTitle}>FITNESS</Text>
 
-        <View style={styles.fitnessContent}>
-          {/* Left: Paused Session or Next Workout */}
-          <View style={styles.workoutColumn}>
-            {pausedSession ? (
-              <PausedSessionCard
-                session={pausedSession}
-                onResume={handleResumeSession}
-                onCancel={handleCancelSession}
-              />
-            ) : (
-              <QuickWorkoutAction workout={nextWorkout || undefined} />
-            )}
-          </View>
+          <View style={styles.fitnessContent}>
+            {/* Left: Paused Session or Next Workout */}
+            <View style={styles.workoutColumn}>
+              {pausedSession ? (
+                <PausedSessionCard
+                  session={pausedSession}
+                  onResume={handleResumeSession}
+                  onCancel={handleCancelSession}
+                />
+              ) : (
+                <QuickWorkoutAction workout={nextWorkout || undefined} />
+              )}
+            </View>
 
-          {/* Right: Fitness Stats */}
-          <View style={styles.statsColumn}>
-            <FitnessStats userId={userId || undefined} />
+            {/* Right: Fitness Stats */}
+            <View style={styles.statsColumn}>
+              <FitnessStats userId={userId || undefined} />
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Recovery Section */}
-      {hasLogged ? (
-        <View style={styles.recoveryCard}>
-          <Text style={styles.recoveryLabel}>Heutiger Recovery Score</Text>
-          <Text style={styles.recoveryScore}>{recoveryScore}/100</Text>
-          <Text style={styles.recoveryEmoji}>
-            {getRecoveryScoreInterpretation(recoveryScore || 0).emoji}
-          </Text>
+        {/* Recovery Section */}
+        {hasLogged ? (
+          <View style={styles.recoveryCard}>
+            <Text style={styles.recoveryLabel}>Heutiger Recovery Score</Text>
+            <Text style={styles.recoveryScore}>{recoveryScore}/100</Text>
+            <Text style={styles.recoveryEmoji}>
+              {getRecoveryScoreInterpretation(recoveryScore || 0).emoji}
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.checkinButton}
+            onPress={() => navigation.navigate("DailyCheckin")}
+          >
+            <Text style={styles.checkinText}>📋 Tägliches Check-in</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.buttonContainer}>
+          <Button
+            title="Profil anzeigen"
+            onPress={() => navigation.navigate("Profile")}
+          />
         </View>
-      ) : (
-        <TouchableOpacity
-          style={styles.checkinButton}
-          onPress={() => navigation.navigate("DailyCheckin")}
-        >
-          <Text style={styles.checkinText}>📋 Tägliches Check-in</Text>
-        </TouchableOpacity>
-      )}
 
-      <View style={styles.buttonContainer}>
-        <Button
-          title="Profil anzeigen"
-          onPress={() => navigation.navigate("Profile")}
-        />
-      </View>
-
-      <View style={styles.buttonContainer}>
-        <Button title="Ausloggen" onPress={handleLogout} color="#FF3B30" />
-      </View>
+        <View style={styles.buttonContainer}>
+          <Button title="Ausloggen" onPress={handleLogout} color="#FF3B30" />
+        </View>
+      </ScrollView>
     </View>
   );
 };
@@ -208,10 +214,14 @@ export const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
     backgroundColor: "#FFFFFF",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 24,
+    alignItems: "center",
   },
   title: {
     fontSize: 32,

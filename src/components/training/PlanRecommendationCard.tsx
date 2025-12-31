@@ -184,6 +184,42 @@ const styles = StyleSheet.create({
     color: COLORS.warning,
   },
 
+  // Dynamic plan badge
+  badgesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dynamicBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    gap: 4,
+  },
+  dynamicBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  dynamicInfoContainer: {
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: theme.borderRadius.sm,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dynamicInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.text,
+    lineHeight: 18,
+  },
+
   // Divider
   divider: {
     height: 1,
@@ -339,6 +375,7 @@ export const PlanRecommendationCard = React.memo<PlanRecommendationCardProps>(({
 
   const badge = getRecommendationBadge(recType);
   const isComplete = completeness === 'complete';
+  const isDynamic = template.is_dynamic === true;
 
   // Determine background overlay style
   let backgroundStyle: ViewStyle | null = null;
@@ -389,16 +426,34 @@ export const PlanRecommendationCard = React.memo<PlanRecommendationCardProps>(({
             </Text>
           </View>
 
-          {/* Completeness Status */}
-          <View style={styles.completenessContainer}>
-            <Text>{isComplete ? '✅' : '⚠️'}</Text>
-            <Text style={[
-              styles.completenessText,
-              isComplete ? styles.completeText : styles.incompleteText
-            ]}>
-              {isComplete ? 'Vollständig konfiguriert' : 'Noch in Entwicklung'}
-            </Text>
+          {/* Completeness Status & Dynamic Badge */}
+          <View style={styles.badgesContainer}>
+            <View style={styles.completenessContainer}>
+              <Text>{isComplete ? '✅' : '⚠️'}</Text>
+              <Text style={[
+                styles.completenessText,
+                isComplete ? styles.completeText : styles.incompleteText
+              ]}>
+                {isComplete ? 'Vollständig konfiguriert' : 'Noch in Entwicklung'}
+              </Text>
+            </View>
+            {isDynamic && (
+              <View style={styles.dynamicBadge}>
+                <Text>⚡</Text>
+                <Text style={styles.dynamicBadgeText}>Dynamisch</Text>
+              </View>
+            )}
           </View>
+
+          {/* Dynamic Plan Info */}
+          {isDynamic && (
+            <View style={styles.dynamicInfoContainer}>
+              <Text>💡</Text>
+              <Text style={styles.dynamicInfoText}>
+                Dieser Plan berechnet deine Trainingsgewichte basierend auf deinen 1RM-Werten
+              </Text>
+            </View>
+          )}
 
           <View style={styles.divider} />
 

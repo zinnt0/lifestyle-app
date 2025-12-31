@@ -13,6 +13,7 @@ import { ProgressBar } from '../../components/ui/ProgressBar';
 import { Input } from '../../components/ui/Input';
 import { NumberPicker } from '../../components/ui/NumberPicker';
 import { MultiSelectChips } from '../../components/ui/MultiSelectChips';
+import { WeekdaySelector } from '../../components/ui/WeekdaySelector';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 
@@ -126,8 +127,33 @@ export const OnboardingScreen2: React.FC = () => {
             min={1}
             max={7}
             unit="Tage"
-            onChange={(value) => updateData({ available_training_days: value })}
+            onChange={(value) => {
+              updateData({
+                available_training_days: value,
+                // Reset preferred_training_days if count changes
+                preferred_training_days: data.preferred_training_days?.length === value
+                  ? data.preferred_training_days
+                  : null
+              });
+            }}
           />
+
+          {/* Preferred Training Days */}
+          {data.available_training_days && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>
+                An welchen Tagen möchtest du trainieren?
+              </Text>
+              <Text style={styles.sectionHint}>
+                Wähle {data.available_training_days} {data.available_training_days === 1 ? 'Tag' : 'Tage'} aus
+              </Text>
+              <WeekdaySelector
+                selectedDays={data.preferred_training_days || []}
+                onDaysChange={(days) => updateData({ preferred_training_days: days })}
+                maxDays={data.available_training_days}
+              />
+            </View>
+          )}
 
           {/* Gym Access */}
           <View style={styles.switchRow}>

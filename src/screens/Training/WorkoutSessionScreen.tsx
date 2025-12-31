@@ -30,8 +30,9 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
 import { TrainingStackParamList } from "@/navigation/types";
 import { trainingService } from "@/services/trainingService";
+import { oneRMService } from "@/services/oneRMService";
 import { supabase } from "@/lib/supabase";
-import type { SessionExercise } from "@/types/training.types";
+import type { SessionExercise, TrainingPlan } from "@/types/training.types";
 import { ProgressBar } from "@/components/training/ProgressBar";
 import { SetRow } from "@/components/training/SetRow";
 import { PaginationDots } from "@/components/training/PaginationDots";
@@ -61,6 +62,10 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
   const [pendingSets, setPendingSets] = useState<
     Record<string, Record<number, { weight: number; reps: number; rir?: number }>>
   >({});
+  const [plan, setPlan] = useState<TrainingPlan | null>(null);
+  const [recommendedWeights, setRecommendedWeights] = useState<Record<string, number | null>>({});
+  const [trainingMaxes, setTrainingMaxes] = useState<Record<string, number | null>>({});
+  const [userId, setUserId] = useState<string | null>(null);
 
   // Current exercise
   const currentExercise = exercises[currentIndex];
@@ -138,18 +143,107 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
   }, [sessionId]);
 
   /**
-   * Load session exercises
+   * Load session exercises and calculate recommended weights for dynamic plans
    */
   const loadSession = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setError("Nicht angemeldet");
+        return;
+      }
+
+      setUserId(user.id);
+
+      // Load session exercises
       const sessionExercises = await trainingService.getSessionExercises(sessionId);
 
       if (!sessionExercises || sessionExercises.length === 0) {
         setError("Keine Übungen für dieses Workout gefunden");
         return;
+      }
+
+      // Load session to get plan_id
+      const { data: session, error: sessionError } = await supabase
+        .from("workout_sessions")
+        .select("plan_id")
+        .eq("id", sessionId)
+        .single();
+
+      if (sessionError || !session) {
+        setError("Session konnte nicht geladen werden");
+        return;
+      }
+
+      // Load plan to check if it's dynamic
+      const { data: planData, error: planError } = await supabase
+        .from("training_plans")
+        .select("*, template:plan_templates(is_dynamic, tm_percentage)")
+        .eq("id", session.plan_id)
+        .single();
+
+      if (planError || !planData) {
+        console.error("Plan konnte nicht geladen werden:", planError);
+        // Continue without plan data - not critical
+      } else {
+        setPlan(planData);
+
+        // Check if plan is dynamic
+        const isDynamic = planData.tm_percentage !== null && planData.tm_percentage !== undefined;
+
+        if (isDynamic) {
+          // Calculate recommended weights and training maxes for each exercise
+          const weights: Record<string, number | null> = {};
+          const tms: Record<string, number | null> = {};
+
+          for (const exercise of sessionExercises) {
+            // Calculate weights for exercises with percentage_1rm OR set_configurations
+            if (exercise.percentage_1rm || (exercise.set_configurations && exercise.set_configurations.length > 0)) {
+              try {
+                // Get the Training Max (TM) for set_configurations
+                // TM = 1RM * tm_percentage (e.g. 90% of 1RM)
+                const trainingMax = await oneRMService.calculateWorkingWeight(
+                  user.id,
+                  exercise.exercise_id,
+                  100, // 100% to get the full TM
+                  planData.tm_percentage || 100
+                );
+                tms[exercise.exercise_id] = trainingMax;
+                console.log('[WorkoutSession] Training Max for', exercise.exercise_id, ':', trainingMax);
+
+                // Calculate recommended weight if percentage_1rm is set (for non-set_configurations exercises)
+                if (exercise.percentage_1rm) {
+                  const recommendedWeight = await oneRMService.calculateWorkingWeight(
+                    user.id,
+                    exercise.exercise_id,
+                    exercise.percentage_1rm,
+                    planData.tm_percentage || 100
+                  );
+
+                  console.log('[WorkoutSession] Received weight for', exercise.exercise_id, ':', recommendedWeight, 'type:', typeof recommendedWeight);
+                  weights[exercise.exercise_id] = recommendedWeight;
+                }
+              } catch (weightError) {
+                console.error(
+                  `Fehler beim Berechnen des Gewichts für Exercise ${exercise.exercise_id}:`,
+                  weightError
+                );
+                weights[exercise.exercise_id] = null;
+                tms[exercise.exercise_id] = null;
+              }
+            }
+          }
+
+          setRecommendedWeights(weights);
+          setTrainingMaxes(tms);
+        }
       }
 
       setExercises(sessionExercises);
@@ -276,8 +370,9 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
       [
         {
           text: "Statistiken ansehen",
-          onPress: () => {
-            navigation.replace("WorkoutSummary", { sessionId });
+          onPress: async () => {
+            // Complete the session first, then navigate to summary
+            await completeWorkout(true);
           },
         },
         {
@@ -292,11 +387,17 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
 
   /**
    * Complete the workout session
+   * @param showSummary - If true, navigate to summary screen instead of dashboard
    */
-  const completeWorkout = async () => {
+  const completeWorkout = async (showSummary: boolean = false) => {
     try {
       await trainingService.completeWorkoutSession(sessionId);
-      navigation.navigate("TrainingDashboard");
+
+      if (showSummary) {
+        navigation.replace("WorkoutSummary", { sessionId });
+      } else {
+        navigation.navigate("TrainingDashboard");
+      }
     } catch (err) {
       console.error("Fehler beim Abschließen des Workouts:", err);
       Alert.alert("Fehler", "Workout konnte nicht abgeschlossen werden");
@@ -427,6 +528,13 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
    * Render individual exercise card
    */
   const renderExerciseCard = ({ item: exercise }: { item: SessionExercise }) => {
+    // Extract recommended weight with proper type checking
+    const recommendedWeight = recommendedWeights[exercise.exercise_id];
+    const trainingMax = trainingMaxes[exercise.exercise_id];
+    const hasValidRecommendedWeight =
+      (typeof recommendedWeight === 'number' || typeof trainingMax === 'number') &&
+      (exercise.percentage_1rm != null || (exercise.set_configurations && exercise.set_configurations.length > 0));
+
     return (
       <View style={styles.carouselCard}>
         <ScrollView
@@ -454,6 +562,10 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
               <Text style={styles.exerciseName}>
                 {exercise.exercise?.name_de || exercise.exercise?.name}
               </Text>
+              {/* Label for assistance exercises (only for dynamic plans without percentage) */}
+              {plan?.template?.is_dynamic && !exercise.percentage_1rm && !(exercise.set_configurations && exercise.set_configurations.length > 0) && (
+                <Text style={styles.assistanceLabel}>Zusatzübung</Text>
+              )}
               <Text style={styles.alternativesHint}>
                 Tippen für Alternativen
               </Text>
@@ -461,12 +573,28 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
 
             {/* Exercise Info */}
             <Text style={styles.exerciseInfo}>
-              {exercise.sets} Sätze •{" "}
-              {exercise.reps_min && exercise.reps_max
-                ? `${exercise.reps_min}-${exercise.reps_max} Wdh`
-                : exercise.reps_target
-                ? `${exercise.reps_target} Wdh`
-                : "Wiederholungen"}
+              {exercise.set_configurations && exercise.set_configurations.length > 0 ? (
+                // Show set-specific reps for set_configurations
+                <>
+                  {exercise.sets} Sätze •{" "}
+                  {exercise.set_configurations.map((config, idx) => (
+                    <Text key={idx}>
+                      {config.reps}{config.is_amrap ? '+' : ''}
+                      {idx < exercise.set_configurations!.length - 1 ? '/' : ''}
+                    </Text>
+                  ))} Wdh
+                </>
+              ) : (
+                // Standard display for regular exercises
+                <>
+                  {exercise.sets} Sätze •{" "}
+                  {exercise.reps_min && exercise.reps_max
+                    ? `${exercise.reps_min}-${exercise.reps_max} Wdh`
+                    : exercise.reps_target
+                    ? `${exercise.reps_target} Wdh`
+                    : "Wiederholungen"}
+                </>
+              )}
             </Text>
 
             {/* Rest Time */}
@@ -477,35 +605,91 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
               </Text>
             )}
 
+            {/* Recommended Weight for Dynamic Plans (only for non-set_configurations exercises) */}
+            {hasValidRecommendedWeight && !(exercise.set_configurations && exercise.set_configurations.length > 0) && (
+                <View style={styles.recommendedWeightContainer}>
+                  <Text style={styles.recommendedWeightLabel}>💡 Empfohlen:</Text>
+                  <Text style={styles.recommendedWeightValue}>
+                    {(recommendedWeight ?? 0).toFixed(1)} kg
+                  </Text>
+                  <Text style={styles.recommendedWeightPercentage}>
+                    ({exercise.percentage_1rm}% vom TM)
+                  </Text>
+                </View>
+              )}
+
             {/* Sets */}
             <View style={styles.setsContainer}>
-              {Array.from({ length: exercise.sets }).map((_, index) => {
-                const setNumber = index + 1;
-                const completedSet = exercise.completed_sets.find(
-                  (s) => s.set_number === setNumber
-                );
-                const pendingSet = pendingSets[exercise.exercise_id]?.[setNumber];
+              {exercise.set_configurations && exercise.set_configurations.length > 0 ? (
+                // 5/3/1 style with set_configurations
+                exercise.set_configurations.map((config) => {
+                  const setNumber = config.set_number;
+                  const completedSet = exercise.completed_sets.find(
+                    (s) => s.set_number === setNumber
+                  );
+                  const pendingSet = pendingSets[exercise.exercise_id]?.[setNumber];
 
-                return (
-                  <SetRow
-                    key={setNumber}
-                    setNumber={setNumber}
-                    targetReps={
-                      exercise.reps_target || exercise.reps_min || exercise.reps_max
-                    }
-                    rirTarget={exercise.rir_target}
-                    isExpanded={expandedSet === setNumber}
-                    onToggle={() =>
-                      setExpandedSet(expandedSet === setNumber ? null : setNumber)
-                    }
-                    onLog={(weight, reps, rir) =>
-                      handleSetLog(exercise.exercise_id, setNumber, weight, reps, rir)
-                    }
-                    completedSet={completedSet}
-                    pendingSet={pendingSet}
-                  />
-                );
-              })}
+                  // Calculate weight for this specific set from Training Max
+                  // Formula: TM * (percentage / 100), rounded to nearest 2.5kg
+                  const trainingMax = trainingMaxes[exercise.exercise_id];
+                  const setWeight = trainingMax
+                    ? Math.round((trainingMax * config.percentage_1rm / 100) / 2.5) * 2.5
+                    : undefined;
+
+                  return (
+                    <SetRow
+                      key={setNumber}
+                      setNumber={setNumber}
+                      targetWeight={setWeight}
+                      targetReps={config.reps}
+                      rirTarget={exercise.rir_target}
+                      isExpanded={expandedSet === setNumber}
+                      onToggle={() =>
+                        setExpandedSet(expandedSet === setNumber ? null : setNumber)
+                      }
+                      onLog={(weight, reps, rir) =>
+                        handleSetLog(exercise.exercise_id, setNumber, weight, reps, rir)
+                      }
+                      completedSet={completedSet}
+                      pendingSet={pendingSet}
+                      isAMRAP={config.is_amrap}
+                      setNotes={config.notes}
+                      percentageLabel={`${config.percentage_1rm}%`}
+                    />
+                  );
+                })
+              ) : (
+                // Standard sets (all the same)
+                Array.from({ length: exercise.sets }).map((_, index) => {
+                  const setNumber = index + 1;
+                  const completedSet = exercise.completed_sets.find(
+                    (s) => s.set_number === setNumber
+                  );
+                  const pendingSet = pendingSets[exercise.exercise_id]?.[setNumber];
+                  const recommendedWeight = recommendedWeights[exercise.exercise_id];
+
+                  return (
+                    <SetRow
+                      key={setNumber}
+                      setNumber={setNumber}
+                      targetWeight={recommendedWeight || undefined}
+                      targetReps={
+                        exercise.reps_target || exercise.reps_min || exercise.reps_max
+                      }
+                      rirTarget={exercise.rir_target}
+                      isExpanded={expandedSet === setNumber}
+                      onToggle={() =>
+                        setExpandedSet(expandedSet === setNumber ? null : setNumber)
+                      }
+                      onLog={(weight, reps, rir) =>
+                        handleSetLog(exercise.exercise_id, setNumber, weight, reps, rir)
+                      }
+                      completedSet={completedSet}
+                      pendingSet={pendingSet}
+                    />
+                  );
+                })
+              )}
             </View>
 
             {/* Complete Exercise Button */}
@@ -579,7 +763,7 @@ export const WorkoutSessionScreen: React.FC<Props> = ({ route, navigation }) => 
         ref={flatListRef}
         data={exercises}
         renderItem={renderExerciseCard}
-        keyExtractor={(item) => item.exercise_id}
+        keyExtractor={(item) => item.id}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -741,6 +925,18 @@ const styles = StyleSheet.create({
     color: "#1a1a1a",
     letterSpacing: -0.5,
   },
+  assistanceLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#666",
+    backgroundColor: "#F5F5F5",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+    marginTop: 4,
+    marginBottom: 2,
+  },
   alternativesHint: {
     fontSize: 13,
     color: "#3083FF",
@@ -758,6 +954,31 @@ const styles = StyleSheet.create({
   },
   setsContainer: {
     gap: 8,
+  },
+  recommendedWeightContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E3F2FD",
+    borderRadius: 12,
+    padding: 12,
+    marginVertical: 8,
+    gap: 6,
+  },
+  recommendedWeightLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1976D2",
+  },
+  recommendedWeightValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1976D2",
+  },
+  recommendedWeightPercentage: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#5E92C4",
   },
   completeButton: {
     backgroundColor: "#70e0ba",

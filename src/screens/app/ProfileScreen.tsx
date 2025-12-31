@@ -129,6 +129,12 @@ export const ProfileScreen: React.FC = () => {
           label="Verfügbare Trainingstage"
           value={`${profile.available_training_days} Tage/Woche`}
         />
+        {profile.preferred_training_days && profile.preferred_training_days.length > 0 && (
+          <ProfileField
+            label="Bevorzugte Trainingstage"
+            value={formatPreferredDays(profile.preferred_training_days)}
+          />
+        )}
         <ProfileField
           label="Primäres Ziel"
           value={profile.primary_goal || "Nicht angegeben"}
@@ -167,6 +173,18 @@ export const ProfileScreen: React.FC = () => {
 
     </ScrollView>
   );
+};
+
+/**
+ * Format preferred training days array to readable string
+ * Converts day numbers to German day names
+ */
+const formatPreferredDays = (days: number[]): string => {
+  const dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  return days
+    .sort((a, b) => a - b)
+    .map(day => dayNames[day])
+    .join(', ');
 };
 
 /**

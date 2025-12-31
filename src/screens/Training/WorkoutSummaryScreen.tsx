@@ -17,8 +17,13 @@ import {
   calculateAndSaveWorkoutCalories,
   WorkoutCalorieCalculation
 } from '../../services/calorieCalculationService';
+import {
+  compareWorkoutPerformance,
+  WorkoutPerformanceComparison as PerformanceData,
+} from '../../services/performanceComparisonService';
 import CalorieCard from '../../components/training/CalorieCard';
 import ExerciseCalorieBreakdown from '../../components/training/ExerciseCalorieBreakdown';
+import WorkoutPerformanceComparison from '../../components/training/WorkoutPerformanceComparison';
 
 type WorkoutSummaryScreenNavigationProp = NativeStackNavigationProp<
   TrainingStackParamList,
@@ -53,10 +58,13 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [calorieData, setCalorieData] = useState<WorkoutCalorieCalculation | null>(null);
   const [isLoadingCalories, setIsLoadingCalories] = useState(true);
+  const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null);
+  const [isLoadingPerformance, setIsLoadingPerformance] = useState(true);
 
   useEffect(() => {
     calculateStats();
     loadCalories();
+    loadPerformanceComparison();
   }, [sessionId]);
 
   const loadCalories = async () => {
@@ -69,6 +77,19 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
       // Don't show error to user, just log it
     } finally {
       setIsLoadingCalories(false);
+    }
+  };
+
+  const loadPerformanceComparison = async () => {
+    try {
+      setIsLoadingPerformance(true);
+      const data = await compareWorkoutPerformance(sessionId);
+      setPerformanceData(data);
+    } catch (error) {
+      console.error('Fehler beim Laden des Performance-Vergleichs:', error);
+      // Don't show error to user, just log it
+    } finally {
+      setIsLoadingPerformance(false);
     }
   };
 
@@ -284,6 +305,40 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
         </View>
 
+        {/* Performance Comparison */}
+        {performanceData && performanceData.exercises.length > 0 && (
+          <>
+            <WorkoutPerformanceComparison
+              exercises={performanceData.exercises}
+              isLoading={isLoadingPerformance}
+            />
+
+            {/* Explanation Info Box */}
+            <View style={styles.infoBox}>
+              <View style={styles.infoBoxHeader}>
+                <Text style={styles.infoBoxIcon}>ℹ️</Text>
+                <Text style={styles.infoBoxTitle}>Wie wird der Vergleich berechnet?</Text>
+              </View>
+              <View style={styles.infoBoxContent}>
+                <Text style={styles.infoBoxText}>
+                  Der Vergleich basiert auf deiner <Text style={styles.infoBoxBold}>letzten Session des gleichen Workouts</Text>.
+                </Text>
+                <Text style={styles.infoBoxText}>
+                  Für jede Übung berechnen wir einen <Text style={styles.infoBoxBold}>kombinierten Score</Text> aus:
+                </Text>
+                <View style={styles.infoBoxList}>
+                  <Text style={styles.infoBoxListItem}>• Durchschnittliches Gewicht aller Sätze</Text>
+                  <Text style={styles.infoBoxListItem}>• Durchschnittliche Wiederholungen aller Sätze</Text>
+                  <Text style={styles.infoBoxListItem}>• Durchschnittliches Gesamtvolumen (Gewicht × Reps)</Text>
+                </View>
+                <Text style={styles.infoBoxText}>
+                  Die <Text style={styles.infoBoxBold}>prozentuale Änderung</Text> zeigt deine Verbesserung oder Verschlechterung im Vergleich zur letzten Session.
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
+
         {/* Calorie Card */}
         {calorieData && (
           <>
@@ -447,6 +502,54 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // Info Box Styles
+  infoBox: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4A90E2',
+    width: '100%',
+  },
+  infoBoxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  infoBoxIcon: {
+    fontSize: 20,
+  },
+  infoBoxTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1976D2',
+    flex: 1,
+  },
+  infoBoxContent: {
+    gap: 8,
+  },
+  infoBoxText: {
+    fontSize: 14,
+    color: '#424242',
+    lineHeight: 20,
+  },
+  infoBoxBold: {
+    fontWeight: '700',
+    color: '#1976D2',
+  },
+  infoBoxList: {
+    marginLeft: 8,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  infoBoxListItem: {
+    fontSize: 14,
+    color: '#424242',
+    lineHeight: 20,
+    marginBottom: 2,
   },
 });
 

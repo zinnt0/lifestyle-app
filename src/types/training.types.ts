@@ -18,7 +18,12 @@ export interface TrainingPlan {
   days_per_week: number;
   status: "active" | "paused" | "completed";
   start_date: string;
+  end_date?: string;
   created_at: string;
+  fitness_level?: "beginner" | "intermediate" | "advanced";
+  primary_goal?: "strength" | "hypertrophy" | "endurance" | "general";
+  duration_weeks?: number;
+  tm_percentage?: number;
   template?: PlanTemplate;
 }
 
@@ -40,6 +45,14 @@ export interface PlanWorkout {
   exercises: PlanExercise[];
 }
 
+export interface SetConfiguration {
+  set_number: number;
+  percentage_1rm: number;
+  reps: number;
+  is_amrap?: boolean;
+  notes?: string;
+}
+
 export interface PlanExercise {
   id: string;
   workout_id: string;
@@ -54,6 +67,7 @@ export interface PlanExercise {
   rest_seconds?: number;
   notes?: string;
   superset_with?: string;
+  set_configurations?: SetConfiguration[] | null;
   exercise?: Exercise;
 }
 
@@ -129,6 +143,7 @@ export interface PlanTemplate {
   description_de?: string;
   scientific_rationale?: string;
   requirements?: string;
+  requires_equipment?: string[];
   progression_type?: string;
   min_training_experience_months?: number;
   // Scoring System Fields (added 2024-12-29)
@@ -136,6 +151,10 @@ export interface PlanTemplate {
   exercises_per_workout?: number;
   completion_status?: "complete" | "incomplete";
   scoring_metadata?: ScoringMetadata;
+  // Dynamic Plan Fields (added 2024-12-30)
+  is_dynamic?: boolean;
+  requires_1rm_for_exercises?: string[];
+  tm_percentage?: number;
 }
 
 /**
@@ -188,6 +207,7 @@ export interface TemplateExercise {
   superset_with?: string;
   is_optional: boolean;
   can_substitute: boolean;
+  set_configurations?: SetConfiguration[] | null;
   exercise?: Exercise;
 }
 

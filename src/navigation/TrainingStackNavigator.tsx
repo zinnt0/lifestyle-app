@@ -18,6 +18,7 @@ import { CustomPlanFlowScreen } from "@/screens/Training/CustomPlanFlowScreen";
 import { TrainingPlanDetailScreen } from "@/screens/Training/TrainingPlanDetailScreen";
 import { WorkoutSessionScreen } from "@/screens/Training/WorkoutSessionScreen";
 import WorkoutSummaryScreen from "@/screens/Training/WorkoutSummaryScreen";
+import { OneRMInputScreen } from "@/screens/Training/OneRMInputScreen";
 
 /**
  * Type-safe navigation params for Training Stack
@@ -29,6 +30,7 @@ export type TrainingStackParamList = {
   PlanConfiguration: undefined;
   GuidedPlanFlow: undefined;
   CustomPlanFlow: undefined;
+  OneRMInput: { planTemplateId: string; requiredExerciseIds: string[] };
   TrainingPlanDetail: { planId: string };
   WorkoutSession: { sessionId: string };
   WorkoutSummary: { sessionId: string };
@@ -68,6 +70,11 @@ export type WorkoutSessionScreenProps = NativeStackScreenProps<
 export type WorkoutSummaryScreenProps = NativeStackScreenProps<
   TrainingStackParamList,
   "WorkoutSummary"
+>;
+
+export type OneRMInputScreenProps = NativeStackScreenProps<
+  TrainingStackParamList,
+  "OneRMInput"
 >;
 
 const Stack = createNativeStackNavigator<TrainingStackParamList>();
@@ -128,6 +135,14 @@ export const TrainingStackNavigator: React.FC = () => {
         component={CustomPlanFlowScreen}
         options={{
           title: "Eigener Plan",
+        }}
+      />
+
+      <Stack.Screen
+        name="OneRMInput"
+        component={OneRMInputScreen}
+        options={{
+          title: "1RM-Werte eingeben",
         }}
       />
 

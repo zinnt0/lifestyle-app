@@ -50,6 +50,7 @@ interface DayConfiguration {
 interface CustomPlanState {
   daysPerWeek: number | null;
   planName: string;
+  durationWeeks: number | null;
   dayConfigurations: DayConfiguration[];
 }
 
@@ -67,7 +68,7 @@ interface SelectedExercise {
   repsMax: number;
 }
 
-type Step = "days" | "schedule" | "configureDays" | "preview";
+type Step = "days" | "duration" | "schedule" | "configureDays" | "preview";
 
 // ============================================================================
 // Constants
@@ -131,6 +132,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
   const [planState, setPlanState] = useState<CustomPlanState>({
     daysPerWeek: null,
     planName: "",
+    durationWeeks: null,
     dayConfigurations: [],
   });
 
@@ -144,9 +146,10 @@ export const CustomPlanFlowScreen: React.FC = () => {
   // Calculate progress
   const calculateProgress = (): number => {
     const stepProgress: Record<Step, number> = {
-      days: 0.25,
-      schedule: 0.5,
-      configureDays: 0.75,
+      days: 0.2,
+      duration: 0.4,
+      schedule: 0.6,
+      configureDays: 0.8,
       preview: 1.0,
     };
     return stepProgress[currentStep];
@@ -243,7 +246,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
           </Button>
           <Button
             variant="primary"
-            onPress={() => setCurrentStep("schedule")}
+            onPress={() => setCurrentStep("duration")}
             disabled={planState.daysPerWeek === null}
             style={styles.navButton}
           >
@@ -255,7 +258,82 @@ export const CustomPlanFlowScreen: React.FC = () => {
   };
 
   // ============================================================================
-  // Step 2: Schedule Selection
+  // Step 2: Duration Selection
+  // ============================================================================
+
+  const renderDurationStep = () => {
+    const durationOptions = [
+      { weeks: null, label: "Unbegrenzt", description: "Kein festes Enddatum" },
+      { weeks: 4, label: "4 Wochen", description: "Kurzer Fokus-Plan" },
+      { weeks: 8, label: "8 Wochen", description: "Standard-Plan" },
+      { weeks: 12, label: "12 Wochen", description: "Langfristiger Plan" },
+      { weeks: 16, label: "16 Wochen", description: "Erweiterter Plan" },
+    ];
+
+    return (
+      <View style={styles.stepContainer}>
+        <ScrollView
+          style={styles.stepScrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.stepScrollContent}
+        >
+          <Text style={styles.stepTitle}>
+            Wie lange soll dein Plan laufen?
+          </Text>
+          <Text style={styles.stepSubtitle}>
+            Du kannst einen zeitlich begrenzten oder unbegrenzten Plan erstellen
+          </Text>
+
+          <View style={styles.optionsContainer}>
+            {durationOptions.map((option) => (
+              <Card
+                key={option.weeks === null ? 'unlimited' : option.weeks}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setPlanState({ ...planState, durationWeeks: option.weeks });
+                }}
+                padding="large"
+                elevation={planState.durationWeeks === option.weeks ? "large" : "medium"}
+                style={[
+                  styles.optionCard,
+                  planState.durationWeeks === option.weeks && styles.optionCardSelected,
+                ]}
+              >
+                <Text style={styles.daysNumber}>{option.label}</Text>
+                <Text style={styles.daysLabel}>{option.description}</Text>
+                {planState.durationWeeks === option.weeks && (
+                  <View style={styles.checkmark}>
+                    <Text style={styles.checkmarkText}>✓</Text>
+                  </View>
+                )}
+              </Card>
+            ))}
+          </View>
+        </ScrollView>
+
+        <View style={styles.navigationButtons}>
+          <Button
+            variant="secondary"
+            onPress={() => setCurrentStep("days")}
+            style={styles.navButton}
+          >
+            Zurück
+          </Button>
+          <Button
+            variant="primary"
+            onPress={() => setCurrentStep("schedule")}
+            disabled={planState.durationWeeks === undefined}
+            style={styles.navButton}
+          >
+            Weiter
+          </Button>
+        </View>
+      </View>
+    );
+  };
+
+  // ============================================================================
+  // Step 3: Schedule Selection
   // ============================================================================
 
   const updateDaySchedule = (dayIndex: number, field: keyof DaySchedule, value: string) => {
@@ -330,7 +408,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
         <View style={styles.navigationButtons}>
           <Button
             variant="secondary"
-            onPress={() => setCurrentStep("days")}
+            onPress={() => setCurrentStep("duration")}
             style={styles.navButton}
           >
             Zurück
@@ -351,7 +429,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
   };
 
   // ============================================================================
-  // Step 3: Configure Days with Carousel
+  // Step 4: Configure Days with Carousel
   // ============================================================================
 
   const currentDayConfig = planState.dayConfigurations[currentDayIndex];
@@ -903,7 +981,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
   };
 
   // ============================================================================
-  // Step 4: Preview & Create
+  // Step 5: Preview & Create
   // ============================================================================
 
   const handleCreatePlan = async () => {
@@ -933,6 +1011,14 @@ export const CustomPlanFlowScreen: React.FC = () => {
         throw new Error("Andere Pläne konnten nicht deaktiviert werden");
       }
 
+      // Calculate end date if duration is set
+      let endDate = null;
+      if (planState.durationWeeks !== null) {
+        const startDate = new Date();
+        endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + (planState.durationWeeks * 7));
+      }
+
       // Create the plan
       const { data: newPlan, error: planError } = await supabase
         .from("training_plans")
@@ -943,6 +1029,9 @@ export const CustomPlanFlowScreen: React.FC = () => {
           days_per_week: planState.daysPerWeek!,
           status: "active",
           start_date: new Date().toISOString(),
+          end_date: endDate ? endDate.toISOString() : null,
+          total_weeks: planState.durationWeeks,
+          current_week: 1,
         })
         .select()
         .single();
@@ -1139,15 +1228,17 @@ export const CustomPlanFlowScreen: React.FC = () => {
             <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
           </View>
           <Text style={styles.progressText}>
-            {currentStep === "days" && "Schritt 1 von 4"}
-            {currentStep === "schedule" && "Schritt 2 von 4"}
-            {currentStep === "configureDays" && "Schritt 3 von 4"}
-            {currentStep === "preview" && "Schritt 4 von 4"}
+            {currentStep === "days" && "Schritt 1 von 5"}
+            {currentStep === "duration" && "Schritt 2 von 5"}
+            {currentStep === "schedule" && "Schritt 3 von 5"}
+            {currentStep === "configureDays" && "Schritt 4 von 5"}
+            {currentStep === "preview" && "Schritt 5 von 5"}
           </Text>
         </View>
 
         {/* Step Content */}
         {currentStep === "days" && renderDaysStep()}
+        {currentStep === "duration" && renderDurationStep()}
         {currentStep === "schedule" && renderScheduleStep()}
         {currentStep === "configureDays" && renderConfigureDaysStep()}
         {currentStep === "preview" && renderPreviewStep()}

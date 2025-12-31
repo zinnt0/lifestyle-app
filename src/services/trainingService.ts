@@ -405,6 +405,173 @@ async function createPlanFromTemplate(
   }
 }
 
+/**
+ * Erstellt einen dynamischen Trainingsplan mit 1RM-basierten Gewichtsberechnungen
+ *
+ * Diese Funktion:
+ * 1. Validiert dass alle benötigten 1RM-Werte vorhanden sind
+ * 2. Erstellt den Trainingsplan mit tm_percentage aus dem Template
+ * 3. Ruft initialize_dynamic_plan RPC auf um user_current_1rm Einträge zu erstellen
+ * 4. Kopiert Workouts und Exercises aus dem Template
+ *
+ * @param userId - Die ID des Users
+ * @param templateId - Die ID des dynamischen Templates
+ * @param oneRMValues - Map von exercise_id -> weight_kg
+ * @param planName - Name des neuen Plans
+ * @param startDate - Startdatum des Plans
+ * @param isActive - Ob der Plan sofort aktiviert werden soll
+ * @returns Die ID des neu erstellten Plans
+ * @throws Error wenn 1RM-Werte fehlen oder Plan-Erstellung fehlschlägt
+ */
+async function createDynamicPlan(
+  userId: string,
+  templateId: string,
+  oneRMValues: Record<string, number>,
+  planName: string,
+  startDate: Date,
+  isActive: boolean
+): Promise<string> {
+  try {
+    // 1. Template laden
+    const template = await getTemplateDetails(templateId);
+
+    // Validiere dass Template dynamisch ist
+    if (!template.is_dynamic) {
+      throw new Error("Template ist nicht als dynamisch markiert");
+    }
+
+    // 2. Validiere dass alle benötigten 1RM-Werte vorhanden sind
+    const requiredExercises = template.requires_1rm_for_exercises || [];
+    const missingExercises = requiredExercises.filter(
+      (exerciseId) => !oneRMValues[exerciseId] || oneRMValues[exerciseId] <= 0
+    );
+
+    if (missingExercises.length > 0) {
+      throw new Error(
+        `Fehlende 1RM-Werte für Exercises: ${missingExercises.join(", ")}`
+      );
+    }
+
+    // 3. Wenn isActive=true, deaktiviere alle anderen Pläne
+    if (isActive) {
+      const { error: deactivateError } = await supabase
+        .from("training_plans")
+        .update({ status: "paused" as const })
+        .eq("user_id", userId);
+
+      if (deactivateError) {
+        console.error("Fehler beim Deaktivieren alter Pläne:", deactivateError);
+        throw new Error("Bestehende Pläne konnten nicht deaktiviert werden");
+      }
+    }
+
+    // 4. Erstelle den Plan mit tm_percentage
+    const { data: newPlan, error: planError } = await supabase
+      .from("training_plans")
+      .insert({
+        user_id: userId,
+        source_template_id: templateId,
+        name: planName,
+        plan_type: template.plan_type,
+        days_per_week: template.days_per_week,
+        status: isActive ? "active" : "paused",
+        start_date: startDate.toISOString(),
+        tm_percentage: template.tm_percentage || 100, // Default to 100% if not specified
+      })
+      .select()
+      .single();
+
+    if (planError || !newPlan) {
+      console.error("Fehler beim Erstellen des Plans:", planError);
+      throw new Error("Plan konnte nicht erstellt werden");
+    }
+
+    try {
+      // 5. Initialisiere dynamische 1RM-Werte via RPC
+      const exerciseIds = Object.keys(oneRMValues);
+
+      const { error: rpcError } = await supabase.rpc("initialize_dynamic_plan", {
+        p_plan_id: newPlan.id,
+        p_user_id: userId,
+        p_exercise_ids: exerciseIds,
+      });
+
+      if (rpcError) {
+        console.error("Fehler beim Initialisieren dynamischer Plan:", rpcError);
+        throw new Error(
+          "Dynamische Plan-Initialisierung fehlgeschlagen: " + rpcError.message
+        );
+      }
+
+      // 6. Kopiere Workouts
+      for (const templateWorkout of template.workouts) {
+        const { data: newWorkout, error: workoutError } = await supabase
+          .from("plan_workouts")
+          .insert({
+            plan_id: newPlan.id,
+            source_template_workout_id: templateWorkout.id,
+            name: templateWorkout.name_de || templateWorkout.name,
+            day_number: templateWorkout.day_number,
+            week_number: templateWorkout.week_number,
+            order_in_week: templateWorkout.order_in_week,
+            focus: templateWorkout.focus,
+          })
+          .select()
+          .single();
+
+        if (workoutError || !newWorkout) {
+          console.error("Fehler beim Erstellen des Workouts:", workoutError);
+          throw new Error("Workout konnte nicht erstellt werden");
+        }
+
+        // 7. Kopiere Exercises für dieses Workout
+        // Für dynamische Pläne kopieren wir percentage_1rm UND set_configurations aus dem Template
+        const exercisesToInsert = templateWorkout.exercises.map((exercise) => ({
+          workout_id: newWorkout.id,
+          exercise_id: exercise.exercise_id,
+          order_in_workout: exercise.order_in_workout,
+          sets: exercise.sets,
+          reps_min: exercise.reps_min,
+          reps_max: exercise.reps_max,
+          rir_target: exercise.rir_target,
+          rest_seconds: exercise.rest_seconds,
+          percentage_1rm: exercise.percentage_1rm, // Wichtig für dynamische Pläne!
+          set_configurations: exercise.set_configurations, // Wichtig für Wendler 5/3/1 und detaillierte Satz-Prozente!
+          notes: exercise.notes, // Kopiere auch die Notes mit den Beschreibungen
+        }));
+
+        const { error: exercisesError } = await supabase
+          .from("plan_exercises")
+          .insert(exercisesToInsert);
+
+        if (exercisesError) {
+          console.error("Fehler beim Erstellen der Exercises:", exercisesError);
+          throw new Error("Exercises konnten nicht erstellt werden");
+        }
+      }
+
+      return newPlan.id;
+    } catch (initError) {
+      // Rollback: Lösche den erstellten Plan bei Fehlern
+      console.error("Fehler bei Plan-Initialisierung, führe Rollback durch:", initError);
+
+      const { error: deleteError } = await supabase
+        .from("training_plans")
+        .delete()
+        .eq("id", newPlan.id);
+
+      if (deleteError) {
+        console.error("Fehler beim Rollback (Plan löschen):", deleteError);
+      }
+
+      throw initError;
+    }
+  } catch (error) {
+    console.error("Fehler in createDynamicPlan:", error);
+    throw error;
+  }
+}
+
 // ============================================================================
 // Workout Session Management
 // ============================================================================
@@ -524,11 +691,26 @@ async function getActiveSession(
 
 /**
  * Schließt eine Workout Session ab
+ * Bei Custom-Plänen wird automatisch geprüft, ob alle Workouts der Woche absolviert wurden
+ * und ggf. die Woche hochgezählt
  *
  * @param sessionId - Die ID der Session
  */
 async function completeWorkoutSession(sessionId: string): Promise<void> {
   try {
+    // Lade Session-Details um Plan-ID zu bekommen
+    const { data: session, error: sessionError } = await supabase
+      .from("workout_sessions")
+      .select("id, plan_id, plan_workout_id, user_id")
+      .eq("id", sessionId)
+      .single();
+
+    if (sessionError || !session) {
+      console.error("Fehler beim Laden der Session:", sessionError);
+      throw new Error("Session konnte nicht geladen werden");
+    }
+
+    // Schließe die Session ab
     const { error } = await supabase
       .from("workout_sessions")
       .update({
@@ -541,9 +723,118 @@ async function completeWorkoutSession(sessionId: string): Promise<void> {
       console.error("Fehler beim Abschließen der Session:", error);
       throw new Error("Session konnte nicht abgeschlossen werden");
     }
+
+    // Prüfe ob es ein Custom-Plan ist und aktualisiere ggf. die Woche
+    if (session.plan_id) {
+      await checkAndUpdateCustomPlanWeek(session.user_id, session.plan_id);
+    }
   } catch (error) {
     console.error("Fehler in completeWorkoutSession:", error);
     throw error;
+  }
+}
+
+/**
+ * Prüft ob alle Workouts der aktuellen Woche für einen Custom-Plan absolviert wurden
+ * und erhöht ggf. current_week um 1
+ *
+ * Diese Funktion wird nach jedem abgeschlossenen Workout für Custom-Pläne aufgerufen.
+ *
+ * @param userId - Die ID des Users
+ * @param planId - Die ID des Plans
+ */
+async function checkAndUpdateCustomPlanWeek(
+  userId: string,
+  planId: string
+): Promise<void> {
+  try {
+    // Lade Plan-Details
+    const { data: plan, error: planError } = await supabase
+      .from("training_plans")
+      .select("id, plan_type, days_per_week, current_week")
+      .eq("id", planId)
+      .single();
+
+    if (planError || !plan) {
+      console.error("Fehler beim Laden des Plans:", planError);
+      return; // Silent fail - wichtiger ist dass das Workout gespeichert wurde
+    }
+
+    // Nur für Custom-Pläne
+    if (plan.plan_type !== "custom") {
+      return;
+    }
+
+    // Lade alle Workouts des Plans
+    const { data: allWorkouts, error: workoutsError } = await supabase
+      .from("plan_workouts")
+      .select("id")
+      .eq("plan_id", planId);
+
+    if (workoutsError || !allWorkouts) {
+      console.error("Fehler beim Laden der Workouts:", workoutsError);
+      return;
+    }
+
+    const totalWorkoutsInPlan = allWorkouts.length;
+
+    // Berechne wie viele Wochen basierend auf abgeschlossenen Zyklen abgeschlossen wurden
+    // Ein Zyklus = alle N verschiedenen Workouts wurden mindestens einmal absolviert
+    const { data: allCompletedSessions, error: sessionsError } = await supabase
+      .from("workout_sessions")
+      .select("id, plan_workout_id, end_time")
+      .eq("user_id", userId)
+      .eq("plan_id", planId)
+      .eq("status", "completed")
+      .order("end_time", { ascending: true }); // Chronologisch von alt nach neu
+
+    if (sessionsError) {
+      console.error("Fehler beim Laden der Sessions:", sessionsError);
+      return;
+    }
+
+    if (!allCompletedSessions || allCompletedSessions.length === 0) {
+      return;
+    }
+
+    // Zähle wie viele vollständige "Wochen" (Zyklen) absolviert wurden
+    // Ein Zyklus ist abgeschlossen, wenn alle N unterschiedlichen Workouts gemacht wurden
+    let completedCycles = 0;
+    let currentCycleWorkouts = new Set<string>();
+
+    for (const session of allCompletedSessions) {
+      currentCycleWorkouts.add(session.plan_workout_id);
+
+      // Wenn wir alle verschiedenen Workouts gesehen haben
+      if (currentCycleWorkouts.size === totalWorkoutsInPlan) {
+        completedCycles++;
+        currentCycleWorkouts.clear(); // Neuer Zyklus beginnt
+      }
+    }
+
+    // Die Wochenzahl sollte completedCycles + 1 sein (aktueller unvollständiger Zyklus)
+    const calculatedWeek = completedCycles + 1;
+
+    // Nur updaten wenn sich die Woche geändert hat
+    if (calculatedWeek !== (plan.current_week || 1)) {
+      console.log(
+        `[checkAndUpdateCustomPlanWeek] Aktualisiere Woche von ${plan.current_week || 1} auf ${calculatedWeek}`
+      );
+
+      const { error: updateError } = await supabase
+        .from("training_plans")
+        .update({
+          current_week: calculatedWeek,
+        })
+        .eq("id", planId);
+
+      if (updateError) {
+        console.error("Fehler beim Aktualisieren der Woche:", updateError);
+      }
+    }
+  } catch (error) {
+    console.error("Fehler in checkAndUpdateCustomPlanWeek:", error);
+    // Silent fail - wichtiger ist dass das Workout gespeichert wurde
   }
 }
 
@@ -779,6 +1070,10 @@ async function logSet(
   rir?: number
 ): Promise<void> {
   try {
+    // Convert undefined to null for database compatibility
+    // Ensure rir is null if undefined or invalid
+    const rirValue = rir !== undefined && rir !== null && !isNaN(rir) ? rir : null;
+
     const { error } = await supabase.from("workout_sets").upsert(
       {
         session_id: sessionId,
@@ -786,7 +1081,7 @@ async function logSet(
         set_number: setNumber,
         weight: weight,
         reps: reps,
-        rir: rir,
+        rir: rirValue,
       },
       {
         onConflict: "session_id,exercise_id,set_number",
@@ -1017,7 +1312,10 @@ async function getRecommendations(
           min_training_experience_months,
           estimated_sets_per_week,
           exercises_per_workout,
-          completion_status
+          completion_status,
+          is_dynamic,
+          requires_1rm_for_exercises,
+          tm_percentage
         `)
         .eq('is_active', true)
         .order('completion_status', { ascending: false }) // Complete programs first
@@ -1156,10 +1454,31 @@ async function getNextWorkout(userId: string): Promise<NextWorkout | null> {
       return null; // Kein aktiver Plan
     }
 
-    // Sortiere Workouts nach day_number
-    const sortedWorkouts = (activePlan.workouts || []).sort(
-      (a: any, b: any) => a.day_number - b.day_number
-    );
+    // Sortiere Workouts nach week_number, dann order_in_week, dann day_number
+    // Dies stellt sicher, dass bei Plänen mit mehreren Wochen (z.B. Jim Wendler)
+    // die Workouts in der richtigen Reihenfolge durchlaufen werden
+    const sortedWorkouts = (activePlan.workouts || []).sort((a: any, b: any) => {
+      // Zuerst nach week_number sortieren (falls vorhanden)
+      const weekA = a.week_number ?? 1;
+      const weekB = b.week_number ?? 1;
+      if (weekA !== weekB) return weekA - weekB;
+
+      // Dann nach order_in_week sortieren
+      if (a.order_in_week !== b.order_in_week) {
+        return a.order_in_week - b.order_in_week;
+      }
+
+      // Zuletzt nach day_number sortieren (Fallback)
+      return a.day_number - b.day_number;
+    });
+
+    console.log('[getNextWorkout] Sorted workouts:', sortedWorkouts.map((w: any) => ({
+      id: w.id,
+      name: w.name,
+      week: w.week_number,
+      order: w.order_in_week,
+      day: w.day_number
+    })));
 
     if (sortedWorkouts.length === 0) {
       return null;
@@ -1180,23 +1499,30 @@ async function getNextWorkout(userId: string): Promise<NextWorkout | null> {
       console.error("Fehler beim Laden der letzten Session:", sessionError);
     }
 
+    console.log('[getNextWorkout] Last completed session:', lastSession);
+
     let nextWorkout: PlanWorkout;
 
     if (!lastSession) {
       // Noch kein Workout absolviert → erstes Workout des Plans
       nextWorkout = sortedWorkouts[0];
+      console.log('[getNextWorkout] No previous session, selecting first workout:', nextWorkout.name);
     } else {
       // Finde das nächste Workout nach dem letzten
       const lastWorkoutIndex = sortedWorkouts.findIndex(
         (w: any) => w.id === lastSession.plan_workout_id
       );
 
+      console.log('[getNextWorkout] Last workout index:', lastWorkoutIndex, 'Total workouts:', sortedWorkouts.length);
+
       if (lastWorkoutIndex === -1 || lastWorkoutIndex >= sortedWorkouts.length - 1) {
         // Letztes Workout war das letzte im Plan → fange von vorne an
         nextWorkout = sortedWorkouts[0];
+        console.log('[getNextWorkout] Cycling back to first workout:', nextWorkout.name);
       } else {
         // Nächstes Workout in der Reihenfolge
         nextWorkout = sortedWorkouts[lastWorkoutIndex + 1];
+        console.log('[getNextWorkout] Next workout in sequence:', nextWorkout.name, 'at index', lastWorkoutIndex + 1);
       }
     }
 
@@ -1211,14 +1537,16 @@ async function getNextWorkout(userId: string): Promise<NextWorkout | null> {
 }
 
 /**
- * Lädt die kommenden Workouts eines Plans
+ * Lädt die kommenden Workouts eines Plans ab dem nächsten geplanten Workout
  * Nützlich für die Trainingsplan-Detailansicht
  *
+ * @param userId - Die ID des Users
  * @param planId - Die ID des Plans
  * @param limit - Maximale Anzahl der Workouts (Standard: 7)
- * @returns Liste der kommenden Workouts
+ * @returns Liste der kommenden Workouts in der richtigen Reihenfolge
  */
 async function getUpcomingWorkouts(
+  userId: string,
   planId: string,
   limit: number = 7
 ): Promise<PlanWorkout[]> {
@@ -1234,23 +1562,86 @@ async function getUpcomingWorkouts(
         )
       `
       )
-      .eq("plan_id", planId)
-      .order("day_number")
-      .order("week_number")
-      .limit(limit);
+      .eq("plan_id", planId);
 
     if (error) {
       console.error("Fehler beim Laden der kommenden Workouts:", error);
       throw new Error("Kommende Workouts konnten nicht geladen werden");
     }
 
-    // Sortiere Exercises innerhalb jedes Workouts
-    return (workouts || []).map((workout: any): PlanWorkout => ({
-      ...workout,
-      exercises: (workout.exercises || []).sort(
-        (a: PlanExercise, b: PlanExercise) => a.order_in_workout - b.order_in_workout
-      ),
-    }));
+    // Sortiere Workouts nach week_number, dann order_in_week, dann day_number
+    // (gleiche Logik wie in getNextWorkout)
+    const sortedWorkouts = (workouts || []).sort((a: any, b: any) => {
+      // Zuerst nach week_number sortieren (falls vorhanden)
+      const weekA = a.week_number ?? 1;
+      const weekB = b.week_number ?? 1;
+      if (weekA !== weekB) return weekA - weekB;
+
+      // Dann nach order_in_week sortieren
+      if (a.order_in_week !== b.order_in_week) {
+        return a.order_in_week - b.order_in_week;
+      }
+
+      // Zuletzt nach day_number sortieren (Fallback)
+      return a.day_number - b.day_number;
+    });
+
+    if (sortedWorkouts.length === 0) {
+      return [];
+    }
+
+    // Finde das nächste Workout basierend auf der letzten abgeschlossenen Session
+    const { data: lastSession, error: sessionError } = await supabase
+      .from("workout_sessions")
+      .select("plan_workout_id")
+      .eq("user_id", userId)
+      .eq("plan_id", planId)
+      .eq("status", "completed")
+      .order("end_time", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (sessionError) {
+      console.error("Fehler beim Laden der letzten Session:", sessionError);
+    }
+
+    // Bestimme den Startindex für die kommenden Workouts
+    let startIndex = 0;
+
+    if (lastSession) {
+      // Finde das nächste Workout nach dem letzten
+      const lastWorkoutIndex = sortedWorkouts.findIndex(
+        (w: any) => w.id === lastSession.plan_workout_id
+      );
+
+      if (lastWorkoutIndex !== -1) {
+        // Starte beim nächsten Workout nach dem letzten
+        startIndex = lastWorkoutIndex + 1;
+
+        // Wenn wir am Ende sind, fange von vorne an
+        if (startIndex >= sortedWorkouts.length) {
+          startIndex = 0;
+        }
+      }
+    }
+
+    // Erstelle eine Liste der kommenden Workouts, die am richtigen Punkt startet
+    // und bei Bedarf am Anfang fortsetzt (zyklisch)
+    const upcomingWorkouts: PlanWorkout[] = [];
+
+    for (let i = 0; i < Math.min(limit, sortedWorkouts.length); i++) {
+      const workoutIndex = (startIndex + i) % sortedWorkouts.length;
+      const workout = sortedWorkouts[workoutIndex];
+
+      upcomingWorkouts.push({
+        ...workout,
+        exercises: (workout.exercises || []).sort(
+          (a: PlanExercise, b: PlanExercise) => a.order_in_workout - b.order_in_workout
+        ),
+      });
+    }
+
+    return upcomingWorkouts;
   } catch (error) {
     console.error("Fehler in getUpcomingWorkouts:", error);
     throw error;
@@ -1278,6 +1669,7 @@ export const trainingService = {
 
   // Plan Creation
   createPlanFromTemplate,
+  createDynamicPlan,
 
   // Workout Session Management
   startWorkoutSession,

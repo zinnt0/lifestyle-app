@@ -17,6 +17,7 @@ export interface OnboardingData {
   fitness_level: 'beginner' | 'intermediate' | 'advanced' | null;
   training_experience_months: number | null;
   available_training_days: number | null; // 1-7
+  preferred_training_days: number[] | null; // Array of weekdays: 0=Sunday, 1=Monday, ..., 6=Saturday
   has_gym_access: boolean;
   home_equipment: string[]; // ['barbell', 'dumbbells', ...]
 
@@ -79,6 +80,7 @@ const initialData: OnboardingData = {
   fitness_level: null,
   training_experience_months: null,
   available_training_days: null,
+  preferred_training_days: null,
   has_gym_access: true,
   home_equipment: [],
 
@@ -143,12 +145,20 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
 
       case 2:
         // HIER wird fitness_level geprüft
+        // preferred_training_days ist optional - wird nur geprüft wenn gesetzt
+        const preferredDaysValid =
+          !data.preferred_training_days ||
+          (data.preferred_training_days.length === data.available_training_days &&
+           data.preferred_training_days.every(day => day >= 0 && day <= 6) &&
+           new Set(data.preferred_training_days).size === data.preferred_training_days.length);
+
         return !!(
           data.fitness_level &&
           data.training_experience_months !== null &&
           data.available_training_days &&
           data.available_training_days >= 1 &&
-          data.available_training_days <= 7
+          data.available_training_days <= 7 &&
+          preferredDaysValid
         );
 
       case 3:
@@ -233,6 +243,19 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
           data.available_training_days > 7
         ) {
           errors.push('Trainingstage müssen zwischen 1 und 7 liegen');
+        }
+
+        // Validate preferred_training_days if set
+        if (data.preferred_training_days) {
+          if (data.preferred_training_days.length !== data.available_training_days) {
+            errors.push('Anzahl der ausgewählten Tage stimmt nicht mit verfügbaren Trainingstagen überein');
+          }
+          if (!data.preferred_training_days.every(day => day >= 0 && day <= 6)) {
+            errors.push('Ungültige Wochentage ausgewählt');
+          }
+          if (new Set(data.preferred_training_days).size !== data.preferred_training_days.length) {
+            errors.push('Doppelte Wochentage sind nicht erlaubt');
+          }
         }
         break;
 

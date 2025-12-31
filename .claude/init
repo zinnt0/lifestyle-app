@@ -89,7 +89,7 @@ lifestyle-app/
 
 **Date:** 2024-12-28 to 2025-12-30
 
-Eine umfassende Überarbeitung des Training-Moduls mit intelligenten Plan-Empfehlungen, Kalorienverfolgung, Fitness-Statistiken und erweiterten Scoring-Algorithmen.
+Eine umfassende Überarbeitung des Training-Moduls mit intelligenten Plan-Empfehlungen, Kalorienverfolgung, Fitness-Statistiken, 1RM-Tracking, Performance-Vergleichen und erweiterten Scoring-Algorithmen.
 
 #### 1. New Training Components
 
@@ -110,6 +110,27 @@ Eine umfassende Überarbeitung des Training-Moduls mit intelligenten Plan-Empfeh
 - **PausedSessionCard.tsx**
   - Verwaltung und Anzeige pausierter Training Sessions
   - Quick Resume Funktionalität
+
+- **EstimateOneRMModal.tsx** ⭐ NEW (2024-12-30)
+  - Modal zur Schätzung von 1RM-Werten aus Workout-Daten
+  - Nutzt Epley-Formel für präzise Schätzungen
+  - Interaktive Eingabe für Gewicht und Wiederholungen
+
+- **ExercisePerformanceBar.tsx** ⭐ NEW (2024-12-30)
+  - Visuelle Darstellung der Exercise Performance
+  - Progress Bars für Performance-Tracking
+  - Color-coded für Verbesserung/Verschlechterung
+
+- **HistoricalPerformance.tsx** ⭐ NEW (2024-12-30)
+  - Chart-basierte Darstellung historischer Performance
+  - Zeigt Entwicklung über mehrere Workouts
+  - Integriert mit Performance Comparison Service
+
+- **WorkoutPerformanceComparison.tsx** ⭐ NEW (2024-12-30)
+  - Vergleicht aktuelles Workout mit vorherigen Sessions
+  - Exercise-by-Exercise Comparison
+  - Prozentuale Verbesserung/Verschlechterung Anzeige
+  - Motivationsfeedback basierend auf Performance
 
 - **PlanRecommendationCard.tsx**
   - Professionelle Empfehlungskarten mit Scoring-Breakdown
@@ -146,7 +167,17 @@ Eine umfassende Überarbeitung des Training-Moduls mit intelligenten Plan-Empfeh
     - Kein RTL Support (medium priority)
     - Keine Dark Mode Optimierung (medium priority)
 
-**Component Index:** Alle Components exportiert via `src/components/training/index.ts`
+**UI Components (NEW - 2024-12-30):**
+
+**Location:** `src/components/ui/`
+
+- **WeekdaySelector.tsx** ⭐ NEW
+  - Multi-Select Weekday Selector Component
+  - Visual day-of-week selection (Mo-So)
+  - Integration mit Preferred Training Days Feature
+  - Returns array of selected days (0=Sunday, 6=Saturday)
+
+**Component Index:** Alle Components exportiert via `src/components/training/index.ts` und `src/components/ui/index.ts`
 
 #### 2. Updated Training Components
 
@@ -189,6 +220,25 @@ Alle Training Screens wurden aktualisiert um neue Features zu integrieren:
 - **WorkoutSummaryScreen.tsx**
   - Post-Workout Summary mit detaillierten Analytics
   - Calorie Burn Summary und Exercise Breakdown
+  - **NEW:** Integration mit Workout Performance Comparison
+  - **NEW:** Zeigt Verbesserung/Verschlechterung im Vergleich zu letzter Session
+
+- **OneRMInputScreen.tsx** ⭐ NEW (2024-12-30)
+  - Screen für initiale 1RM-Eingabe bei Plan-Start
+  - Required für Plans mit dynamischer Gewichtsberechnung
+  - Exercise-by-Exercise 1RM Input
+  - Validation und Fehlerbehandlung
+  - Option zur Schätzung via Epley-Formel
+  - Automatic Navigation nach erfolgreicher Eingabe
+
+- **PlanProgressScreen.tsx** ⭐ NEW (2024-12-30)
+  - Zeigt Training Max (TM) Progression für dynamische Plans
+  - Overview Card mit Plan-Details (TM%, aktuelle Woche)
+  - Exercise List mit Initial 1RM und Current TM
+  - Weekly Progression History pro Exercise
+  - Pull-to-Refresh Funktionalität
+  - Button für 1RM-Updates
+  - Integration mit `training_max_progression` Table
 
 - **HomeScreen.tsx** (app level)
   - Aktualisiert für Training Module Changes
@@ -213,6 +263,55 @@ Alle Training Screens wurden aktualisiert um neue Features zu integrieren:
   - MET (Metabolic Equivalent of Task) Calculations
   - User Profile Integration (Weight, Age, Fitness Level)
   - Per-Exercise und Total Workout Calorie Tracking
+
+- **oneRMService.ts** ⭐ NEW (2024-12-30)
+  - **Purpose:** Comprehensive 1RM (One Rep Max) Management
+  - **Lines of Code:** 450 lines
+  - **Key Functions:**
+    - `getCurrentOneRM(userId, exerciseId)` - Lädt aktuellen 1RM via `user_current_1rm` view
+    - `getAllCurrentOneRMs(userId)` - Lädt alle 1RM-Werte eines Users
+    - `saveOneRM(userId, exerciseId, weight, isEstimated, notes)` - Speichert 1RM in DB
+    - `getRequiredOneRMExercises(planType)` - Holt Required Exercises für Plan
+    - `calculateWorkingWeight(userId, exerciseId, percentageRM, tmPercentage)` - Berechnet Arbeitsgewicht via RPC
+    - `checkMissingOneRM(userId, exerciseIds)` - Prüft fehlende 1RM-Werte
+    - `estimateOneRMFromWorkout(weight, reps)` - Epley-Formel (1RM = weight × (1 + reps/30))
+    - `estimateAndSaveOneRM(userId, exerciseId, weight, reps, notes)` - Schätzt und speichert
+  - **Features:**
+    - Integration mit `user_1rm` Table und `user_current_1rm` View
+    - Support für geschätzte vs. gemessene 1RM-Werte
+    - Automatic Working Weight Calculation mit Training Max Support
+    - Validation und Error Handling
+    - Deutsche Fehlermeldungen
+  - **Use Cases:**
+    - Pre-Plan-Check: Identifiziere fehlende 1RM vor Plan-Start
+    - Dynamic Weight Calculation: Berechne Arbeitsgewichte für Sets
+    - Progressive Overload: Track 1RM-Entwicklung über Zeit
+
+- **performanceComparisonService.ts** ⭐ NEW (2024-12-30)
+  - **Purpose:** Workout Performance Comparison
+  - **Lines of Code:** 272 lines
+  - **Key Functions:**
+    - `compareWorkoutPerformance(sessionId)` - Vergleicht aktuelles Workout mit letztem
+    - `getWorkoutPerformanceData(sessionId)` - Lädt Performance-Daten
+    - `findPreviousWeekWorkout(currentSessionId)` - Findet Vergleichs-Workout
+    - `calculateExerciseAverage(sets)` - Berechnet Average Performance Score
+  - **Performance Metrics:**
+    - Average Weight
+    - Average Reps
+    - Average Volume (Weight × Reps)
+    - Combined Score: `(avgWeight + avgReps + avgVolume) / 3`
+  - **Features:**
+    - Findet gleiches Workout der letzten Session (nicht nur letzte Woche)
+    - Unterstützt Template-based und Custom Plans
+    - Exercise-by-Exercise Comparison
+    - Prozentuale Änderungsberechnung
+    - Handles missing previous data gracefully
+  - **Returns:**
+    - `ExercisePerformance[]` mit currentAverage, previousAverage, percentageChange
+    - `hasPreviousData` flag für UI handling
+  - **Integration:**
+    - Verwendet in `WorkoutSummaryScreen` für Post-Workout Feedback
+    - Displayed via `WorkoutPerformanceComparison` Component
 
 **Testing:**
 - Service Tests: `src/services/__tests__/`
@@ -288,16 +387,50 @@ Enhanced TypeScript Definitionen inklusive:
 
 #### 7. Database Schema Changes
 
-**Neue Felder zu plan_templates hinzugefügt:**
+**Neue Felder zu plan_templates (2024-12-28):**
 - `estimated_sets_per_week` - Pre-calculated Total Sets per Week
 - `exercises_per_workout` - Average Exercises per Workout Session
 - `completion_status` - Plan Completeness Indicator ('complete' | 'incomplete')
 - `popularity_score` - Plan Popularity Metric für Sorting
 
+**Neue Felder zu profiles (2024-12-30):** ⭐ NEW
+- **Migration:** `supabase/migrations/20241230_add_preferred_training_days.sql`
+- **Field:** `preferred_training_days` - `INTEGER[]` (Array of 0-6, where 0=Sunday, 6=Saturday)
+- **Purpose:** Ermöglicht Users ihre bevorzugten Trainingstage zu spezifizieren
+- **Validation:**
+  - Array length: 1-7 days (via CHECK constraint)
+  - Values 0-6 (Application-level validation)
+  - No duplicates (Application-level validation)
+  - Should match length of `available_training_days`
+- **Example:** `[1, 3, 5]` = Monday, Wednesday, Friday
+- **Integration:** WeekdaySelector Component für UI
+
+**Neue Felder zu training_plans (2024-12-30):** ⭐ NEW
+- **Migration:** `supabase/migrations/20241230_add_week_tracking.sql`
+- **Fields:**
+  - `current_week` - `INTEGER DEFAULT 1` - Current week of plan (calculated from start_date)
+  - `total_weeks` - `INTEGER` - Total duration in weeks (NULL = unlimited)
+- **Purpose:** Week-based progression tracking für Training Plans
+- **Functions Added:**
+  - `calculate_current_week(p_plan_id UUID)` - Berechnet aktuelle Woche basierend auf start_date
+  - `update_plan_current_week(p_plan_id UUID)` - Updated current_week Feld
+  - `update_all_active_plans_weeks()` - Batch-Update aller aktiven Plans (für Cron)
+- **Calculation Logic:**
+  - Weeks since start: `FLOOR(EXTRACT(EPOCH FROM (CURRENT_DATE - start_date)) / (7 * 86400)) + 1`
+  - Minimum week: 1
+  - Capped at `total_weeks` if set
+- **Use Cases:**
+  - Progressive Overload: Track welche Woche im Plan
+  - Auto-Progression: Automatic weight increments pro Woche
+  - Plan Completion: Wissen wann Plan fertig ist
+- **Integration:** PlanProgressScreen zeigt current_week
+
 **Benefits:**
 - Eliminiert Runtime Calculations während Scoring
 - Ermöglicht Dynamic Completeness Management
 - Verbessert Query Performance
+- Enables week-based progressive overload
+- Supports preferred training day scheduling
 
 #### 8. Testing Infrastructure (Training)
 
@@ -380,14 +513,17 @@ Enhanced TypeScript Definitionen inklusive:
 **18 Tabellen, alle erstellt:**
 
 - Core: profiles, exercises (6 rows), intolerances_catalog (8 rows)
-- Training: training_plans, plan_workouts, plan_exercises, workout_sessions, workout_sets, user_1rm, plan_templates
+- Training: training_plans, plan_workouts, plan_exercises, workout_sessions, workout_sets, user_1rm, plan_templates, training_max_progression
 - Nutrition: nutrition_goals, meal_plans, meals, meal_items, food_items, daily_nutrition_log
 - Supplements: supplements, user_supplements
 - Analytics: recommendation_events (NEW)
 
-**Wichtige Schema-Änderungen:**
+**Wichtige Schema-Änderungen (2024-12-28 to 2024-12-30):**
 - `plan_templates` enhanced mit: `estimated_sets_per_week`, `exercises_per_workout`, `completion_status`, `popularity_score`
+- `profiles` enhanced mit: `preferred_training_days` (INTEGER[])
+- `training_plans` enhanced mit: `current_week`, `total_weeks`
 - `recommendation_events` für Analytics
+- **NEW Functions:** `calculate_current_week()`, `update_plan_current_week()`, `update_all_active_plans_weeks()`
 
 **RLS aktiviert** auf allen User-Tabellen.
 
@@ -792,6 +928,24 @@ getRecommendation(score: number): string
 - ✅ Custom and guided plan creation flows
 - ✅ Comprehensive analytics and monitoring
 - ✅ Real-time health checks and alerts
+- ✅ **1RM (One Rep Max) Tracking System** (2024-12-30)
+  - Initial 1RM Input für neue Plans
+  - Automatic Working Weight Calculation
+  - Training Max (TM) Support mit configurable percentage
+  - 1RM Estimation via Epley Formula
+  - Historical 1RM Tracking
+- ✅ **Workout Performance Comparison** (2024-12-30)
+  - Week-over-Week Performance Tracking
+  - Exercise-by-Exercise Comparison
+  - Percentage Improvement/Decline Metrics
+  - Visual Performance Feedback
+- ✅ **Plan Progress Tracking** (2024-12-30)
+  - Training Max Progression per Week
+  - Week-based Plan Tracking
+  - Progressive Overload Monitoring
+- ✅ **Preferred Training Days** (2024-12-30)
+  - User-configurable training day preferences
+  - Visual weekday selector
 
 **Core Components**: Siehe "Recent Major Changes - Training Section Enhancement" oben
 
@@ -1181,6 +1335,46 @@ The project uses specialized AI agents for different development tasks:
 - Konfigurierbare Sampling Rate
 **Implementation**: `recommendationAnalytics.ts`
 
+### 18. 1RM Tracking via Database View
+**Entscheidung**: `user_current_1rm` View statt direkte `user_1rm` Queries
+**Grund**:
+- Automatic "latest per exercise" logic via View
+- Cleaner Service Layer Code
+- Better Performance (View is indexed)
+- Consistent Data Access Pattern
+**Implementation**: `oneRMService.ts` nutzt `user_current_1rm` View
+**Trade-off**: View-Updates bei Schema-Changes nötig
+
+### 19. Epley Formula für 1RM Estimation
+**Entscheidung**: Epley-Formel (1RM = weight × (1 + reps/30)) für Schätzungen
+**Grund**:
+- Industry-Standard Formel
+- Präzise für 1-10 Wiederholungen
+- Einfach zu berechnen
+- Wissenschaftlich validiert
+**Alternative**: Brzycki, Lombardi, Mayhew Formulas
+**Trade-off**: Weniger genau bei sehr hohen Wiederholungen (>10)
+
+### 20. Week-based Progressive Overload
+**Entscheidung**: Week Tracking via `current_week` und `total_weeks` Fields
+**Grund**:
+- Strukturierte Progressive Overload
+- Clear Plan Progression
+- Enables Automatic Weight Increments
+- User kann Progress sehen
+**Implementation**: Database Functions für auto-calculation
+**Trade-off**: Benötigt Cron-Job für automatische Updates (alternative: calculate on-demand)
+
+### 21. Performance Comparison via Combined Score
+**Entscheidung**: Combined Score aus Weight, Reps und Volume
+**Grund**:
+- Holistische Performance-Bewertung
+- Berücksichtigt mehrere Faktoren
+- Verhindert Gaming (z.B. nur Gewicht erhöhen)
+- Balanced Metric
+**Formula**: `(avgWeight + avgReps + avgVolume) / 3`
+**Trade-off**: Komplexer als single metric, aber genauer
+
 ---
 
 ## Development Guidelines
@@ -1235,10 +1429,19 @@ The project uses specialized AI agents for different development tasks:
    - Need to implement sampling rate configuration for high traffic
    - Add A/B testing framework for recommendation algorithm
 
+4. **1RM & Performance Tracking (NEW - 2024-12-30):**
+   - ⚠️ PlanProgressScreen: "1RM aktualisieren" Button zeigt nur Alert (Feature not implemented yet)
+   - ⚠️ Performance Comparison: Chart visualization noch nicht implementiert (nur Data Service)
+   - ⚠️ Historical Performance: Component erstellt aber noch nicht vollständig integriert
+   - Need to add validation for Training Max increments
+   - Consider adding auto-increment suggestions based on performance
+   - Week tracking updates aktuell manuell (should be automated via Cron)
+
 ### General
 - Auth Screens noch nicht implementiert
 - Nutrition Module noch nicht begonnen
 - Supplement Tracking in Planung
+- TrainingStackNavigator needs to register new screens (OneRMInputScreen, PlanProgressScreen)
 
 ### Future Enhancements
 - Reduced motion accessibility support

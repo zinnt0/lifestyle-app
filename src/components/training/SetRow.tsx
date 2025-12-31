@@ -28,6 +28,9 @@ interface SetRowProps {
   onLog: (weight: number, reps: number, rir?: number) => void;
   completedSet?: WorkoutSet;
   pendingSet?: { weight: number; reps: number; rir?: number };
+  isAMRAP?: boolean;
+  setNotes?: string;
+  percentageLabel?: string;
 }
 
 export const SetRow: React.FC<SetRowProps> = ({
@@ -40,25 +43,48 @@ export const SetRow: React.FC<SetRowProps> = ({
   onLog,
   completedSet,
   pendingSet,
+  isAMRAP = false,
+  setNotes,
+  percentageLabel,
 }) => {
-  const [weight, setWeight] = useState(
-    completedSet?.weight?.toString() ||
-    pendingSet?.weight?.toString() ||
-    (targetWeight !== null && targetWeight !== undefined ? targetWeight.toString() : "") ||
-    ""
-  );
-  const [reps, setReps] = useState(
-    completedSet?.reps?.toString() ||
-    pendingSet?.reps?.toString() ||
-    (targetReps !== null && targetReps !== undefined ? targetReps.toString() : "") ||
-    ""
-  );
-  const [rir, setRir] = useState(
-    completedSet?.rir?.toString() ||
-    pendingSet?.rir?.toString() ||
-    (rirTarget !== null && rirTarget !== undefined ? rirTarget.toString() : "") ||
-    ""
-  );
+  const [weight, setWeight] = useState(() => {
+    if (completedSet?.weight !== undefined && completedSet?.weight !== null) {
+      return completedSet.weight.toString();
+    }
+    if (pendingSet?.weight !== undefined && pendingSet?.weight !== null) {
+      return pendingSet.weight.toString();
+    }
+    if (targetWeight !== undefined && targetWeight !== null) {
+      return targetWeight.toFixed(1);
+    }
+    return "";
+  });
+
+  const [reps, setReps] = useState(() => {
+    if (completedSet?.reps !== undefined && completedSet?.reps !== null) {
+      return completedSet.reps.toString();
+    }
+    if (pendingSet?.reps !== undefined && pendingSet?.reps !== null) {
+      return pendingSet.reps.toString();
+    }
+    if (targetReps !== undefined && targetReps !== null) {
+      return targetReps.toString();
+    }
+    return "";
+  });
+
+  const [rir, setRir] = useState(() => {
+    if (completedSet?.rir !== undefined && completedSet?.rir !== null) {
+      return completedSet.rir.toString();
+    }
+    if (pendingSet?.rir !== undefined && pendingSet?.rir !== null) {
+      return pendingSet.rir.toString();
+    }
+    if (rirTarget !== undefined && rirTarget !== null) {
+      return rirTarget.toString();
+    }
+    return "";
+  });
 
   const previouslyExpanded = useRef(isExpanded);
 
@@ -69,10 +95,14 @@ export const SetRow: React.FC<SetRowProps> = ({
       if (weight && reps) {
         const weightNum = parseFloat(weight);
         const repsNum = parseInt(reps);
-        const rirNum = rir ? parseInt(rir) : undefined;
+        const rirNum = rir && rir.trim() !== '' ? parseInt(rir) : undefined;
 
+        // Validate RIR is in valid range (0-5) if provided
         if (!isNaN(weightNum) && !isNaN(repsNum)) {
-          onLog(weightNum, repsNum, rirNum);
+          const validRir = rirNum !== undefined && !isNaN(rirNum) && rirNum >= 0 && rirNum <= 5
+            ? rirNum
+            : undefined;
+          onLog(weightNum, repsNum, validRir);
         }
       }
     }
@@ -91,10 +121,14 @@ export const SetRow: React.FC<SetRowProps> = ({
 
     const weightNum = parseFloat(weight);
     const repsNum = parseInt(reps);
-    const rirNum = rir ? parseInt(rir) : undefined;
+    const rirNum = rir && rir.trim() !== '' ? parseInt(rir) : undefined;
 
+    // Validate RIR is in valid range (0-5) if provided
     if (!isNaN(weightNum) && !isNaN(repsNum)) {
-      onLog(weightNum, repsNum, rirNum);
+      const validRir = rirNum !== undefined && !isNaN(rirNum) && rirNum >= 0 && rirNum <= 5
+        ? rirNum
+        : undefined;
+      onLog(weightNum, repsNum, validRir);
     }
   };
 
@@ -113,12 +147,20 @@ export const SetRow: React.FC<SetRowProps> = ({
         onPress={handleToggle}
       >
         <View style={styles.headerContent}>
-          <Text style={styles.setNumber}>Satz {setNumber}</Text>
+          <View style={styles.setNumberRow}>
+            <Text style={styles.setNumber}>Satz {setNumber}</Text>
+            {percentageLabel && (
+              <Text style={styles.percentageBadge}>{percentageLabel}</Text>
+            )}
+            {isAMRAP && (
+              <Text style={styles.amrapBadge}>AMRAP</Text>
+            )}
+          </View>
 
           {isCompleted ? (
             <View style={styles.completedInfo}>
               <Text style={styles.completedText}>
-                ✓ {completedSet.weight}kg × {completedSet.reps}
+                ✓ {completedSet.weight}kg × {completedSet.reps}{isAMRAP && '+'}
               </Text>
               {completedSet.rir !== undefined && (
                 <Text style={styles.rirText}>RiR {completedSet.rir}</Text>
@@ -127,17 +169,24 @@ export const SetRow: React.FC<SetRowProps> = ({
           ) : isPending ? (
             <View style={styles.completedInfo}>
               <Text style={styles.pendingText}>
-                ○ {pendingSet!.weight}kg × {pendingSet!.reps}
+                ○ {pendingSet!.weight}kg × {pendingSet!.reps}{isAMRAP && '+'}
               </Text>
               {pendingSet!.rir !== undefined && (
                 <Text style={styles.rirText}>RiR {pendingSet!.rir}</Text>
               )}
             </View>
           ) : (
-            <Text style={styles.targetText}>
-              Soll: {targetWeight ?? 0}kg × {targetReps ?? 0}
-              {rirTarget !== undefined && rirTarget !== null && ` @ RiR ${rirTarget}`}
-            </Text>
+            <>
+              {(targetWeight !== undefined && targetWeight !== null) || (targetReps !== undefined && targetReps !== null) ? (
+                <Text style={styles.targetText}>
+                  Soll: {targetWeight !== undefined && targetWeight !== null ? `${targetWeight.toFixed(1)}kg` : '-'} × {targetReps ?? '-'}{isAMRAP && '+'}
+                  {rirTarget !== undefined && rirTarget !== null && ` @ RiR ${rirTarget}`}
+                </Text>
+              ) : null}
+              {setNotes && (
+                <Text style={styles.setNotesText}>💡 {setNotes}</Text>
+              )}
+            </>
           )}
         </View>
 
@@ -147,13 +196,22 @@ export const SetRow: React.FC<SetRowProps> = ({
       {/* Expanded Content */}
       {isExpanded && (
         <View style={styles.expandedContent}>
-          <View style={styles.targetInfo}>
-            <Text style={styles.label}>Ziel:</Text>
-            <Text style={styles.value}>
-              {targetWeight ?? 0}kg × {targetReps ?? 0}
-              {rirTarget !== undefined && rirTarget !== null && ` @ RiR ${rirTarget}`}
-            </Text>
-          </View>
+          {(targetWeight !== undefined && targetWeight !== null) || (targetReps !== undefined && targetReps !== null) ? (
+            <View style={styles.targetInfo}>
+              <Text style={styles.label}>Ziel:</Text>
+              <Text style={styles.value}>
+                {targetWeight !== undefined && targetWeight !== null ? `${targetWeight.toFixed(1)}kg` : '-'} × {targetReps ?? '-'}{isAMRAP && '+'}
+                {rirTarget !== undefined && rirTarget !== null && ` @ RiR ${rirTarget}`}
+              </Text>
+            </View>
+          ) : null}
+
+          {setNotes && (
+            <View style={styles.targetInfo}>
+              <Text style={styles.label}>💡</Text>
+              <Text style={styles.value}>{setNotes}</Text>
+            </View>
+          )}
 
           <View style={styles.inputRow}>
             <View style={styles.inputGroup}>
@@ -226,10 +284,33 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  setNumberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   setNumber: {
     fontSize: 16,
     fontWeight: "600",
     color: "#333",
+  },
+  percentageBadge: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4A90E2",
+    backgroundColor: "#E3F2FD",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  amrapBadge: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FF9500",
+    backgroundColor: "#FFF3E0",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   completedInfo: {
     flexDirection: "row",
@@ -249,6 +330,12 @@ const styles = StyleSheet.create({
   targetText: {
     fontSize: 14,
     color: "#666",
+  },
+  setNotesText: {
+    fontSize: 12,
+    color: "#4A90E2",
+    fontStyle: "italic",
+    marginTop: 2,
   },
   rirText: {
     fontSize: 12,

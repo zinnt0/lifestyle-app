@@ -44,8 +44,9 @@ export const ActivePlanCard: React.FC<ActivePlanCardProps> = ({
 }) => {
   const [menuVisible, setMenuVisible] = React.useState(false);
 
-  const progress = plan.current_week
-    ? (plan.current_week / (plan.total_weeks || 12)) * 100
+  // Only calculate progress if plan has a defined duration
+  const progress = plan.current_week && plan.total_weeks
+    ? (plan.current_week / plan.total_weeks) * 100
     : 0;
 
   const handleDelete = () => {
@@ -93,16 +94,18 @@ export const ActivePlanCard: React.FC<ActivePlanCardProps> = ({
           {plan.days_per_week} Tage pro Woche
         </Text>
 
-        {plan.current_week && plan.total_weeks && (
+        {plan.current_week && (
           <>
             <Text style={styles.weekInfo}>
-              Woche {plan.current_week} von {plan.total_weeks}
+              Woche {plan.current_week}{plan.total_weeks ? ` von ${plan.total_weeks}` : ''}
             </Text>
-            <ProgressBar
-              progress={progress}
-              color="#fff"
-              backgroundColor="rgba(255, 255, 255, 0.3)"
-            />
+            {plan.total_weeks && (
+              <ProgressBar
+                progress={progress}
+                color="#fff"
+                backgroundColor="rgba(255, 255, 255, 0.3)"
+              />
+            )}
           </>
         )}
 

@@ -7,7 +7,7 @@
  * - Plan details and specifications
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -19,11 +19,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { TrainingStackParamList } from "@/navigation/types";
 import { trainingService } from "@/services/trainingService";
 import {
   TrainingPlanDetails,
-  NextWorkout,
   PlanWorkout,
   WorkoutSession,
 } from "@/types/training.types";
@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/Button";
 import { PausedSessionCard } from "@/components/training/PausedSessionCard";
 import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
+import { getProfile } from "@/services/profile.service";
 
 // Design System Constants
 const COLORS = {
@@ -98,6 +99,7 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
   const [nextWorkout, setNextWorkout] = useState<PlanWorkout | null>(null);
   const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(null);
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<PlanWorkout[]>([]);
+  const [preferredDays, setPreferredDays] = useState<number[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +121,23 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
       }
 
       // Load plan details with workouts
-      const planDetails = await trainingService.getTrainingPlanDetails(planId);
+      let planDetails = await trainingService.getTrainingPlanDetails(planId);
+
+      // Update current week only for template-based plans (not custom plans)
+      // Custom plans track weeks based on completed workouts, not dates
+      if (planDetails.start_date && planDetails.plan_type !== 'custom') {
+        const { error: updateError } = await supabase.rpc('update_plan_current_week', {
+          p_plan_id: planId
+        });
+
+        if (!updateError) {
+          // Reload plan to get updated current_week
+          planDetails = await trainingService.getTrainingPlanDetails(planId);
+        } else {
+          console.error('Fehler beim Aktualisieren der aktuellen Woche:', updateError);
+        }
+      }
+
       setPlan(planDetails);
 
       // Check for paused session for this plan
@@ -131,16 +149,24 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
         setPausedSession(null);
       }
 
-      // Determine next workout
-      // For now, we'll use the first workout from the plan
-      // In a more sophisticated implementation, this would check last completed session
-      if (planDetails.workouts && planDetails.workouts.length > 0) {
+      // Determine next workout based on last completed session
+      const nextWorkoutData = await trainingService.getNextWorkout(user.id);
+      if (nextWorkoutData && nextWorkoutData.plan.id === planId) {
+        setNextWorkout(nextWorkoutData.workout);
+      } else if (planDetails.workouts && planDetails.workouts.length > 0) {
+        // Fallback: if no next workout found or plan doesn't match, use first workout
         setNextWorkout(planDetails.workouts[0]);
       }
 
       // Load upcoming workouts (next 5)
-      const upcoming = await trainingService.getUpcomingWorkouts(planId, 5);
+      const upcoming = await trainingService.getUpcomingWorkouts(user.id, planId, 5);
       setUpcomingWorkouts(upcoming);
+
+      // Load user's preferred training days
+      const { profile } = await getProfile(user.id);
+      if (profile?.preferred_training_days) {
+        setPreferredDays(profile.preferred_training_days);
+      }
     } catch (err) {
       console.error("Error loading plan details:", err);
       setError(
@@ -155,11 +181,13 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
   }, [planId]);
 
   /**
-   * Initial load
+   * Load plan details when screen is focused
    */
-  useEffect(() => {
-    loadPlanDetails();
-  }, [loadPlanDetails]);
+  useFocusEffect(
+    useCallback(() => {
+      loadPlanDetails();
+    }, [loadPlanDetails])
+  );
 
   /**
    * Pull to refresh handler
@@ -271,8 +299,8 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
    * Calculate current week and total weeks
    */
   const currentWeek = plan.current_week || 1;
-  const totalWeeks = plan.total_weeks || 12;
-  const progressPercentage = (currentWeek / totalWeeks) * 100;
+  const totalWeeks = plan.total_weeks || plan.duration_weeks || null;
+  const progressPercentage = totalWeeks ? (currentWeek / totalWeeks) * 100 : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -286,23 +314,25 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
         <View style={styles.header}>
           <Text style={styles.planName}>{plan.name}</Text>
           <Text style={styles.planInfo}>
-            {plan.days_per_week} Tage pro Woche • Woche {currentWeek}/{totalWeeks}
+            {plan.days_per_week} Tage pro Woche • Woche {currentWeek}{totalWeeks ? `/${totalWeeks}` : ''}
           </Text>
 
-          {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${progressPercentage}%` },
-                ]}
-              />
+          {/* Progress Bar - only show if plan has duration */}
+          {totalWeeks && (
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBar}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${progressPercentage}%` },
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {Math.round(progressPercentage)}%
+              </Text>
             </View>
-            <Text style={styles.progressText}>
-              {Math.round(progressPercentage)}%
-            </Text>
-          </View>
+          )}
         </View>
 
         {/* Paused or Next Workout Section */}
@@ -338,7 +368,8 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
                 <UpcomingWorkoutCard
                   key={workout.id}
                   workout={workout}
-                  dayOffset={index}
+                  workoutIndex={index}
+                  preferredDays={preferredDays}
                   onPress={() => {
                     // Could navigate to workout preview in future
                   }}
@@ -351,32 +382,151 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
         {/* Plan Details Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>PLAN-DETAILS</Text>
-          <Card padding="medium" elevation="small">
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Trainingstyp:</Text>
-              <Text style={styles.detailValue}>{plan.plan_type}</Text>
+
+          {/* Overview Cards Grid */}
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statIcon}>🎯</Text>
+              <Text style={styles.statLabel}>Hauptziel</Text>
+              <Text style={styles.statValue}>
+                {plan.primary_goal === 'strength' ? 'Kraft' :
+                 plan.primary_goal === 'hypertrophy' ? 'Muskelaufbau' :
+                 plan.primary_goal === 'endurance' ? 'Ausdauer' :
+                 'Allgemein'}
+              </Text>
             </View>
-            {plan.template?.progression_type && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Progression:</Text>
-                <Text style={styles.detailValue}>
-                  {plan.template.progression_type}
+
+            <View style={styles.statCard}>
+              <Text style={styles.statIcon}>📊</Text>
+              <Text style={styles.statLabel}>Fitness-Level</Text>
+              <Text style={styles.statValue}>
+                {plan.fitness_level === 'beginner' ? 'Anfänger' :
+                 plan.fitness_level === 'intermediate' ? 'Fortgeschritten' :
+                 'Expert'}
+              </Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statIcon}>📅</Text>
+              <Text style={styles.statLabel}>Dauer</Text>
+              <Text style={styles.statValue}>{plan.total_weeks || plan.duration_weeks || 12} Wochen</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statIcon}>💪</Text>
+              <Text style={styles.statLabel}>Workouts</Text>
+              <Text style={styles.statValue}>{plan.workouts.length}</Text>
+            </View>
+          </View>
+
+          {/* Training Information Card */}
+          <Card padding="medium" elevation="small" style={styles.infoCard}>
+            <Text style={styles.cardTitle}>Training</Text>
+
+            <View style={styles.infoItem}>
+              <View style={styles.infoIconContainer}>
+                <Text style={styles.infoItemIcon}>🔄</Text>
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoItemLabel}>Progression</Text>
+                <Text style={styles.infoItemValue}>
+                  {plan.template?.progression_type === 'linear' ? 'Linear' :
+                   plan.template?.progression_type === 'double' ? 'Doppelt' :
+                   plan.template?.progression_type === 'undulating' ? 'Wellenförmig' :
+                   plan.template?.progression_type === 'block' ? 'Block' :
+                   plan.template?.progression_type || 'Standard'}
                 </Text>
               </View>
-            )}
-            {plan.template?.requirements && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Equipment:</Text>
-                <Text style={styles.detailValue}>
-                  {plan.template.requirements}
-                </Text>
+            </View>
+
+            <View style={styles.infoItem}>
+              <View style={styles.infoIconContainer}>
+                <Text style={styles.infoItemIcon}>🏋️</Text>
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoItemLabel}>Trainingstyp</Text>
+                <Text style={styles.infoItemValue}>{plan.plan_type}</Text>
+              </View>
+            </View>
+
+            {plan.template?.is_dynamic && (
+              <View style={styles.dynamicBadge}>
+                <Text style={styles.dynamicBadgeIcon}>⚡</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dynamicBadgeTitle}>Dynamischer Plan</Text>
+                  <Text style={styles.dynamicBadgeText}>
+                    Gewichte werden automatisch basierend auf deinem 1RM berechnet
+                    {plan.tm_percentage && ` (${plan.tm_percentage}% Training Max)`}
+                  </Text>
+                </View>
               </View>
             )}
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Workouts gesamt:</Text>
-              <Text style={styles.detailValue}>{plan.workouts.length}</Text>
-            </View>
           </Card>
+
+          {/* Timeline Card */}
+          {(plan.start_date || plan.end_date) && (
+            <Card padding="medium" elevation="small" style={styles.infoCard}>
+              <Text style={styles.cardTitle}>Zeitplan</Text>
+
+              {plan.start_date && (
+                <View style={styles.infoItem}>
+                  <View style={styles.infoIconContainer}>
+                    <Text style={styles.infoItemIcon}>🚀</Text>
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoItemLabel}>Startdatum</Text>
+                    <Text style={styles.infoItemValue}>
+                      {new Date(plan.start_date).toLocaleDateString('de-DE', {
+                        day: '2-digit',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {plan.end_date && (
+                <View style={styles.infoItem}>
+                  <View style={styles.infoIconContainer}>
+                    <Text style={styles.infoItemIcon}>🏁</Text>
+                  </View>
+                  <View style={styles.infoContent}>
+                    <Text style={styles.infoItemLabel}>Enddatum</Text>
+                    <Text style={styles.infoItemValue}>
+                      {new Date(plan.end_date).toLocaleDateString('de-DE', {
+                        day: '2-digit',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </Card>
+          )}
+
+          {/* Equipment Card */}
+          {plan.template?.requires_equipment && plan.template.requires_equipment.length > 0 && (
+            <Card padding="medium" elevation="small" style={styles.infoCard}>
+              <Text style={styles.cardTitle}>Equipment</Text>
+              <View style={styles.equipmentContainer}>
+                {plan.template.requires_equipment.map((equipment, index) => (
+                  <View key={index} style={styles.equipmentChip}>
+                    <Text style={styles.equipmentText}>{equipment}</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          )}
+
+          {/* Description Card */}
+          {plan.template?.description_de && (
+            <Card padding="medium" elevation="small" style={styles.infoCard}>
+              <Text style={styles.cardTitle}>Über diesen Plan</Text>
+              <Text style={styles.descriptionText}>{plan.template.description_de}</Text>
+            </Card>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -436,18 +586,85 @@ const NextWorkoutCard: React.FC<NextWorkoutCardProps> = ({
  */
 interface UpcomingWorkoutCardProps {
   workout: PlanWorkout;
-  dayOffset: number;
+  workoutIndex: number;
+  preferredDays: number[] | null;
   onPress: () => void;
 }
 
+/**
+ * Calculate the next scheduled date for a workout
+ * based on the workout's day_number and preferred training days
+ */
+const getNextWorkoutDate = (
+  workout: PlanWorkout,
+  workoutIndex: number,
+  preferredDays: number[] | null
+): Date => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Convert day_number (1-7, where 1=Monday) to JavaScript day of week (0-6, where 0=Sunday)
+  // day_number: 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday, 7=Sunday
+  // JS getDay(): 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+  const targetDayOfWeek = workout.day_number === 7 ? 0 : workout.day_number;
+
+  // If no preferred days, find the next occurrence of the target day
+  if (!preferredDays || preferredDays.length === 0) {
+    return getNextDateForDayOfWeek(today, targetDayOfWeek, workoutIndex);
+  }
+
+  // Check if the workout's day is in the preferred days
+  if (!preferredDays.includes(targetDayOfWeek)) {
+    // If the workout day is not a preferred day, fall back to finding the next occurrence
+    return getNextDateForDayOfWeek(today, targetDayOfWeek, workoutIndex);
+  }
+
+  // Find the next occurrence of this specific day of week
+  return getNextDateForDayOfWeek(today, targetDayOfWeek, workoutIndex);
+};
+
+/**
+ * Helper function to find the next occurrence(s) of a specific day of week
+ * @param fromDate - Starting date
+ * @param targetDayOfWeek - Target day (0 = Sunday, 1 = Monday, etc.)
+ * @param occurrenceIndex - Which occurrence to return (0 = first, 1 = second, etc.)
+ */
+const getNextDateForDayOfWeek = (
+  fromDate: Date,
+  targetDayOfWeek: number,
+  occurrenceIndex: number
+): Date => {
+  let occurrencesFound = 0;
+  let daysChecked = 1; // Start from tomorrow
+  const maxDaysToCheck = 60; // Look ahead up to 60 days
+
+  while (daysChecked <= maxDaysToCheck) {
+    const checkDate = new Date(fromDate);
+    checkDate.setDate(fromDate.getDate() + daysChecked);
+
+    if (checkDate.getDay() === targetDayOfWeek) {
+      if (occurrencesFound === occurrenceIndex) {
+        return checkDate;
+      }
+      occurrencesFound++;
+    }
+
+    daysChecked++;
+  }
+
+  // Fallback: simple offset from today
+  const fallbackDate = new Date(fromDate);
+  fallbackDate.setDate(fromDate.getDate() + occurrenceIndex + 1);
+  return fallbackDate;
+};
+
 const UpcomingWorkoutCard: React.FC<UpcomingWorkoutCardProps> = ({
   workout,
-  dayOffset,
+  workoutIndex,
+  preferredDays,
   onPress,
 }) => {
-  // Calculate date (simplified - would use actual scheduling logic)
-  const date = new Date();
-  date.setDate(date.getDate() + dayOffset + 1);
+  const date = getNextWorkoutDate(workout, workoutIndex, preferredDays);
   const dayName = date.toLocaleDateString("de-DE", { weekday: "short" });
   const dateStr = date.toLocaleDateString("de-DE", {
     day: "2-digit",
@@ -604,24 +821,130 @@ const styles = StyleSheet.create({
     ...FONTS.caption,
     fontSize: 12,
   },
-  // Plan Details Styles
-  detailRow: {
+  // Plan Details Styles - Stats Grid
+  statsGrid: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: "45%",
+    backgroundColor: COLORS.cardBg,
+    padding: SPACING.lg,
+    borderRadius: 12,
     alignItems: "center",
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  detailLabel: {
-    ...FONTS.body,
-    color: COLORS.textSecondary,
+  statIcon: {
+    fontSize: 32,
+    marginBottom: SPACING.sm,
   },
-  detailValue: {
+  statLabel: {
+    ...FONTS.caption,
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: SPACING.xs,
+  },
+  statValue: {
+    ...FONTS.h3,
+    fontSize: 16,
+    textAlign: "center",
+  },
+  // Info Cards
+  infoCard: {
+    marginBottom: SPACING.md,
+  },
+  cardTitle: {
+    ...FONTS.h3,
+    fontSize: 16,
+    marginBottom: SPACING.md,
+    color: COLORS.text,
+  },
+  infoItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: SPACING.md,
+  },
+  infoIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F5F5F5",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: SPACING.md,
+  },
+  infoItemIcon: {
+    fontSize: 20,
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoItemLabel: {
+    ...FONTS.caption,
+    fontSize: 12,
+    marginBottom: SPACING.xs / 2,
+  },
+  infoItemValue: {
     ...FONTS.body,
     fontWeight: "600",
-    textAlign: "right",
-    flex: 1,
-    marginLeft: SPACING.md,
+    fontSize: 15,
+  },
+  // Dynamic Badge
+  dynamicBadge: {
+    flexDirection: "row",
+    backgroundColor: "#E3F2FD",
+    padding: SPACING.md,
+    borderRadius: 12,
+    marginTop: SPACING.sm,
+    alignItems: "flex-start",
+  },
+  dynamicBadgeIcon: {
+    fontSize: 24,
+    marginRight: SPACING.md,
+  },
+  dynamicBadgeTitle: {
+    ...FONTS.body,
+    fontWeight: "700",
+    fontSize: 15,
+    marginBottom: SPACING.xs / 2,
+    color: COLORS.primary,
+  },
+  dynamicBadgeText: {
+    ...FONTS.caption,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  // Equipment Chips
+  equipmentContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
+  },
+  equipmentChip: {
+    backgroundColor: "#F5F5F5",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  equipmentText: {
+    ...FONTS.caption,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  // Description
+  descriptionText: {
+    ...FONTS.body,
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.text,
   },
 });

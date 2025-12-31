@@ -174,6 +174,18 @@ export const GuidedPlanFlowScreen: React.FC<
         );
       }
 
+      // Check if plan is dynamic and requires 1RM input
+      if (recommendation.template.is_dynamic &&
+          recommendation.template.requires_1rm_for_exercises &&
+          recommendation.template.requires_1rm_for_exercises.length > 0) {
+        // Navigate to OneRMInput screen
+        navigation.navigate("OneRMInput", {
+          planTemplateId: recommendation.template.id,
+          requiredExerciseIds: recommendation.template.requires_1rm_for_exercises,
+        });
+        return;
+      }
+
       // Warning for incomplete programs
       if (recommendation.completeness === "incomplete") {
         // Track incomplete warning shown
