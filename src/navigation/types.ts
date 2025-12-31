@@ -46,6 +46,32 @@ export type MainStackParamList = {
 };
 
 /**
+ * Training Stack Parameter List
+ *
+ * Screens in the training section
+ */
+export type TrainingStackParamList = {
+  TrainingDashboard: undefined;
+  PlanConfiguration: undefined;
+  GuidedPlanFlow: undefined;
+  CustomPlanFlow: undefined;
+  TrainingPlanDetail: { planId: string };
+  WorkoutSession: { sessionId: string };
+  WorkoutSummary: { sessionId: string };
+};
+
+/**
+ * Tab Navigator Parameter List
+ *
+ * Main app tabs
+ */
+export type TabNavigatorParamList = {
+  HomeTab: undefined;
+  TrainingTab: undefined;
+  MoreTab: undefined;
+};
+
+/**
  * Root Navigator Parameter List
  *
  * Top-level navigation structure

@@ -14,6 +14,7 @@ export interface Profile {
   fitness_level: 'beginner' | 'intermediate' | 'advanced' | null;
   training_experience_months: number | null;
   available_training_days: number | null; // 1-7
+  preferred_training_days: number[] | null; // Array of weekdays: 0=Sunday, 1=Monday, ..., 6=Saturday
   primary_goal:
     | 'strength'
     | 'hypertrophy'
@@ -175,6 +176,7 @@ export const createProfile = async (
         fitness_level: data.fitness_level,
         training_experience_months: data.training_experience_months,
         available_training_days: data.available_training_days,
+        preferred_training_days: data.preferred_training_days,
         primary_goal: data.primary_goal,
         sleep_hours_avg: data.sleep_hours_avg,
         stress_level: data.stress_level,

@@ -134,10 +134,10 @@ export const Input: React.FC<InputProps> = ({
           onBlur={() => setIsFocused(false)}
           style={[
             styles.input,
-            leftIcon && styles.inputWithLeftIcon,
-            (rightIcon || showClear) && styles.inputWithRightIcon,
-            multiline && styles.inputMultiline,
-            disabled && styles.inputDisabled,
+            leftIcon ? styles.inputWithLeftIcon : undefined,
+            (rightIcon || showClear) ? styles.inputWithRightIcon : undefined,
+            multiline ? styles.inputMultiline : undefined,
+            disabled ? styles.inputDisabled : undefined,
           ]}
           accessibilityLabel={label || placeholder}
           accessibilityHint={error}

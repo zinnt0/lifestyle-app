@@ -23,6 +23,7 @@ import { Button } from '../../components/ui/Button';
 import { RadioGroup } from '../../components/ui/RadioGroup';
 import { NumberPicker } from '../../components/ui/NumberPicker';
 import { MultiSelectChips } from '../../components/ui/MultiSelectChips';
+import { WeekdaySelector } from '../../components/ui/WeekdaySelector';
 import { GoalCard } from '../../components/ui/GoalCard';
 import { Slider } from '../../components/ui/Slider';
 
@@ -41,6 +42,7 @@ interface ProfileFormData {
   fitness_level: 'beginner' | 'intermediate' | 'advanced' | null;
   training_experience_months: number | null;
   available_training_days: number | null;
+  preferred_training_days: number[] | null;
   has_gym_access: boolean;
   home_equipment: string[];
 
@@ -90,6 +92,7 @@ export const ProfileEditScreen: React.FC = () => {
     fitness_level: null,
     training_experience_months: null,
     available_training_days: null,
+    preferred_training_days: null,
     has_gym_access: true,
     home_equipment: [],
     primary_goal: null,
@@ -145,6 +148,7 @@ export const ProfileEditScreen: React.FC = () => {
           fitness_level: profile.fitness_level,
           training_experience_months: profile.training_experience_months,
           available_training_days: profile.available_training_days,
+          preferred_training_days: profile.preferred_training_days,
           has_gym_access: profile.has_gym_access,
           home_equipment: profile.home_equipment || [],
           primary_goal: profile.primary_goal,
@@ -476,8 +480,29 @@ export const ProfileEditScreen: React.FC = () => {
           value={formData.available_training_days || 3}
           min={1}
           max={7}
-          onChange={(value) => updateField('available_training_days', value)}
+          onChange={(value) => {
+            updateField('available_training_days', value);
+            // Reset preferred_training_days if count changes
+            if (formData.preferred_training_days?.length !== value) {
+              updateField('preferred_training_days', null);
+            }
+          }}
         />
+
+        {formData.available_training_days && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Bevorzugte Trainingstage</Text>
+            <Text style={styles.sectionHint}>
+              Wähle {formData.available_training_days}{' '}
+              {formData.available_training_days === 1 ? 'Tag' : 'Tage'} aus
+            </Text>
+            <WeekdaySelector
+              selectedDays={formData.preferred_training_days || []}
+              onDaysChange={(days) => updateField('preferred_training_days', days)}
+              maxDays={formData.available_training_days}
+            />
+          </View>
+        )}
 
         <View style={styles.toggleRow}>
           <Text style={styles.label}>Gym-Zugang</Text>
@@ -737,6 +762,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#000000',
     marginBottom: 16,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 8,
+  },
+  sectionHint: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginBottom: 12,
   },
   label: {
     fontSize: 14,

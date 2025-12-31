@@ -1,5 +1,13 @@
 import React from "react";
-import { StyleSheet, View, ViewStyle, Platform, TouchableOpacity } from "react-native";
+import {
+  StyleSheet,
+  View,
+  ViewStyle,
+  StyleProp,
+  Platform,
+  TouchableOpacity,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Design System Constants
 const COLORS = {
@@ -27,22 +35,38 @@ interface CardProps {
   /** Shadow elevation level */
   elevation?: CardElevation;
   /** Card style override */
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   /** Optional press handler to make card touchable */
   onPress?: () => void;
+  /** Enable gradient background */
+  gradient?: boolean;
+  /** Gradient colors (only used if gradient=true) */
+  gradientColors?: string[];
+  /** @deprecated Use elevation instead */
+  elevated?: boolean;
 }
 
 /**
  * Card Component
  *
- * A reusable card component with shadow/elevation support.
+ * A reusable card component with shadow/elevation support and optional gradient background.
  * Useful for grouping related content.
  *
  * @example
  * ```tsx
+ * // Basic card
  * <Card padding="medium" elevation="medium">
- *   <Text variant="heading3">Card Title</Text>
- *   <Text variant="body">Card content goes here</Text>
+ *   <Text>Card content goes here</Text>
+ * </Card>
+ *
+ * // Gradient card
+ * <Card gradient gradientColors={["#4A90E2", "#7B68EE"]}>
+ *   <Text style={{ color: "#fff" }}>Gradient Card</Text>
+ * </Card>
+ *
+ * // Touchable card
+ * <Card onPress={handlePress}>
+ *   <Text>Tap me!</Text>
  * </Card>
  * ```
  */
@@ -50,9 +74,15 @@ export const Card: React.FC<CardProps> = ({
   children,
   padding = "medium",
   elevation = "small",
+  elevated, // Legacy support
   style,
   onPress,
+  gradient = false,
+  gradientColors = ["#4A90E2", "#7B68EE"],
 }) => {
+  // Handle legacy 'elevated' prop
+  const effectiveElevation = elevated ? "medium" : elevation;
+
   const getPaddingStyle = (): ViewStyle => {
     switch (padding) {
       case "none":
@@ -69,7 +99,7 @@ export const Card: React.FC<CardProps> = ({
   const getElevationStyle = (): ViewStyle => {
     if (Platform.OS === "ios") {
       // iOS shadow
-      switch (elevation) {
+      switch (effectiveElevation) {
         case "none":
           return {};
         case "small":
@@ -96,7 +126,7 @@ export const Card: React.FC<CardProps> = ({
       }
     } else {
       // Android elevation
-      switch (elevation) {
+      switch (effectiveElevation) {
         case "none":
           return { elevation: 0 };
         case "small":
@@ -111,10 +141,27 @@ export const Card: React.FC<CardProps> = ({
 
   const cardStyle = [
     styles.card,
-    getPaddingStyle(),
-    getElevationStyle(),
+    !gradient && getPaddingStyle(), // Don't apply padding to outer container if gradient
+    !gradient && getElevationStyle(),
     style,
   ];
+
+  // Content wrapper with padding (used inside gradient)
+  const contentStyle = [
+    styles.content,
+    gradient && getPaddingStyle(),
+  ];
+
+  const renderContent = () => {
+    if (gradient) {
+      return (
+        <LinearGradient colors={gradientColors as any} style={styles.gradient}>
+          <View style={contentStyle}>{children}</View>
+        </LinearGradient>
+      );
+    }
+    return children;
+  };
 
   // If onPress is provided, wrap in TouchableOpacity
   if (onPress) {
@@ -122,21 +169,18 @@ export const Card: React.FC<CardProps> = ({
       <TouchableOpacity
         style={cardStyle}
         onPress={onPress}
-        activeOpacity={0.7}
+        activeOpacity={0.8}
         accessibilityRole="button"
       >
-        {children}
+        {renderContent()}
       </TouchableOpacity>
     );
   }
 
   // Otherwise, render as regular View
   return (
-    <View
-      style={cardStyle}
-      accessibilityRole="none"
-    >
-      {children}
+    <View style={cardStyle} accessibilityRole="none">
+      {renderContent()}
     </View>
   );
 };
@@ -144,8 +188,16 @@ export const Card: React.FC<CardProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.background,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: Platform.OS === "android" ? 1 : 0,
     borderColor: COLORS.borderLight,
+    marginVertical: 8,
+    overflow: "hidden", // Important for gradient clipping
+  },
+  gradient: {
+    borderRadius: 16,
+  },
+  content: {
+    // Content wrapper for gradient cards
   },
 });
