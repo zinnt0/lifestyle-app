@@ -4,9 +4,13 @@ import { createProfile } from '../services/profile.service';
 
 /**
  * Onboarding Data Interface
- * Stores all user information collected across 6 onboarding screens
+ * Stores all user information collected across 7 onboarding screens
  */
 export interface OnboardingData {
+  // Screen 0: Username & Profilbild (neue erste Screen)
+  username: string | null;
+  profile_image_url: string | null; // optional
+
   // Screen 1: Basisdaten
   age: number | null;
   weight: number | null; // kg
@@ -70,6 +74,10 @@ export interface OnboardingContextType {
  * Initial onboarding data with default values
  */
 const initialData: OnboardingData = {
+  // Screen 0
+  username: null,
+  profile_image_url: null,
+
   // Screen 1
   age: null,
   weight: null,
@@ -105,17 +113,17 @@ interface OnboardingProviderProps {
 
 /**
  * Onboarding Provider Component
- * Manages state and validation for the 6-step onboarding flow
+ * Manages state and validation for the 7-step onboarding flow
  */
 export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
   children,
 }) => {
   const [data, setData] = useState<OnboardingData>(initialData);
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const totalSteps = 6;
+  const totalSteps = 7;
 
   /**
    * Update onboarding data with partial updates
@@ -129,6 +137,14 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
    */
   const isStepValid = (step: number): boolean => {
     switch (step) {
+      case 0:
+        // Username & Profilbild (Profilbild ist optional)
+        return !!(
+          data.username &&
+          data.username.length >= 3 &&
+          /^[a-zA-Z0-9_]+$/.test(data.username)
+        );
+
       case 1:
         // NUR Basisdaten prüfen (age, weight, height, gender)
         return !!(
@@ -181,6 +197,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
       case 6:
         // Summary screen, check all previous steps
         return (
+          isStepValid(0) &&
           isStepValid(1) &&
           isStepValid(2) &&
           isStepValid(3) &&
@@ -200,6 +217,17 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
     const errors: string[] = [];
 
     switch (step) {
+      case 0:
+        // Username & Profilbild
+        if (!data.username) {
+          errors.push('Username ist erforderlich');
+        } else if (data.username.length < 3) {
+          errors.push('Username muss mindestens 3 Zeichen lang sein');
+        } else if (!/^[a-zA-Z0-9_]+$/.test(data.username)) {
+          errors.push('Username darf nur Buchstaben, Zahlen und Unterstriche enthalten');
+        }
+        break;
+
       case 1:
         // NUR Basisdaten Fehler
         if (!data.age) {
@@ -282,6 +310,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
       case 6:
         // Check all previous steps for summary
         const allErrors = [
+          ...getStepErrors(0),
           ...getStepErrors(1),
           ...getStepErrors(2),
           ...getStepErrors(3),
@@ -325,7 +354,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
    * Move to the previous step
    */
   const previousStep = () => {
-    if (currentStep > 1) {
+    if (currentStep > 0) {
       setCurrentStep((prev) => prev - 1);
       setError(null);
     }
@@ -335,7 +364,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
    * Jump to a specific step
    */
   const goToStep = (step: number) => {
-    if (step >= 1 && step <= totalSteps) {
+    if (step >= 0 && step <= totalSteps) {
       setCurrentStep(step);
       setError(null);
     }

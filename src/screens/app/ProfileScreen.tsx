@@ -13,6 +13,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -141,11 +142,30 @@ export const ProfileScreen: React.FC = () => {
       {/* Header Section */}
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={48} color={COLORS.surface} />
-          </View>
+          {profile.profile_image_url ? (
+            <Image
+              source={{
+                uri: `${profile.profile_image_url}?t=${Date.now()}`,
+              }}
+              style={styles.avatar}
+              resizeMode="cover"
+              onError={(error) => {
+                console.error('Profile image load error:', error.nativeEvent.error);
+                console.error('Profile image URL:', profile.profile_image_url);
+              }}
+              onLoad={() => {
+                console.log('Profile image loaded successfully');
+              }}
+            />
+          ) : (
+            <View style={styles.avatar}>
+              <Ionicons name="person" size={48} color={COLORS.surface} />
+            </View>
+          )}
         </View>
-        <Text style={styles.userName}>Mein Profil</Text>
+        <Text style={styles.userName}>
+          {profile.username ? `@${profile.username}` : 'Mein Profil'}
+        </Text>
         <Text style={styles.userSubtitle}>Deine persönlichen Daten</Text>
       </View>
 

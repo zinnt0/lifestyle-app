@@ -76,7 +76,7 @@ export const Input: React.FC<InputProps> = ({
     onChangeText("");
   };
 
-  const showClear = showClearButton && value.length > 0 && !disabled;
+  const showClear = showClearButton && value && value.length > 0 && !disabled;
 
   return (
     <View style={[styles.container, style]}>

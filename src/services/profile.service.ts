@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { OnboardingData } from '../contexts/OnboardingContext';
+import { uploadProfileImage } from './storage.service';
 
 /**
  * Profile Interface
@@ -7,6 +8,8 @@ import { OnboardingData } from '../contexts/OnboardingContext';
  */
 export interface Profile {
   id: string; // UUID (matches auth.users.id)
+  username: string | null; // Unique username (min 3 chars, alphanumeric + underscore)
+  profile_image_url: string | null; // Optional profile image URL
   age: number | null;
   weight: number | null; // Decimal (kg)
   height: number | null; // Decimal (cm)
@@ -105,8 +108,18 @@ export interface IntolerancesCatalogResponse {
 const getProfileErrorMessage = (error: any): string => {
   const message = error.message?.toLowerCase() || '';
 
+  // Unique constraint errors
+  if (message.includes('unique constraint') || message.includes('duplicate key')) {
+    if (message.includes('username')) {
+      return 'Dieser Username ist bereits vergeben';
+    }
+  }
+
   // Database constraint errors
   if (message.includes('check constraint')) {
+    if (message.includes('username')) {
+      return 'Username muss mindestens 3 Zeichen lang sein und darf nur Buchstaben, Zahlen und Unterstriche enthalten';
+    }
     if (message.includes('age')) {
       return 'Alter muss zwischen 13 und 120 liegen';
     }
@@ -165,10 +178,25 @@ export const createProfile = async (
   data: OnboardingData
 ): Promise<ProfileResponse> => {
   try {
-    // 1. Update profile
+    // 1. Upload profile image if it's a local URI (starts with file://)
+    let profileImageUrl = data.profile_image_url;
+    if (profileImageUrl && profileImageUrl.startsWith('file://')) {
+      const { url, error: uploadError } = await uploadProfileImage(profileImageUrl, userId);
+      if (uploadError) {
+        console.warn('Image upload failed:', uploadError);
+        // Continue without image rather than failing completely
+        profileImageUrl = null;
+      } else {
+        profileImageUrl = url;
+      }
+    }
+
+    // 2. Update profile
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .update({
+        username: data.username,
+        profile_image_url: profileImageUrl,
         age: data.age,
         weight: data.weight,
         height: data.height,
@@ -196,7 +224,7 @@ export const createProfile = async (
       };
     }
 
-    // 2. Save intolerances if any
+    // 3. Save intolerances if any
     if (data.intolerances.length > 0) {
       const intolerancesResult = await saveUserIntolerances(
         userId,
@@ -532,4 +560,74 @@ export const getProfileCompleteness = (profile: Profile): number => {
   ).length;
 
   return Math.round((filledFields / fields.length) * 100);
+};
+
+/**
+ * Check if a username is available
+ *
+ * @param username - The username to check
+ * @param excludeUserId - Optional user ID to exclude from check (for updating own username)
+ * @returns Object with isAvailable boolean and error if any
+ *
+ * @example
+ * ```typescript
+ * const { isAvailable, error } = await isUsernameAvailable('john_doe');
+ * if (isAvailable) {
+ *   console.log('Username is available!');
+ * } else {
+ *   console.log('Username is taken');
+ * }
+ * ```
+ */
+export const isUsernameAvailable = async (
+  username: string,
+  excludeUserId?: string
+): Promise<{ isAvailable: boolean; error: ProfileError | null }> => {
+  try {
+    // Validate username format
+    if (!username || username.length < 3) {
+      return {
+        isAvailable: false,
+        error: { message: 'Username muss mindestens 3 Zeichen lang sein' },
+      };
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return {
+        isAvailable: false,
+        error: { message: 'Username darf nur Buchstaben, Zahlen und Unterstriche enthalten' },
+      };
+    }
+
+    // Check if username exists
+    let query = supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', username);
+
+    // Exclude current user if updating
+    if (excludeUserId) {
+      query = query.neq('id', excludeUserId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      return {
+        isAvailable: false,
+        error: { message: 'Fehler beim Prüfen des Usernames' },
+      };
+    }
+
+    // If data exists, username is taken
+    return {
+      isAvailable: !data,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      isAvailable: false,
+      error: { message: 'Ein Fehler ist aufgetreten' },
+    };
+  }
 };

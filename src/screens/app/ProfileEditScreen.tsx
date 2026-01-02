@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,8 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Switch,
+  Image,
+  Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { pickImage, uploadProfileImage, deleteProfileImage } from '../../services/storage.service';
 import { supabase } from '../../lib/supabase';
 import {
   getProfile,
@@ -18,7 +22,7 @@ import {
   getIntolerancesCatalog,
   Intolerance,
 } from '../../services/profile.service';
-import { Input } from '../../components/ui/Input';
+import { NumericInput } from '../../components/ui/NumericInput';
 import { Button } from '../../components/ui/Button';
 import { RadioGroup } from '../../components/ui/RadioGroup';
 import { NumberPicker } from '../../components/ui/NumberPicker';
@@ -33,6 +37,9 @@ import { OptionButton } from '../../components/ui/OptionButton';
  * Matches the structure needed for profile updates
  */
 interface ProfileFormData {
+  // Profile
+  profile_image_url: string | null;
+
   // Section 1: Basisdaten
   age: number | null;
   weight: number | null;
@@ -83,9 +90,12 @@ export const ProfileEditScreen: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [pickingImage, setPickingImage] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Form data
   const [formData, setFormData] = useState<ProfileFormData>({
+    profile_image_url: null,
     age: null,
     weight: null,
     height: null,
@@ -101,13 +111,6 @@ export const ProfileEditScreen: React.FC = () => {
     stress_level: null,
   });
 
-  // Raw input strings for numeric fields (to preserve commas/periods while typing)
-  const [inputStrings, setInputStrings] = useState({
-    age: '',
-    weight: '',
-    height: '',
-    training_experience_months: '',
-  });
 
   // Intolerances
   const [intolerances, setIntolerances] = useState<UserIntoleranceInput[]>([]);
@@ -142,6 +145,7 @@ export const ProfileEditScreen: React.FC = () => {
 
       if (profile) {
         setFormData({
+          profile_image_url: profile.profile_image_url,
           age: profile.age,
           weight: profile.weight,
           height: profile.height,
@@ -155,14 +159,6 @@ export const ProfileEditScreen: React.FC = () => {
           primary_goal: profile.primary_goal,
           sleep_hours_avg: profile.sleep_hours_avg,
           stress_level: profile.stress_level,
-        });
-
-        // Initialize input strings with loaded values
-        setInputStrings({
-          age: profile.age?.toString() || '',
-          weight: profile.weight?.toString() || '',
-          height: profile.height?.toString() || '',
-          training_experience_months: profile.training_experience_months?.toString() || '',
         });
       }
 
@@ -194,29 +190,74 @@ export const ProfileEditScreen: React.FC = () => {
 
   /**
    * Update a single form field
+   * Memoized to prevent unnecessary re-renders and input focus loss
    */
-  const updateField = (field: keyof ProfileFormData, value: any) => {
+  const updateField = useCallback((field: keyof ProfileFormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear messages on change
-    if (error) setError(null);
-    if (successMessage) setSuccessMessage(null);
-  };
+  }, []);
+
 
   /**
-   * Handle numeric input with comma/period preservation
-   * Replaces comma with period and preserves trailing decimal separator
+   * Handle image selection from media library
    */
-  const handleNumericInput = (
-    field: 'age' | 'weight' | 'height' | 'training_experience_months',
-    text: string
-  ) => {
-    // Store the raw input text (with comma replaced by period for display)
-    const displayText = text.replace(',', '.');
-    setInputStrings((prev) => ({ ...prev, [field]: displayText }));
+  const handlePickImage = async () => {
+    try {
+      setPickingImage(true);
+      const asset = await pickImage();
 
-    // Parse the numeric value
-    const numericValue = displayText === '' ? null : parseFloat(displayText) || null;
-    updateField(field, numericValue);
+      if (asset) {
+        setUploadingImage(true);
+
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('Nicht angemeldet');
+        }
+
+        // Delete old image if exists
+        if (formData.profile_image_url && formData.profile_image_url.includes('supabase')) {
+          await deleteProfileImage(formData.profile_image_url);
+        }
+
+        // Upload new image
+        const { url, error: uploadError } = await uploadProfileImage(asset.uri, user.id);
+
+        if (uploadError) {
+          throw new Error(uploadError);
+        }
+
+        if (!url) {
+          throw new Error('Keine URL vom Upload erhalten');
+        }
+
+        console.log('Upload successful, URL:', url);
+
+        // Update form data with new URL
+        updateField('profile_image_url', url);
+
+        // Save immediately to database
+        const { error: updateError } = await updateProfile(user.id, {
+          profile_image_url: url,
+        });
+
+        if (updateError) {
+          throw new Error(updateError.message);
+        }
+
+        console.log('Profile updated in database with image URL');
+
+        setSuccessMessage('Profilbild erfolgreich hochgeladen!');
+
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccessMessage(null), 3000);
+      }
+    } catch (error: any) {
+      Alert.alert('Fehler', error.message || 'Fehler beim Hochladen des Bildes');
+      setError(error.message || 'Fehler beim Hochladen des Bildes');
+    } finally {
+      setPickingImage(false);
+      setUploadingImage(false);
+    }
   };
 
   /**
@@ -396,6 +437,8 @@ export const ProfileEditScreen: React.FC = () => {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
+      keyboardShouldPersistTaps="handled"
+      removeClippedSubviews={false}
     >
       {/* Header */}
       <View style={styles.header}>
@@ -405,30 +448,84 @@ export const ProfileEditScreen: React.FC = () => {
         </Text>
       </View>
 
+      {/* Profile Image Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Profilbild</Text>
+        <View style={styles.imageSection}>
+          <TouchableOpacity
+            style={styles.imageContainer}
+            onPress={handlePickImage}
+            disabled={pickingImage || uploadingImage}
+          >
+            {uploadingImage ? (
+              <View style={styles.placeholderImage}>
+                <ActivityIndicator size="large" color="#007AFF" />
+                <Text style={styles.uploadingText}>Wird hochgeladen...</Text>
+              </View>
+            ) : formData.profile_image_url ? (
+              <Image
+                source={{
+                  uri: `${formData.profile_image_url}?t=${Date.now()}`,
+                }}
+                style={styles.profileImage}
+                resizeMode="cover"
+                onError={(error) => {
+                  console.error('Image load error:', error.nativeEvent.error);
+                  console.error('Image URL:', formData.profile_image_url);
+                  setError('Bild konnte nicht geladen werden. URL: ' + formData.profile_image_url);
+                }}
+                onLoad={() => {
+                  console.log('Image loaded successfully:', formData.profile_image_url);
+                }}
+              />
+            ) : (
+              <View style={styles.placeholderImage}>
+                <Ionicons name="camera" size={32} color="#8E8E93" />
+                <Text style={styles.placeholderText}>Bild auswählen</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {formData.profile_image_url && !uploadingImage && (
+            <TouchableOpacity
+              style={styles.removeButton}
+              onPress={async () => {
+                // Delete from storage if it's a Supabase URL
+                if (formData.profile_image_url && formData.profile_image_url.includes('supabase')) {
+                  await deleteProfileImage(formData.profile_image_url);
+                }
+                updateField('profile_image_url', null);
+              }}
+            >
+              <Text style={styles.removeButtonText}>Bild entfernen</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       {/* Section 1: Basisdaten */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Basisdaten</Text>
 
-        <Input
+        <NumericInput
           label="Alter"
-          value={inputStrings.age}
-          onChangeText={(text) => handleNumericInput('age', text)}
+          value={formData.age}
+          onValueChange={(value) => updateField('age', value)}
           keyboardType="number-pad"
           placeholder="z.B. 25"
         />
 
-        <Input
+        <NumericInput
           label="Gewicht (kg)"
-          value={inputStrings.weight}
-          onChangeText={(text) => handleNumericInput('weight', text)}
+          value={formData.weight}
+          onValueChange={(value) => updateField('weight', value)}
           keyboardType="decimal-pad"
           placeholder="z.B. 75.5"
         />
 
-        <Input
+        <NumericInput
           label="Größe (cm)"
-          value={inputStrings.height}
-          onChangeText={(text) => handleNumericInput('height', text)}
+          value={formData.height}
+          onValueChange={(value) => updateField('height', value)}
           keyboardType="decimal-pad"
           placeholder="z.B. 180"
         />
@@ -468,10 +565,10 @@ export const ProfileEditScreen: React.FC = () => {
           />
         </View>
 
-        <Input
+        <NumericInput
           label="Trainingserfahrung (Monate)"
-          value={inputStrings.training_experience_months}
-          onChangeText={(text) => handleNumericInput('training_experience_months', text)}
+          value={formData.training_experience_months}
+          onValueChange={(value) => updateField('training_experience_months', value)}
           keyboardType="number-pad"
           placeholder="z.B. 12"
         />
@@ -873,5 +970,47 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: 'transparent',
+  },
+  imageSection: {
+    marginBottom: 16,
+  },
+  imageContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F2F2F7',
+  },
+  placeholderImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F2F2F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 8,
+  },
+  uploadingText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 8,
+  },
+  removeButton: {
+    marginTop: 12,
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  removeButtonText: {
+    fontSize: 14,
+    color: '#FF3B30',
+    fontWeight: '500',
   },
 });
