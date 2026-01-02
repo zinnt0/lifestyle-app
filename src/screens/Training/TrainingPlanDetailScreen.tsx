@@ -36,15 +36,15 @@ import { getProfile } from "@/services/profile.service";
 
 // Design System Constants
 const COLORS = {
-  primary: "#4A90E2",
+  primary: "#3b82f6",
   secondary: "#7B68EE",
   success: "#34C759",
-  background: "#F5F5F5",
+  background: "#F8F9FA",
   cardBg: "#FFFFFF",
   text: "#333333",
   textSecondary: "#666666",
-  gradientStart: "#4A90E2",
-  gradientEnd: "#7B68EE",
+  gradientStart: "#3b82f6",
+  gradientEnd: "#3b82f6",
 };
 
 const SPACING = {
@@ -97,7 +97,9 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
   // State
   const [plan, setPlan] = useState<TrainingPlanDetails | null>(null);
   const [nextWorkout, setNextWorkout] = useState<PlanWorkout | null>(null);
-  const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(null);
+  const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(
+    null
+  );
   const [upcomingWorkouts, setUpcomingWorkouts] = useState<PlanWorkout[]>([]);
   const [preferredDays, setPreferredDays] = useState<number[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,16 +127,22 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
 
       // Update current week only for template-based plans (not custom plans)
       // Custom plans track weeks based on completed workouts, not dates
-      if (planDetails.start_date && planDetails.plan_type !== 'custom') {
-        const { error: updateError } = await supabase.rpc('update_plan_current_week', {
-          p_plan_id: planId
-        });
+      if (planDetails.start_date && planDetails.plan_type !== "custom") {
+        const { error: updateError } = await supabase.rpc(
+          "update_plan_current_week",
+          {
+            p_plan_id: planId,
+          }
+        );
 
         if (!updateError) {
           // Reload plan to get updated current_week
           planDetails = await trainingService.getTrainingPlanDetails(planId);
         } else {
-          console.error('Fehler beim Aktualisieren der aktuellen Woche:', updateError);
+          console.error(
+            "Fehler beim Aktualisieren der aktuellen Woche:",
+            updateError
+          );
         }
       }
 
@@ -159,7 +167,11 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
       }
 
       // Load upcoming workouts (next 5)
-      const upcoming = await trainingService.getUpcomingWorkouts(user.id, planId, 5);
+      const upcoming = await trainingService.getUpcomingWorkouts(
+        user.id,
+        planId,
+        5
+      );
       setUpcomingWorkouts(upcoming);
 
       // Load user's preferred training days
@@ -170,9 +182,7 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
     } catch (err) {
       console.error("Error loading plan details:", err);
       setError(
-        err instanceof Error
-          ? err.message
-          : "Fehler beim Laden der Plandetails"
+        err instanceof Error ? err.message : "Fehler beim Laden der Plandetails"
       );
     } finally {
       setLoading(false);
@@ -303,9 +313,10 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
   const progressPercentage = totalWeeks ? (currentWeek / totalWeeks) * 100 : 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
@@ -314,7 +325,8 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
         <View style={styles.header}>
           <Text style={styles.planName}>{plan.name}</Text>
           <Text style={styles.planInfo}>
-            {plan.days_per_week} Tage pro Woche • Woche {currentWeek}{totalWeeks ? `/${totalWeeks}` : ''}
+            {plan.days_per_week} Tage pro Woche • Woche {currentWeek}
+            {totalWeeks ? `/${totalWeeks}` : ""}
           </Text>
 
           {/* Progress Bar - only show if plan has duration */}
@@ -389,10 +401,13 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
               <Text style={styles.statIcon}>🎯</Text>
               <Text style={styles.statLabel}>Hauptziel</Text>
               <Text style={styles.statValue}>
-                {plan.primary_goal === 'strength' ? 'Kraft' :
-                 plan.primary_goal === 'hypertrophy' ? 'Muskelaufbau' :
-                 plan.primary_goal === 'endurance' ? 'Ausdauer' :
-                 'Allgemein'}
+                {plan.primary_goal === "strength"
+                  ? "Kraft"
+                  : plan.primary_goal === "hypertrophy"
+                  ? "Muskelaufbau"
+                  : plan.primary_goal === "endurance"
+                  ? "Ausdauer"
+                  : "Allgemein"}
               </Text>
             </View>
 
@@ -400,16 +415,20 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
               <Text style={styles.statIcon}>📊</Text>
               <Text style={styles.statLabel}>Fitness-Level</Text>
               <Text style={styles.statValue}>
-                {plan.fitness_level === 'beginner' ? 'Anfänger' :
-                 plan.fitness_level === 'intermediate' ? 'Fortgeschritten' :
-                 'Expert'}
+                {plan.fitness_level === "beginner"
+                  ? "Anfänger"
+                  : plan.fitness_level === "intermediate"
+                  ? "Fortgeschritten"
+                  : "Expert"}
               </Text>
             </View>
 
             <View style={styles.statCard}>
               <Text style={styles.statIcon}>📅</Text>
               <Text style={styles.statLabel}>Dauer</Text>
-              <Text style={styles.statValue}>{plan.total_weeks || plan.duration_weeks || 12} Wochen</Text>
+              <Text style={styles.statValue}>
+                {plan.total_weeks || plan.duration_weeks || 12} Wochen
+              </Text>
             </View>
 
             <View style={styles.statCard}>
@@ -430,11 +449,15 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
               <View style={styles.infoContent}>
                 <Text style={styles.infoItemLabel}>Progression</Text>
                 <Text style={styles.infoItemValue}>
-                  {plan.template?.progression_type === 'linear' ? 'Linear' :
-                   plan.template?.progression_type === 'double' ? 'Doppelt' :
-                   plan.template?.progression_type === 'undulating' ? 'Wellenförmig' :
-                   plan.template?.progression_type === 'block' ? 'Block' :
-                   plan.template?.progression_type || 'Standard'}
+                  {plan.template?.progression_type === "linear"
+                    ? "Linear"
+                    : plan.template?.progression_type === "double"
+                    ? "Doppelt"
+                    : plan.template?.progression_type === "undulating"
+                    ? "Wellenförmig"
+                    : plan.template?.progression_type === "block"
+                    ? "Block"
+                    : plan.template?.progression_type || "Standard"}
                 </Text>
               </View>
             </View>
@@ -455,8 +478,10 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
                 <View style={{ flex: 1 }}>
                   <Text style={styles.dynamicBadgeTitle}>Dynamischer Plan</Text>
                   <Text style={styles.dynamicBadgeText}>
-                    Gewichte werden automatisch basierend auf deinem 1RM berechnet
-                    {plan.tm_percentage && ` (${plan.tm_percentage}% Training Max)`}
+                    Gewichte werden automatisch basierend auf deinem 1RM
+                    berechnet
+                    {plan.tm_percentage &&
+                      ` (${plan.tm_percentage}% Training Max)`}
                   </Text>
                 </View>
               </View>
@@ -476,10 +501,10 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
                   <View style={styles.infoContent}>
                     <Text style={styles.infoItemLabel}>Startdatum</Text>
                     <Text style={styles.infoItemValue}>
-                      {new Date(plan.start_date).toLocaleDateString('de-DE', {
-                        day: '2-digit',
-                        month: 'long',
-                        year: 'numeric'
+                      {new Date(plan.start_date).toLocaleDateString("de-DE", {
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
                       })}
                     </Text>
                   </View>
@@ -494,10 +519,10 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
                   <View style={styles.infoContent}>
                     <Text style={styles.infoItemLabel}>Enddatum</Text>
                     <Text style={styles.infoItemValue}>
-                      {new Date(plan.end_date).toLocaleDateString('de-DE', {
-                        day: '2-digit',
-                        month: 'long',
-                        year: 'numeric'
+                      {new Date(plan.end_date).toLocaleDateString("de-DE", {
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
                       })}
                     </Text>
                   </View>
@@ -507,24 +532,27 @@ export const TrainingPlanDetailScreen: React.FC<Props> = ({
           )}
 
           {/* Equipment Card */}
-          {plan.template?.requires_equipment && plan.template.requires_equipment.length > 0 && (
-            <Card padding="medium" elevation="small" style={styles.infoCard}>
-              <Text style={styles.cardTitle}>Equipment</Text>
-              <View style={styles.equipmentContainer}>
-                {plan.template.requires_equipment.map((equipment, index) => (
-                  <View key={index} style={styles.equipmentChip}>
-                    <Text style={styles.equipmentText}>{equipment}</Text>
-                  </View>
-                ))}
-              </View>
-            </Card>
-          )}
+          {plan.template?.requires_equipment &&
+            plan.template.requires_equipment.length > 0 && (
+              <Card padding="medium" elevation="small" style={styles.infoCard}>
+                <Text style={styles.cardTitle}>Equipment</Text>
+                <View style={styles.equipmentContainer}>
+                  {plan.template.requires_equipment.map((equipment, index) => (
+                    <View key={index} style={styles.equipmentChip}>
+                      <Text style={styles.equipmentText}>{equipment}</Text>
+                    </View>
+                  ))}
+                </View>
+              </Card>
+            )}
 
           {/* Description Card */}
           {plan.template?.description_de && (
             <Card padding="medium" elevation="small" style={styles.infoCard}>
               <Text style={styles.cardTitle}>Über diesen Plan</Text>
-              <Text style={styles.descriptionText}>{plan.template.description_de}</Text>
+              <Text style={styles.descriptionText}>
+                {plan.template.description_de}
+              </Text>
             </Card>
           )}
         </View>
@@ -570,7 +598,7 @@ const NextWorkoutCard: React.FC<NextWorkoutCardProps> = ({
 
       <Button
         onPress={onStart}
-        variant="primary"
+        variant="secondary"
         size="large"
         style={styles.startButton}
       >
@@ -673,7 +701,7 @@ const UpcomingWorkoutCard: React.FC<UpcomingWorkoutCardProps> = ({
 
   return (
     <Card
-      padding="medium"
+      padding="large"
       elevation="small"
       style={styles.upcomingCard}
       onPress={onPress}
@@ -696,6 +724,9 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -721,6 +752,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: SPACING.lg,
+    paddingTop: SPACING.lg,
     backgroundColor: COLORS.cardBg,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5EA",
@@ -796,17 +828,25 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   startButton: {
-    backgroundColor: "#FFFFFF",
     marginTop: SPACING.md,
   },
   // Upcoming Workouts Styles
   upcomingScrollView: {
     marginHorizontal: -SPACING.lg,
     paddingHorizontal: SPACING.lg,
+    overflow: "visible",
   },
   upcomingCard: {
     width: 140,
     marginRight: SPACING.md,
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1,
+    borderColor: "rgba(59, 130, 246, 0.8)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   upcomingWorkoutName: {
     ...FONTS.h3,
@@ -914,7 +954,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 15,
     marginBottom: SPACING.xs / 2,
-    color: COLORS.primary,
+    color: "#3b82f6",
   },
   dynamicBadgeText: {
     ...FONTS.caption,

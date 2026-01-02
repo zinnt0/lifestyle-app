@@ -16,8 +16,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +26,7 @@ import { useTrainingNavigation } from "@/hooks/useTrainingNavigation";
 import { ActivePlanCard } from "@/components/training/ActivePlanCard";
 import { InactivePlanCard } from "@/components/training/InactivePlanCard";
 import { Button } from "@/components/ui/Button";
+import { AppHeader } from "@/components/ui/AppHeader";
 import type { TrainingPlan, TrainingPlanDetails } from "@/types/training.types";
 
 /**
@@ -226,7 +227,10 @@ export const TrainingDashboardScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      {/* Header - Logo left, Profile right */}
+      <AppHeader />
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
@@ -286,10 +290,11 @@ export const TrainingDashboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "transparent",
   },
   scrollView: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   contentContainer: {
     padding: 16,

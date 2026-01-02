@@ -1,32 +1,6 @@
 import React from "react";
 import { StyleSheet, Text as RNText, TextStyle, TextProps as RNTextProps } from "react-native";
-
-// Design System Constants
-const COLORS = {
-  primary: "#007AFF",
-  error: "#FF3B30",
-  success: "#34C759",
-  warning: "#FF9500",
-  text: "#000000",
-  textSecondary: "#8E8E93",
-  textTertiary: "#C7C7CC",
-};
-
-const FONTS = {
-  sizes: {
-    small: 14,
-    medium: 16,
-    large: 18,
-    xlarge: 24,
-    xxlarge: 32,
-  },
-  weights: {
-    regular: "400" as const,
-    medium: "500" as const,
-    semibold: "600" as const,
-    bold: "700" as const,
-  },
-};
+import { COLORS, TYPOGRAPHY } from './theme';
 
 type TextVariant = "heading1" | "heading2" | "heading3" | "body" | "caption" | "error";
 type TextColor = "primary" | "secondary" | "tertiary" | "error" | "success" | "warning";
@@ -82,44 +56,44 @@ export const Text: React.FC<TextComponentProps> = ({
     switch (variant) {
       case "heading1":
         return {
-          fontSize: FONTS.sizes.xxlarge,
-          fontWeight: FONTS.weights.bold,
-          lineHeight: FONTS.sizes.xxlarge * 1.2,
+          fontSize: TYPOGRAPHY.sizes.xxxl,
+          fontWeight: TYPOGRAPHY.weights.bold,
+          lineHeight: TYPOGRAPHY.sizes.xxxl * 1.25,
           color: COLORS.text,
         };
       case "heading2":
         return {
-          fontSize: FONTS.sizes.xlarge,
-          fontWeight: FONTS.weights.bold,
-          lineHeight: FONTS.sizes.xlarge * 1.2,
+          fontSize: TYPOGRAPHY.sizes.xxl,
+          fontWeight: TYPOGRAPHY.weights.bold,
+          lineHeight: TYPOGRAPHY.sizes.xxl * 1.25,
           color: COLORS.text,
         };
       case "heading3":
         return {
-          fontSize: FONTS.sizes.large,
-          fontWeight: FONTS.weights.semibold,
-          lineHeight: FONTS.sizes.large * 1.3,
+          fontSize: TYPOGRAPHY.sizes.lg,
+          fontWeight: TYPOGRAPHY.weights.semibold,
+          lineHeight: TYPOGRAPHY.sizes.lg * 1.35,
           color: COLORS.text,
         };
       case "body":
         return {
-          fontSize: FONTS.sizes.medium,
-          fontWeight: FONTS.weights.regular,
-          lineHeight: FONTS.sizes.medium * 1.5,
+          fontSize: TYPOGRAPHY.sizes.md,
+          fontWeight: TYPOGRAPHY.weights.regular,
+          lineHeight: TYPOGRAPHY.sizes.md * 1.55,
           color: COLORS.text,
         };
       case "caption":
         return {
-          fontSize: FONTS.sizes.small,
-          fontWeight: FONTS.weights.regular,
-          lineHeight: FONTS.sizes.small * 1.4,
+          fontSize: TYPOGRAPHY.sizes.sm,
+          fontWeight: TYPOGRAPHY.weights.regular,
+          lineHeight: TYPOGRAPHY.sizes.sm * 1.45,
           color: COLORS.textSecondary,
         };
       case "error":
         return {
-          fontSize: FONTS.sizes.small,
-          fontWeight: FONTS.weights.medium,
-          lineHeight: FONTS.sizes.small * 1.4,
+          fontSize: TYPOGRAPHY.sizes.sm,
+          fontWeight: TYPOGRAPHY.weights.medium,
+          lineHeight: TYPOGRAPHY.sizes.sm * 1.4,
           color: COLORS.error,
         };
     }
@@ -151,7 +125,7 @@ export const Text: React.FC<TextComponentProps> = ({
   const getWeightStyle = (): TextStyle => {
     if (!weight) return {};
 
-    return { fontWeight: FONTS.weights[weight] };
+    return { fontWeight: TYPOGRAPHY.weights[weight] };
   };
 
   return (

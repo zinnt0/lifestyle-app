@@ -11,7 +11,7 @@ interface PaginationDotsProps {
 export const PaginationDots: React.FC<PaginationDotsProps> = ({
   total,
   current,
-  color = "#4A90E2",
+  color = "#3b82f6",
   inactiveColor = "#E0E0E0",
 }) => {
   return (

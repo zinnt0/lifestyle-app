@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#4A90E2",
+    color: "#3b82f6",
     marginBottom: 4,
   },
   streakEmoji: {

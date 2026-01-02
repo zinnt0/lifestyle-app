@@ -2,7 +2,7 @@
  * Profile Screen
  *
  * Displays user profile information collected during onboarding.
- * Read-only for now - editing functionality will be added later.
+ * Modernized with design system components and improved visual hierarchy.
  */
 
 import React, { useState, useCallback } from "react";
@@ -12,18 +12,29 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 import { getProfile } from "../../services/profile.service";
 import type { Profile } from "../../services/profile.service";
 import type { MainStackParamList } from "../../navigation/types";
 import { Button } from "../../components/ui/Button";
+import { ProfileField } from "../../components/ui/ProfileField";
+import { Card } from "../../components/ui/Card";
+import {
+  COLORS,
+  SPACING,
+  TYPOGRAPHY,
+  BORDER_RADIUS,
+  SHADOWS,
+} from "../../components/ui/theme";
 
 type ProfileScreenNavigationProp = NativeStackNavigationProp<
   MainStackParamList,
-  'Profile'
+  "Profile"
 >;
 
 /**
@@ -75,102 +86,193 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
+  const handleLogout = () => {
+    Alert.alert("Abmelden", "Möchtest du dich wirklich abmelden?", [
+      { text: "Abbrechen", style: "cancel" },
+      {
+        text: "Abmelden",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await supabase.auth.signOut();
+            // Navigation wird automatisch durch Supabase Auth State Change gehandelt
+          } catch (error) {
+            Alert.alert("Fehler", "Abmeldung fehlgeschlagen");
+          }
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Profil wird geladen...</Text>
       </View>
     );
   }
 
   if (!profile) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Profil konnte nicht geladen werden</Text>
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={64} color={COLORS.error} />
+        <Text style={styles.errorTitle}>Profil nicht gefunden</Text>
+        <Text style={styles.errorSubtitle}>
+          Bitte versuche es später erneut
+        </Text>
+        <Button
+          title="Erneut laden"
+          onPress={loadProfile}
+          variant="primary"
+          size="large"
+          style={styles.retryButton}
+        />
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.title}>Dein Profil</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header Section */}
+      <View style={styles.header}>
+        <View style={styles.avatarContainer}>
+          <View style={styles.avatar}>
+            <Ionicons name="person" size={48} color={COLORS.surface} />
+          </View>
+        </View>
+        <Text style={styles.userName}>Mein Profil</Text>
+        <Text style={styles.userSubtitle}>Deine persönlichen Daten</Text>
+      </View>
+
+      {/* Basic Info Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="person-outline" size={24} color={COLORS.primary} />
+          <Text style={styles.sectionTitle}>Grunddaten</Text>
+        </View>
+
+        <Card elevation="small" padding="medium">
+          <ProfileField label="Alter" value={`${profile.age} Jahre`} />
+          <ProfileField
+            label="Geschlecht"
+            value={profile.gender || "Nicht angegeben"}
+          />
+          <ProfileField label="Gewicht" value={`${profile.weight} kg`} />
+          <ProfileField
+            label="Größe"
+            value={`${profile.height} cm`}
+            style={styles.lastField}
+          />
+        </Card>
+      </View>
+
+      {/* Fitness Info Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="barbell-outline" size={24} color={COLORS.primary} />
+          <Text style={styles.sectionTitle}>Fitness</Text>
+        </View>
+
+        <Card elevation="small" padding="medium">
+          <ProfileField
+            label="Trainingslevel"
+            value={profile.fitness_level || "Nicht angegeben"}
+          />
+          <ProfileField
+            label="Trainingserfahrung"
+            value={`${profile.training_experience_months} Monate`}
+          />
+          <ProfileField
+            label="Verfügbare Trainingstage"
+            value={`${profile.available_training_days} Tage/Woche`}
+          />
+          {profile.preferred_training_days &&
+            profile.preferred_training_days.length > 0 && (
+              <ProfileField
+                label="Bevorzugte Trainingstage"
+                value={formatPreferredDays(profile.preferred_training_days)}
+              />
+            )}
+          <ProfileField
+            label="Primäres Ziel"
+            value={profile.primary_goal || "Nicht angegeben"}
+            style={styles.lastField}
+          />
+        </Card>
+      </View>
+
+      {/* Lifestyle Info Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="bed-outline" size={24} color={COLORS.primary} />
+          <Text style={styles.sectionTitle}>Lifestyle</Text>
+        </View>
+
+        <Card elevation="small" padding="medium">
+          <ProfileField
+            label="Durchschnittlicher Schlaf"
+            value={`${profile.sleep_hours_avg} Stunden`}
+          />
+          <ProfileField
+            label="Stress-Level"
+            value={`${profile.stress_level}/10`}
+            style={styles.lastField}
+          />
+        </Card>
+      </View>
+
+      {/* Equipment Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="fitness-outline" size={24} color={COLORS.primary} />
+          <Text style={styles.sectionTitle}>Equipment</Text>
+        </View>
+
+        <Card elevation="small" padding="medium">
+          <ProfileField
+            label="Fitnessstudio-Zugang"
+            value={profile.has_gym_access ? "Ja" : "Nein"}
+          />
+          {profile.home_equipment && profile.home_equipment.length > 0 && (
+            <ProfileField
+              label="Home Equipment"
+              value={profile.home_equipment.join(", ")}
+              style={styles.lastField}
+            />
+          )}
+          {(!profile.home_equipment || profile.home_equipment.length === 0) && (
+            <Text style={styles.noEquipmentText}>
+              Kein Home Equipment angegeben
+            </Text>
+          )}
+        </Card>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.actionContainer}>
         <Button
-          title="Bearbeiten"
-          variant="outline"
-          size="small"
-          onPress={() => navigation.navigate('ProfileEdit')}
+          title="Profil bearbeiten"
+          variant="primary"
+          size="large"
+          onPress={() => navigation.navigate("ProfileEdit")}
+          style={styles.editButton}
         />
       </View>
 
-      {/* Basic Info */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Grunddaten</Text>
+      {/* Bottom Spacing */}
+      <View style={styles.bottomSpacer} />
 
-        <ProfileField label="Alter" value={`${profile.age} Jahre`} />
-        <ProfileField label="Geschlecht" value={profile.gender || "Nicht angegeben"} />
-        <ProfileField label="Gewicht" value={`${profile.weight} kg`} />
-        <ProfileField label="Größe" value={`${profile.height} cm`} />
+      {/* Logout Button at Bottom */}
+      <View style={styles.logoutContainer}>
+        <Button variant="danger" onPress={handleLogout}>
+          Ausloggen
+        </Button>
       </View>
-
-      {/* Fitness Info */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Fitness</Text>
-
-        <ProfileField
-          label="Trainingslevel"
-          value={profile.fitness_level || "Nicht angegeben"}
-        />
-        <ProfileField
-          label="Trainingserfahrung"
-          value={`${profile.training_experience_months} Monate`}
-        />
-        <ProfileField
-          label="Verfügbare Trainingstage"
-          value={`${profile.available_training_days} Tage/Woche`}
-        />
-        {profile.preferred_training_days && profile.preferred_training_days.length > 0 && (
-          <ProfileField
-            label="Bevorzugte Trainingstage"
-            value={formatPreferredDays(profile.preferred_training_days)}
-          />
-        )}
-        <ProfileField
-          label="Primäres Ziel"
-          value={profile.primary_goal || "Nicht angegeben"}
-        />
-      </View>
-
-      {/* Lifestyle Info */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Lifestyle</Text>
-
-        <ProfileField
-          label="Durchschnittlicher Schlaf"
-          value={`${profile.sleep_hours_avg} Stunden`}
-        />
-        <ProfileField
-          label="Stress-Level"
-          value={`${profile.stress_level}/10`}
-        />
-      </View>
-
-      {/* Equipment */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Equipment</Text>
-
-        <ProfileField
-          label="Fitnessstudio-Zugang"
-          value={profile.has_gym_access ? "Ja" : "Nein"}
-        />
-        {profile.home_equipment && profile.home_equipment.length > 0 && (
-          <ProfileField
-            label="Home Equipment"
-            value={profile.home_equipment.join(", ")}
-          />
-        )}
-      </View>
-
     </ScrollView>
   );
 };
@@ -180,77 +282,129 @@ export const ProfileScreen: React.FC = () => {
  * Converts day numbers to German day names
  */
 const formatPreferredDays = (days: number[]): string => {
-  const dayNames = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   return days
     .sort((a, b) => a - b)
-    .map(day => dayNames[day])
-    .join(', ');
+    .map((day) => dayNames[day])
+    .join(", ");
 };
-
-/**
- * ProfileField Component
- *
- * Reusable component for displaying a label-value pair
- */
-const ProfileField: React.FC<{ label: string; value: string | number | null }> = ({
-  label,
-  value,
-}) => (
-  <View style={styles.field}>
-    <Text style={styles.label}>{label}</Text>
-    <Text style={styles.value}>{value || "Nicht angegeben"}</Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.background,
   },
   content: {
-    padding: 24,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.xxl,
+    paddingBottom: SPACING.xxxl,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.background,
   },
-  headerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: TYPOGRAPHY.sizes.md,
+    color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.weights.medium,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 24,
+    backgroundColor: COLORS.background,
+    padding: SPACING.xxxl,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
+  errorTitle: {
+    fontSize: TYPOGRAPHY.sizes.xl,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    color: COLORS.text,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.xs,
+    textAlign: "center",
   },
+  errorSubtitle: {
+    fontSize: TYPOGRAPHY.sizes.md,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    marginBottom: SPACING.xxl,
+  },
+  retryButton: {
+    minWidth: 200,
+  },
+
+  // Header Section
+  header: {
+    alignItems: "center",
+    marginBottom: SPACING.xxxl,
+  },
+  avatarContainer: {
+    marginBottom: SPACING.lg,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    ...SHADOWS.md,
+  },
+  userName: {
+    fontSize: TYPOGRAPHY.sizes.xxl,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  userSubtitle: {
+    fontSize: TYPOGRAPHY.sizes.md,
+    color: COLORS.textSecondary,
+    fontWeight: TYPOGRAPHY.weights.medium,
+  },
+
+  // Section Styles
   section: {
-    marginBottom: 24,
+    marginBottom: SPACING.xxl,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SPACING.md,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 12,
-    color: "#000000",
+    fontSize: TYPOGRAPHY.sizes.lg,
+    fontWeight: TYPOGRAPHY.weights.semibold,
+    color: COLORS.text,
+    marginLeft: SPACING.sm,
   },
-  field: {
-    marginBottom: 12,
+
+  // Field Styles
+  lastField: {
+    marginBottom: 0,
   },
-  label: {
-    fontSize: 14,
-    color: "#8E8E93",
-    marginBottom: 4,
+  noEquipmentText: {
+    fontSize: TYPOGRAPHY.sizes.sm,
+    color: COLORS.textTertiary,
+    fontStyle: "italic",
   },
-  value: {
-    fontSize: 16,
-    color: "#000000",
-    fontWeight: "500",
+
+  // Action Buttons
+  actionContainer: {
+    marginTop: SPACING.lg,
   },
-  errorText: {
-    fontSize: 16,
-    color: "#FF3B30",
-    textAlign: "center",
+  editButton: {
+    marginBottom: SPACING.md,
+  },
+  bottomSpacer: {
+    height: SPACING.xxxl,
+  },
+  logoutContainer: {
+    marginBottom: SPACING.xxl,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
 });

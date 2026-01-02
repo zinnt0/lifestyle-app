@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { COLORS, SPACING, TYPOGRAPHY, SHADOWS, BORDER_RADIUS } from './theme';
 
 interface GoalCardProps {
   /** Goal label/title */
@@ -65,64 +66,49 @@ export const GoalCard: React.FC<GoalCardProps> = ({
   );
 };
 
-const COLORS = {
-  primary: '#007AFF',
-  success: '#34C759',
-  text: '#000000',
-  textSecondary: '#8E8E93',
-  border: '#C6C6C8',
-  borderLight: '#E5E5EA',
-  background: '#FFFFFF',
-  backgroundSecondary: '#F2F2F7',
-};
-
-const SPACING = {
-  sm: 8,
-  md: 16,
-  lg: 24,
-};
-
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.md,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: COLORS.borderLight,
-    borderRadius: 16,
-    backgroundColor: COLORS.background,
+    padding: SPACING.xl,
+    marginBottom: SPACING.lg,
+    borderWidth: 0,
+    borderRadius: BORDER_RADIUS.xxl,
+    backgroundColor: COLORS.surface,
+    ...SHADOWS.md,
   },
   cardSelected: {
+    backgroundColor: `${COLORS.primary}08`,
+    borderWidth: 2,
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.backgroundSecondary,
+    ...SHADOWS.lg,
   },
   iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: COLORS.backgroundSecondary,
+    width: 56,
+    height: 56,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: `${COLORS.primary}12`,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: SPACING.md,
+    marginRight: SPACING.lg,
   },
   icon: {
-    fontSize: 32,
+    fontSize: 28,
   },
   content: {
     flex: 1,
   },
   label: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.sizes.lg,
+    fontWeight: TYPOGRAPHY.weights.bold,
     color: COLORS.text,
-    marginBottom: 4,
+    marginBottom: SPACING.xs,
   },
   labelSelected: {
     color: COLORS.primary,
   },
   description: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.sizes.sm,
     color: COLORS.textSecondary,
   },
   descriptionSelected: {
@@ -131,14 +117,14 @@ const styles = StyleSheet.create({
   checkmark: {
     width: 28,
     height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.success,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkmarkText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.background,
+    fontSize: TYPOGRAPHY.sizes.md,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    color: COLORS.white,
   },
 });

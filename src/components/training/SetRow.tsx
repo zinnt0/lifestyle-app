@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
   percentageBadge: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#4A90E2",
+    color: "#3b82f6",
     backgroundColor: "#E3F2FD",
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   },
   setNotesText: {
     fontSize: 12,
-    color: "#4A90E2",
+    color: "#3b82f6",
     fontStyle: "italic",
     marginTop: 2,
   },

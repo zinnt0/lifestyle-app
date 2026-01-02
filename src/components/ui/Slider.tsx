@@ -5,6 +5,7 @@ import {
   Text,
 } from 'react-native';
 import RNSlider from '@react-native-community/slider';
+import { COLORS, SPACING, TYPOGRAPHY } from './theme';
 
 interface SliderProps {
   /** Current value */
@@ -93,49 +94,38 @@ export const Slider: React.FC<SliderProps> = ({
   );
 };
 
-const COLORS = {
-  primary: '#007AFF',
-  text: '#000000',
-  textSecondary: '#8E8E93',
-  borderLight: '#E5E5EA',
-};
-
-const SPACING = {
-  sm: 8,
-  md: 16,
-};
-
 const styles = StyleSheet.create({
   container: {
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: TYPOGRAPHY.weights.semibold,
     color: COLORS.text,
   },
   value: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.sizes.lg,
+    fontWeight: TYPOGRAPHY.weights.bold,
     color: COLORS.primary,
   },
   slider: {
     width: '100%',
-    height: 40,
+    height: 44,
   },
   labels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
+    paddingHorizontal: SPACING.xs,
+    marginTop: SPACING.xs,
   },
   labelText: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.sizes.xs,
     color: COLORS.textSecondary,
   },
 });

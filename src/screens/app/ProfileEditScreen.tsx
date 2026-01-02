@@ -26,6 +26,7 @@ import { MultiSelectChips } from '../../components/ui/MultiSelectChips';
 import { WeekdaySelector } from '../../components/ui/WeekdaySelector';
 import { GoalCard } from '../../components/ui/GoalCard';
 import { Slider } from '../../components/ui/Slider';
+import { OptionButton } from '../../components/ui/OptionButton';
 
 /**
  * Profile Form Data Interface
@@ -701,25 +702,6 @@ const getSeverityLabel = (severity: string): string => {
   return labels[severity] || severity;
 };
 
-/**
- * OptionButton Component
- * Used for fitness level selection
- */
-const OptionButton: React.FC<{
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}> = ({ label, selected, onPress }) => (
-  <TouchableOpacity
-    style={[styles.optionButton, selected && styles.optionButtonSelected]}
-    onPress={onPress}
-  >
-    <Text style={[styles.optionText, selected && styles.optionTextSelected]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
 // Styles
 const styles = StyleSheet.create({
   container: {
@@ -785,26 +767,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 16,
-  },
-  optionButton: {
-    flex: 1,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#C6C6C8',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  optionButtonSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  optionText: {
-    fontSize: 14,
-    color: '#000000',
-  },
-  optionTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '600',
   },
   toggleRow: {
     flexDirection: 'row',

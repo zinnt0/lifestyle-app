@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { COLORS, BORDER_RADIUS } from './theme';
 
 interface ProgressBarProps {
   /** Progress percentage (0-100) */
@@ -24,7 +25,7 @@ interface ProgressBarProps {
  */
 export const ProgressBar: React.FC<ProgressBarProps> = ({
   progress,
-  height = 4,
+  height = 8,
   backgroundColor = COLORS.borderLight,
   fillColor = COLORS.primary,
 }) => {
@@ -54,19 +55,14 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   );
 };
 
-const COLORS = {
-  primary: '#007AFF',
-  borderLight: '#E5E5EA',
-};
-
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    borderRadius: 2,
+    borderRadius: BORDER_RADIUS.full,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: BORDER_RADIUS.full,
   },
 });

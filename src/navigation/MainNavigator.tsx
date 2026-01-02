@@ -36,8 +36,7 @@ export const MainNavigator: React.FC = () => {
         name="Home"
         component={HomeScreen}
         options={{
-          title: "Lifestyle App",
-          headerLargeTitle: true,
+          headerShown: false,
         }}
       />
       <Stack.Screen

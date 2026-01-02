@@ -4,25 +4,10 @@ import {
   View,
   ViewStyle,
   StyleProp,
-  Platform,
   TouchableOpacity,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-
-// Design System Constants
-const COLORS = {
-  background: "#FFFFFF",
-  border: "#C6C6C8",
-  borderLight: "#E5E5EA",
-};
-
-const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-};
+import { COLORS, SPACING, SHADOWS, BORDER_RADIUS } from "./theme";
 
 type CardPadding = "none" | "small" | "medium" | "large";
 type CardElevation = "none" | "small" | "medium" | "large";
@@ -60,7 +45,7 @@ interface CardProps {
  * </Card>
  *
  * // Gradient card
- * <Card gradient gradientColors={["#4A90E2", "#7B68EE"]}>
+ * <Card gradient gradientColors={["#3B6FF8", "#43C59E"]}>
  *   <Text style={{ color: "#fff" }}>Gradient Card</Text>
  * </Card>
  *
@@ -78,7 +63,7 @@ export const Card: React.FC<CardProps> = ({
   style,
   onPress,
   gradient = false,
-  gradientColors = ["#4A90E2", "#7B68EE"],
+  gradientColors = [COLORS.primary, COLORS.secondary],
 }) => {
   // Handle legacy 'elevated' prop
   const effectiveElevation = elevated ? "medium" : elevation;
@@ -97,50 +82,21 @@ export const Card: React.FC<CardProps> = ({
   };
 
   const getElevationStyle = (): ViewStyle => {
-    if (Platform.OS === "ios") {
-      // iOS shadow
-      switch (effectiveElevation) {
-        case "none":
-          return {};
-        case "small":
-          return {
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.05,
-            shadowRadius: 2,
-          };
-        case "medium":
-          return {
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-          };
-        case "large":
-          return {
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-          };
-      }
-    } else {
-      // Android elevation
-      switch (effectiveElevation) {
-        case "none":
-          return { elevation: 0 };
-        case "small":
-          return { elevation: 2 };
-        case "medium":
-          return { elevation: 4 };
-        case "large":
-          return { elevation: 8 };
-      }
+    switch (effectiveElevation) {
+      case "none":
+        return SHADOWS.none;
+      case "small":
+        return SHADOWS.sm;
+      case "medium":
+        return SHADOWS.md;
+      case "large":
+        return SHADOWS.lg;
     }
   };
 
   const cardStyle = [
     styles.card,
+    gradient && { overflow: "hidden" as const }, // Only clip overflow for gradients
     !gradient && getPaddingStyle(), // Don't apply padding to outer container if gradient
     !gradient && getElevationStyle(),
     style,
@@ -187,15 +143,13 @@ export const Card: React.FC<CardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
-    borderWidth: Platform.OS === "android" ? 1 : 0,
-    borderColor: COLORS.borderLight,
-    marginVertical: 8,
-    overflow: "hidden", // Important for gradient clipping
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.xxl,
+    borderWidth: 0,
+    marginVertical: SPACING.md,
   },
   gradient: {
-    borderRadius: 16,
+    borderRadius: BORDER_RADIUS.xxl,
   },
   content: {
     // Content wrapper for gradient cards

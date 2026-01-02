@@ -8,35 +8,7 @@ import {
   TextInputProps,
   ViewStyle,
 } from "react-native";
-
-// Design System Constants
-const COLORS = {
-  primary: "#007AFF",
-  error: "#FF3B30",
-  text: "#000000",
-  textSecondary: "#8E8E93",
-  textTertiary: "#C7C7CC",
-  border: "#C6C6C8",
-  borderLight: "#E5E5EA",
-  background: "#FFFFFF",
-  disabled: "#C7C7CC",
-};
-
-const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-};
-
-const FONTS = {
-  sizes: {
-    small: 14,
-    medium: 16,
-  },
-  weights: {
-    medium: "500" as const,
-  },
-};
+import { COLORS, SPACING, TYPOGRAPHY, SHADOWS, BORDER_RADIUS } from "./theme";
 
 interface InputProps extends Omit<TextInputProps, "style"> {
   /** Input value */
@@ -168,79 +140,84 @@ export const Input: React.FC<InputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   label: {
-    fontSize: FONTS.sizes.small,
-    fontWeight: FONTS.weights.medium,
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: TYPOGRAPHY.weights.semibold,
     color: COLORS.text,
     marginBottom: SPACING.sm,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
+    borderColor: COLORS.borderLight,
+    borderRadius: BORDER_RADIUS.lg,
   },
   inputContainerFocused: {
     borderColor: COLORS.primary,
     borderWidth: 2,
+    ...SHADOWS.sm,
   },
   inputContainerError: {
     borderColor: COLORS.error,
   },
   inputContainerDisabled: {
     backgroundColor: COLORS.borderLight,
-    borderColor: COLORS.disabled,
+    borderColor: COLORS.borderLight,
   },
   input: {
     flex: 1,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-    fontSize: FONTS.sizes.medium,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 14,
+    fontSize: TYPOGRAPHY.sizes.md,
     color: COLORS.text,
   },
   inputWithLeftIcon: {
-    paddingLeft: SPACING.xs,
+    paddingLeft: SPACING.sm,
   },
   inputWithRightIcon: {
-    paddingRight: SPACING.xs,
+    paddingRight: SPACING.sm,
   },
   inputMultiline: {
     minHeight: 80,
     textAlignVertical: "top",
-    paddingTop: 12,
+    paddingTop: 14,
   },
   inputDisabled: {
     color: COLORS.textSecondary,
   },
   leftIconContainer: {
-    paddingLeft: 12,
+    paddingLeft: SPACING.lg,
     justifyContent: "center",
     alignItems: "center",
   },
   rightIconContainer: {
-    paddingRight: 12,
+    paddingRight: SPACING.lg,
     justifyContent: "center",
     alignItems: "center",
   },
   clearButton: {
-    paddingRight: 12,
-    paddingLeft: SPACING.sm,
+    marginRight: SPACING.sm,
+    marginLeft: SPACING.sm,
+    width: 28,
+    height: 28,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.borderLight,
     justifyContent: "center",
     alignItems: "center",
   },
   clearButtonText: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.sizes.md,
     color: COLORS.textSecondary,
-    fontWeight: "600",
+    fontWeight: TYPOGRAPHY.weights.semibold,
   },
   errorText: {
     color: COLORS.error,
-    fontSize: 12,
-    marginTop: SPACING.xs,
-    marginLeft: SPACING.xs,
+    fontSize: TYPOGRAPHY.sizes.xs,
+    marginTop: SPACING.sm,
+    marginLeft: SPACING.sm,
   },
 });

@@ -31,8 +31,8 @@ interface ProgressBarProps {
  */
 export const ProgressBar: React.FC<ProgressBarProps> = ({
   progress,
-  color = "#4CAF50",
-  backgroundColor = "#E0E0E0",
+  color = "#43C59E",
+  backgroundColor = "#EDF1F7",
   height = 8,
   animated = true,
 }) => {
@@ -71,11 +71,13 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    borderRadius: 4,
+    borderRadius: 999,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 242, 0.9)",
   },
   fill: {
     height: "100%",
-    borderRadius: 4,
+    borderRadius: 999,
   },
 });

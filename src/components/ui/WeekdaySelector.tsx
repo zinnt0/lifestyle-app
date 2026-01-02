@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { COLORS, SPACING, TYPOGRAPHY, SHADOWS, BORDER_RADIUS } from './theme';
 
 interface WeekdaySelectorProps {
   selectedDays: number[]; // Array of day numbers: 0=Sunday, 1=Monday, ..., 6=Saturday
@@ -24,23 +25,6 @@ const WEEKDAYS = [
   { id: 6, short: 'Sa', full: 'Samstag' },
   { id: 0, short: 'So', full: 'Sonntag' },
 ];
-
-const COLORS = {
-  primary: '#007AFF',
-  border: '#C6C6C8',
-  borderLight: '#E5E5EA',
-  text: '#000000',
-  textSecondary: '#8E8E93',
-  background: '#FFFFFF',
-  backgroundSecondary: '#F2F2F7',
-  disabled: '#E5E5EA',
-};
-
-const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-};
 
 export const WeekdaySelector: React.FC<WeekdaySelectorProps> = ({
   selectedDays,
@@ -122,33 +106,34 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: COLORS.borderLight,
-    backgroundColor: COLORS.background,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceSecondary,
   },
   dayButtonSelected: {
-    borderColor: COLORS.primary,
+    borderColor: COLORS.primaryLight,
     backgroundColor: COLORS.primary,
+    ...SHADOWS.md,
   },
   dayButtonDisabled: {
     borderColor: COLORS.borderLight,
-    backgroundColor: COLORS.disabled,
+    backgroundColor: COLORS.textDisabled,
     opacity: 0.5,
   },
   dayText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: TYPOGRAPHY.weights.semibold,
     color: COLORS.text,
   },
   dayTextSelected: {
-    color: COLORS.background,
+    color: COLORS.white,
   },
   dayTextDisabled: {
     color: COLORS.textSecondary,
   },
   hint: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.sizes.xs,
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginTop: SPACING.xs,

@@ -68,7 +68,7 @@ export const PausedSessionCard: React.FC<PausedSessionCardProps> = ({
   return (
     <Card
       gradient
-      gradientColors={["#FF9500", "#FF6B35"]}
+      gradientColors={["#5B9EFF", "#7DB9FF"]}
       padding="large"
       elevation="medium"
       style={styles.card}
@@ -179,6 +179,6 @@ const styles = StyleSheet.create({
   resumeButtonText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#FF9500",
+    color: "#5B9EFF",
   },
 });
