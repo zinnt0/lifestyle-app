@@ -95,13 +95,14 @@ export const SetRow: React.FC<SetRowProps> = ({
       if (weight && reps) {
         const weightNum = parseFloat(weight);
         const repsNum = parseInt(reps);
-        const rirNum = rir && rir.trim() !== '' ? parseInt(rir) : undefined;
+        const rirNum = rir && rir.trim() !== "" ? parseInt(rir) : undefined;
 
         // Validate RIR is in valid range (0-5) if provided
         if (!isNaN(weightNum) && !isNaN(repsNum)) {
-          const validRir = rirNum !== undefined && !isNaN(rirNum) && rirNum >= 0 && rirNum <= 5
-            ? rirNum
-            : undefined;
+          const validRir =
+            rirNum !== undefined && !isNaN(rirNum) && rirNum >= 0 && rirNum <= 5
+              ? rirNum
+              : undefined;
           onLog(weightNum, repsNum, validRir);
         }
       }
@@ -121,13 +122,14 @@ export const SetRow: React.FC<SetRowProps> = ({
 
     const weightNum = parseFloat(weight);
     const repsNum = parseInt(reps);
-    const rirNum = rir && rir.trim() !== '' ? parseInt(rir) : undefined;
+    const rirNum = rir && rir.trim() !== "" ? parseInt(rir) : undefined;
 
     // Validate RIR is in valid range (0-5) if provided
     if (!isNaN(weightNum) && !isNaN(repsNum)) {
-      const validRir = rirNum !== undefined && !isNaN(rirNum) && rirNum >= 0 && rirNum <= 5
-        ? rirNum
-        : undefined;
+      const validRir =
+        rirNum !== undefined && !isNaN(rirNum) && rirNum >= 0 && rirNum <= 5
+          ? rirNum
+          : undefined;
       onLog(weightNum, repsNum, validRir);
     }
   };
@@ -152,15 +154,14 @@ export const SetRow: React.FC<SetRowProps> = ({
             {percentageLabel && (
               <Text style={styles.percentageBadge}>{percentageLabel}</Text>
             )}
-            {isAMRAP && (
-              <Text style={styles.amrapBadge}>AMRAP</Text>
-            )}
+            {isAMRAP && <Text style={styles.amrapBadge}>AMRAP</Text>}
           </View>
 
           {isCompleted ? (
             <View style={styles.completedInfo}>
               <Text style={styles.completedText}>
-                ✓ {completedSet.weight}kg × {completedSet.reps}{isAMRAP && '+'}
+                ✓ {completedSet.weight}kg × {completedSet.reps}
+                {isAMRAP && "+"}
               </Text>
               {completedSet.rir !== undefined && (
                 <Text style={styles.rirText}>RiR {completedSet.rir}</Text>
@@ -169,7 +170,8 @@ export const SetRow: React.FC<SetRowProps> = ({
           ) : isPending ? (
             <View style={styles.completedInfo}>
               <Text style={styles.pendingText}>
-                ○ {pendingSet!.weight}kg × {pendingSet!.reps}{isAMRAP && '+'}
+                ○ {pendingSet!.weight}kg × {pendingSet!.reps}
+                {isAMRAP && "+"}
               </Text>
               {pendingSet!.rir !== undefined && (
                 <Text style={styles.rirText}>RiR {pendingSet!.rir}</Text>
@@ -177,10 +179,18 @@ export const SetRow: React.FC<SetRowProps> = ({
             </View>
           ) : (
             <>
-              {(targetWeight !== undefined && targetWeight !== null) || (targetReps !== undefined && targetReps !== null) ? (
+              {(targetWeight !== undefined && targetWeight !== null) ||
+              (targetReps !== undefined && targetReps !== null) ? (
                 <Text style={styles.targetText}>
-                  Soll: {targetWeight !== undefined && targetWeight !== null ? `${targetWeight.toFixed(1)}kg` : '-'} × {targetReps ?? '-'}{isAMRAP && '+'}
-                  {rirTarget !== undefined && rirTarget !== null && ` @ RiR ${rirTarget}`}
+                  Soll:{" "}
+                  {targetWeight !== undefined && targetWeight !== null
+                    ? `${targetWeight.toFixed(1)}kg`
+                    : "-"}{" "}
+                  × {targetReps ?? "-"}
+                  {isAMRAP && "+"}
+                  {rirTarget !== undefined &&
+                    rirTarget !== null &&
+                    ` @ RiR ${rirTarget}`}
                 </Text>
               ) : null}
               {setNotes && (
@@ -196,12 +206,19 @@ export const SetRow: React.FC<SetRowProps> = ({
       {/* Expanded Content */}
       {isExpanded && (
         <View style={styles.expandedContent}>
-          {(targetWeight !== undefined && targetWeight !== null) || (targetReps !== undefined && targetReps !== null) ? (
+          {(targetWeight !== undefined && targetWeight !== null) ||
+          (targetReps !== undefined && targetReps !== null) ? (
             <View style={styles.targetInfo}>
               <Text style={styles.label}>Ziel:</Text>
               <Text style={styles.value}>
-                {targetWeight !== undefined && targetWeight !== null ? `${targetWeight.toFixed(1)}kg` : '-'} × {targetReps ?? '-'}{isAMRAP && '+'}
-                {rirTarget !== undefined && rirTarget !== null && ` @ RiR ${rirTarget}`}
+                {targetWeight !== undefined && targetWeight !== null
+                  ? `${targetWeight.toFixed(1)}kg`
+                  : "-"}{" "}
+                × {targetReps ?? "-"}
+                {isAMRAP && "+"}
+                {rirTarget !== undefined &&
+                  rirTarget !== null &&
+                  ` @ RiR ${rirTarget}`}
               </Text>
             </View>
           ) : null}
@@ -242,13 +259,19 @@ export const SetRow: React.FC<SetRowProps> = ({
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>RiR - Reps in Reserve (optional)</Text>
+            <Text style={styles.inputLabel}>
+              RiR - Reps in Reserve (optional)
+            </Text>
             <TextInput
               value={rir}
               onChangeText={setRir}
               onBlur={handleAutoSave}
               keyboardType="numeric"
-              placeholder={rirTarget !== null && rirTarget !== undefined ? rirTarget.toString() : "0-5"}
+              placeholder={
+                rirTarget !== null && rirTarget !== undefined
+                  ? rirTarget.toString()
+                  : "0-5"
+              }
               style={[styles.input, styles.rirInput]}
             />
           </View>
@@ -260,25 +283,29 @@ export const SetRow: React.FC<SetRowProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 4,
+    marginVertical: 6,
+    overflow: "visible",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     padding: 16,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderWidth: 0,
+    // Shadow
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
   headerCompleted: {
     backgroundColor: "#E8F5E9",
-    borderColor: "#70e0ba",
   },
   headerPending: {
     backgroundColor: "#E3F2FD",
-    borderColor: "#3083FF",
   },
   headerContent: {
     flex: 1,
