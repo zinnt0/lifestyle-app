@@ -1,8 +1,8 @@
 # Lifestyle App - Fitness & Nutrition Tracker
 
-**Last Updated:** 2025-12-30
+**Last Updated:** 2026-01-02
 **Project Type:** React Native (Expo) Lifestyle Application
-**Branch:** feature/training-section
+**Branch:** main
 **Status:** Active Development
 
 ---
@@ -36,8 +36,9 @@ lifestyle-app/
 │   ├── lib/                    # Third-party library configs
 │   │   └── supabase.ts         # ✅ Supabase client mit AsyncStorage
 │   ├── components/
-│   │   ├── ui/                 # ✅ 13 UI Components (Reusable)
-│   │   └── training/           # ✅ Training feature components (NEW)
+│   │   ├── ui/                 # ✅ 23+ UI Components (Reusable) + theme.ts
+│   │   ├── app/                # ✅ App-specific components (RecoveryCard, etc.)
+│   │   └── training/           # ✅ Training feature components
 │   ├── screens/
 │   │   ├── Training/           # ✅ Training screens (NEW)
 │   │   ├── onboarding/         # ✅ 6 Onboarding Screens + Summary
@@ -52,8 +53,9 @@ lifestyle-app/
 │   │   └── calorieCalculationService.ts  # ✅ Calorie calculations (NEW)
 │   ├── utils/                  # Utility functions & helpers
 │   │   ├── validation.ts       # ✅ Form validation functions
-│   │   ├── planRecommendationScoring.ts  # ✅ 4D Scoring Algorithm (NEW)
-│   │   └── recommendationAnalytics.ts    # ✅ Analytics System (NEW)
+│   │   ├── emojiHelpers.ts     # ✅ Emoji processing utilities
+│   │   ├── planRecommendationScoring.ts  # ✅ 4D Scoring Algorithm
+│   │   └── recommendationAnalytics.ts    # ✅ Analytics System
 │   ├── contexts/               # React Context providers
 │   │   └── OnboardingContext.tsx  # ✅ 6-step onboarding state
 │   ├── hooks/                  # Custom React hooks
@@ -83,11 +85,284 @@ lifestyle-app/
 
 ---
 
-## Recent Major Changes (December 2024 - January 2025)
+## Recent Major Changes (December 2024 - January 2026)
+
+### UI Modernization (Feature Branch: feature/ui-modernization) ⭐ NEW
+
+**Date:** 2026-01-02
+**Status:** ✅ Merged to main
+
+Eine umfassende UI-Modernisierung mit zentralisiertem Theme-System, neuen wiederverwendbaren Komponenten und konsistentem Design über die gesamte App.
+
+#### 1. Centralized Theme System
+
+**Location:** `src/components/ui/theme.ts`
+
+**Features:**
+- **Unified Color Palette:**
+  - Primary Colors (blue-500, blue-600, blue-700)
+  - Semantic Colors (success, warning, error, info)
+  - Neutral Palette (gray shades)
+  - Background & Surface Colors
+  - Brand Colors (MODO brand integration)
+- **Typography System:**
+  - Font sizes (xs: 12, sm: 14, md: 16, lg: 18, xl: 20, 2xl: 24, 3xl: 30, 4xl: 36)
+  - Font weights (normal, medium, semibold, bold)
+  - Line heights optimized for readability
+- **Spacing Scale:**
+  - Consistent spacing (xs: 4, sm: 8, md: 12, lg: 16, xl: 20, 2xl: 24, 3xl: 32, 4xl: 40, 5xl: 48)
+- **Shadow Definitions:**
+  - sm, md, lg, xl shadows for elevation
+- **Border Radius:**
+  - xs: 4, sm: 6, md: 8, lg: 12, xl: 16, 2xl: 20, full: 9999
+
+**Benefits:**
+- Single source of truth für Design-Tokens
+- Konsistente UI über alle Screens
+- Einfache Theme-Anpassungen
+- Bessere Wartbarkeit
+
+#### 2. New UI Components (10+ Components)
+
+**Location:** `src/components/ui/`
+
+**New Components:**
+
+- **ActivityChip.tsx**
+  - Visual chip für Activity/Recovery Tracking
+  - Color-coded (gray, blue, green, orange, red variants)
+  - Icon Support (text-based icons)
+  - Verwendung: Recovery Activities, Tags
+
+- **Alert.tsx**
+  - Professional Alert/Banner Component
+  - 4 Variants: info, success, warning, error
+  - Icon Integration
+  - Dismissable Option
+  - Accessibility-ready
+
+- **AppHeader.tsx**
+  - App-wide Header Component
+  - Logo Support (MODO Logo)
+  - Gradient Background
+  - Consistent Branding
+
+- **FormGroup.tsx**
+  - Form Field Wrapper
+  - Label + Input + Error Message
+  - Required Field Indicator
+  - Helper Text Support
+  - Validation State Styling
+
+- **InfoBox.tsx**
+  - Information Display Box
+  - 4 Variants: info, success, warning, error
+  - Icon Support
+  - Title + Message Layout
+  - Collapsible Option
+
+- **OptionButton.tsx**
+  - Selectable Option Button
+  - Selected State Styling
+  - Icon Support
+  - Checkmark Indicator
+  - Verwendung: Multi-choice selections
+
+- **PageHeader.tsx**
+  - Page-level Header
+  - Title + Subtitle
+  - Back Button Support
+  - Action Buttons
+  - Gradient Option
+
+- **ProfileField.tsx**
+  - Profile Information Display Field
+  - Label + Value Layout
+  - Icon Support
+  - Editable Indicator
+  - Verwendung: ProfileScreen
+
+- **SectionTitle.tsx**
+  - Section Header Component
+  - Title + Optional Action
+  - Divider Line
+  - Count Badge Support
+  - Consistent Typography
+
+- **StatsCard.tsx**
+  - Statistics Display Card
+  - Icon + Label + Value Layout
+  - Color-coded Values
+  - Trend Indicators (↑↓)
+  - Verwendung: Dashboards, Analytics
+
+**Updated Components:**
+
+- **Button.tsx** - Modernized with theme integration, better variants
+- **Card.tsx** - Simplified with theme system, elevation support
+- **Input.tsx** - Enhanced validation states, better accessibility
+- **Text.tsx** - Full typography system integration
+- **MultiSelectChips.tsx** - Theme colors, better touch targets
+- **NumberPicker.tsx** - Improved styling, haptic feedback
+- **RadioGroup.tsx** - Theme integration, better spacing
+- **Slider.tsx** - Modern design, better labels
+- **WeekdaySelector.tsx** - Theme colors, improved UX
+- **ProgressBar.tsx** - Animated, theme colors
+- **GoalCard.tsx** - Modernized design, better icons
+
+#### 3. App-Specific Components
+
+**Location:** `src/components/app/`
+
+**New Directory für app-specific components:**
+
+- **RecoveryCard.tsx** ⭐ NEW
+  - Dedicated Recovery Status Display
+  - Color-coded Score Display (Green/Blue/Yellow/Orange/Red)
+  - Recovery Trend Indicator
+  - Action Button (Navigate to Check-in)
+  - Integration mit Recovery Service
+  - Verwendung: HomeScreen
+
+**Index Export:** `src/components/app/index.ts`
+
+#### 4. Training Components Updates
+
+**Location:** `src/components/training/`
+
+**Updated Components:**
+
+- **ActivePlanCard.tsx** - Theme integration, modern card design
+- **InactivePlanCard.tsx** - Consistent styling with ActivePlanCard
+- **PausedSessionCard.tsx** - Theme colors, better CTA buttons
+- **QuickWorkoutAction.tsx** - Modernized action button
+- **ProgressBar.tsx** - Animated, theme-based colors
+- **AlternativesModal.tsx** - Theme integration
+- **EstimateOneRMModal.tsx** - Consistent modal styling
+- **FitnessStats.tsx** - StatsCard integration
+- **HistoricalPerformance.tsx** - Chart color updates
+- **SetRow.tsx** - Better input styling
+- **WorkoutPerformanceComparison.tsx** - Theme colors
+- **PaginationDots.tsx** - Theme integration
+
+**Export Update:** Alle Components exportiert via `src/components/training/index.ts`
+
+#### 5. Screen Modernization
+
+**Updated Screens:**
+
+- **ProfileScreen.tsx** ⭐ MAJOR UPDATE
+  - Complete redesign with AppHeader
+  - ProfileField Components für alle Felder
+  - SectionTitle für strukturierte Sections
+  - StatsCard für Training Stats
+  - InfoBox für wichtige Informationen
+  - Alert für Fehlermeldungen
+  - Moderne Card-basierte Layouts
+  - Improved Navigation
+
+- **HomeScreen.tsx** ⭐ UPDATED
+  - AppHeader Integration
+  - RecoveryCard Integration
+  - SectionTitle Usage
+  - StatsCard für Quick Stats
+  - Modernized Card Layouts
+  - Better Information Hierarchy
+
+- **DailyCheckinScreen.tsx** ⭐ UPDATED
+  - FormGroup Integration
+  - Alert Component für Feedback
+  - InfoBox für Instructions
+  - Theme-based Color Coding
+  - Improved Form Layout
+
+- **ProfileEditScreen.tsx** ⭐ UPDATED
+  - FormGroup für alle Input Fields
+  - Alert Component für Validation Errors
+  - OptionButton für Selections
+  - Better Form Structure
+
+- **TrainingDashboardScreen.tsx** ⭐ UPDATED
+  - SectionTitle Integration
+  - StatsCard für Training Metrics
+  - Modernized Card Layouts
+
+- **TrainingPlanDetailScreen.tsx** ⭐ UPDATED
+  - Theme System Integration
+  - StatsCard Grid für Plan Details
+  - InfoBox für Dynamic Plan Badge
+  - Modernized Information Display
+  - Better Visual Hierarchy
+
+#### 6. Navigation Updates
+
+**Updated Navigators:**
+
+- **MainNavigator.tsx**
+  - Header styling mit theme colors
+  - Consistent navigation design
+
+- **TrainingStackNavigator.tsx**
+  - Theme-based header colors
+  - Unified navigation experience
+
+#### 7. Utilities & Helpers
+
+**New Utilities:**
+
+- **emojiHelpers.ts** ⭐ NEW
+  - `removeEmojis(text: string)` - Entfernt Emojis aus Text
+  - `extractEmojis(text: string)` - Extrahiert nur Emojis
+  - `hasEmojis(text: string)` - Prüft ob Text Emojis enthält
+  - Verwendung: Text Processing, Display Logic
+
+#### 8. Assets
+
+**New Assets:**
+
+- **MODO_Logo.png** ⭐ NEW
+  - Brand Logo (117KB PNG)
+  - High-resolution für Retina Displays
+  - Verwendung: AppHeader, Splash Screen
+
+#### 9. Dependencies
+
+**New Dependencies:**
+
+- **react-native-svg** ⭐ NEW
+  - SVG Graphics Support
+  - Icon Rendering
+  - Enhanced Graphics Capabilities
+
+#### 10. Design System Benefits
+
+**Improvements:**
+
+- ✅ **Consistency:** Einheitliches Design über alle Screens
+- ✅ **Maintainability:** Zentrales Theme-System für einfache Anpassungen
+- ✅ **Reusability:** 20+ wiederverwendbare UI-Komponenten
+- ✅ **Performance:** Optimierte Component-Rendering
+- ✅ **Accessibility:** Verbesserte Touch-Targets und Kontraste
+- ✅ **Developer Experience:** Einfachere Component-Integration
+- ✅ **Scalability:** Einfaches Hinzufügen neuer Features
+
+**Migration Pattern:**
+
+```typescript
+// Before
+const COLORS = { primary: '#007AFF', ... };  // Duplicate in every file
+
+// After
+import { theme } from '@/components/ui/theme';
+const primaryColor = theme.colors.primary.blue500;
+```
+
+---
 
 ### Training Section Enhancement (Feature Branch: feature/training-section)
 
 **Date:** 2024-12-28 to 2025-12-30
+**Status:** ✅ Merged to main
 
 Eine umfassende Überarbeitung des Training-Moduls mit intelligenten Plan-Empfehlungen, Kalorienverfolgung, Fitness-Statistiken, 1RM-Tracking, Performance-Vergleichen und erweiterten Scoring-Algorithmen.
 
@@ -577,38 +852,69 @@ const { values, errors, isSubmitting, handleChange, handleSubmit, reset } = useF
 
 **Design-Entscheidung**: Keine externe Validation Library (Zod/Yup) für kleineren Bundle
 
-### 3. UI Components (✅ Komplett - 2025-12-26)
+### 3. UI Components (✅ Komplett - Updated 2026-01-02)
 
 **Location**: `src/components/ui/`
 
-**Basis Components** (ursprünglich):
-- `Button.tsx` - Variants: primary, secondary, outline
-- `Card.tsx` - Container component
-- `Input.tsx` - Text input mit error state
-- `Text.tsx` - Typography mit size variants
+**Centralized Theme System** (2026-01-02): ⭐ NEW
+- `theme.ts` - Centralized design system
+  - Unified color palette (primary, semantic, neutral, brand)
+  - Typography system (8 font sizes, 4 weights, line heights)
+  - Spacing scale (10 levels: xs to 5xl)
+  - Shadow definitions (sm, md, lg, xl)
+  - Border radius scale (xs to full)
 
-**Neue Components** (2025-12-26):
-- `ProgressBar.tsx` - Progress Indicator (0-100% mit animated fill)
-- `RadioGroup.tsx` - Radio Button Group mit Vertical/Horizontal Layout
-- `NumberPicker.tsx` - +/- Number Selector mit Min/Max bounds
-- `MultiSelectChips.tsx` - Multi-Select Chips mit horizontal scrollbar
-- `GoalCard.tsx` - Large Goal Selection Card mit Icon & Checkmark
-- `Slider.tsx` - React Native Slider Wrapper mit Labels & Value Formatter
-- `index.tsx` - Central export für alle UI Components
+**Core Components** (Updated 2026-01-02):
+- `Button.tsx` - Theme integration, improved variants
+- `Card.tsx` - Simplified with theme, elevation support
+- `Input.tsx` - Enhanced validation, better accessibility
+- `Text.tsx` - Full typography system integration
 
-**Design System**:
-- Consistent `COLORS` object (primary, secondary, text, border, error, success)
-- `SPACING` constants (xs: 4, sm: 8, md: 16, lg: 24, xl: 32)
-- `FONT_SIZES` (sm: 12, md: 14, lg: 16, xl: 18, xxl: 24)
-- Style composition via `style` prop override
+**Form Components**:
+- `FormGroup.tsx` ⭐ NEW - Form field wrapper with label/error
+- `OptionButton.tsx` ⭐ NEW - Selectable option button
+- `RadioGroup.tsx` - Theme integration, better spacing
+- `NumberPicker.tsx` - Improved styling, haptic feedback
+- `MultiSelectChips.tsx` - Theme colors, better touch targets
+- `Slider.tsx` - Modern design, better labels
+- `WeekdaySelector.tsx` - Theme colors, improved UX
 
-**Features**:
+**Display Components**:
+- `ActivityChip.tsx` ⭐ NEW - Activity/tag chip component
+- `Alert.tsx` ⭐ NEW - Professional alert/banner (4 variants)
+- `InfoBox.tsx` ⭐ NEW - Information display box (collapsible)
+- `ProfileField.tsx` ⭐ NEW - Profile information field
+- `StatsCard.tsx` ⭐ NEW - Statistics card with trend indicators
+- `GoalCard.tsx` - Modernized design, better icons
+- `ProgressBar.tsx` - Animated, theme colors
+
+**Layout Components**:
+- `AppHeader.tsx` ⭐ NEW - App-wide header with logo
+- `PageHeader.tsx` ⭐ NEW - Page-level header
+- `SectionTitle.tsx` ⭐ NEW - Section header with divider
+
+**Total:** 23+ UI Components
+
+**Design System Features**:
+- Single source of truth für Design-Tokens
+- Consistent theming across entire app
+- Easy customization and maintenance
 - TypeScript strict mode mit vollständigen Interfaces
-- Accessibility support (accessibilityLabel, accessibilityRole)
+- Accessibility support (WCAG 2.1 AA target)
 - Error states & validation feedback
 - Loading states wo relevant
 - Disabled states mit visueller Rückmeldung
 - Native Performance (keine Web-Dependencies)
+
+**Theme Migration Pattern**:
+```typescript
+// Old (duplicated in every file)
+const COLORS = { primary: '#007AFF', ... };
+
+// New (centralized)
+import { theme } from '@/components/ui/theme';
+const primaryColor = theme.colors.primary.blue500;
+```
 
 ### 4. Profile Service (✅ Komplett) - **NEU 2025-12-26**
 
@@ -1375,6 +1681,36 @@ The project uses specialized AI agents for different development tasks:
 **Formula**: `(avgWeight + avgReps + avgVolume) / 3`
 **Trade-off**: Komplexer als single metric, aber genauer
 
+### 22. Centralized Theme System statt Multiple Design Systems
+**Entscheidung**: Single `theme.ts` file statt duplicate COLORS/SPACING in jedem File
+**Grund**:
+- DRY (Don't Repeat Yourself) Prinzip
+- Single Source of Truth für Design-Tokens
+- Einfachere Theme-Anpassungen (nur eine Datei ändern)
+- Konsistenz über gesamte App garantiert
+- Bessere Wartbarkeit und Skalierbarkeit
+- TypeScript Auto-Completion für Theme-Properties
+**Implementation**:
+- Central theme.ts mit colors, typography, spacing, shadows, borderRadius
+- Components importieren theme statt eigene Konstanten
+**Before**: 50+ Files mit duplicate COLORS/SPACING definitions
+**After**: 1 theme.ts + imports in alle Components
+**Trade-off**: Minimal (nur Import overhead), aber massiv bessere Maintainability
+
+### 23. Component-Based Design System statt Screen-Level Styling
+**Entscheidung**: Wiederverwendbare UI-Components für common patterns
+**Grund**:
+- Consistency: Gleiche Patterns sehen überall gleich aus
+- Reusability: Write once, use everywhere
+- Maintainability: Fix in one place, fixed everywhere
+- Speed: Schnellere Feature-Entwicklung mit bestehenden Components
+**Examples**:
+- `ProfileField` statt duplicate Label+Value code in jedem Screen
+- `SectionTitle` statt custom section headers
+- `StatsCard` statt duplicate stat displays
+- `FormGroup` statt manual label+input+error rendering
+**Trade-off**: Initiale Investment in Component-Creation, aber massive Langzeit-Benefits
+
 ---
 
 ## Development Guidelines
@@ -1414,6 +1750,18 @@ The project uses specialized AI agents for different development tasks:
 
 ## Known Issues & Technical Debt
 
+### UI System (Updated 2026-01-02)
+1. **Theme System:**
+   - ✅ Centralized theme implemented
+   - ⚠️ Dark mode not yet implemented (theme ready, needs screen updates)
+   - ⚠️ Theme switching mechanism not implemented
+   - ⚠️ Some legacy components still use local COLORS (migration in progress)
+
+2. **Components:**
+   - ⚠️ No reduced motion support (medium priority)
+   - ⚠️ No RTL support for Arabic/Hebrew (medium priority)
+   - ⚠️ Multi-language support needed (currently German only)
+
 ### Training Module
 1. **ScoreBreakdownChart:**
    - ⚠️ No reduced motion support (medium priority)
@@ -1429,7 +1777,7 @@ The project uses specialized AI agents for different development tasks:
    - Need to implement sampling rate configuration for high traffic
    - Add A/B testing framework for recommendation algorithm
 
-4. **1RM & Performance Tracking (NEW - 2024-12-30):**
+4. **1RM & Performance Tracking:**
    - ⚠️ PlanProgressScreen: "1RM aktualisieren" Button zeigt nur Alert (Feature not implemented yet)
    - ⚠️ Performance Comparison: Chart visualization noch nicht implementiert (nur Data Service)
    - ⚠️ Historical Performance: Component erstellt aber noch nicht vollständig integriert
@@ -1444,14 +1792,16 @@ The project uses specialized AI agents for different development tasks:
 - TrainingStackNavigator needs to register new screens (OneRMInputScreen, PlanProgressScreen)
 
 ### Future Enhancements
+- **Dark Mode:** Theme system ready, needs screen-level implementation
+- **Theme Switching:** User preference storage + toggle UI
 - Reduced motion accessibility support
 - RTL language support
-- Dark mode optimization
 - Multi-language internationalization (i18n)
 - Offline mode support
 - Social features (plan sharing, leaderboards)
 - Cloud sync für Recovery Logs
 - Advanced analytics dashboard
+- **Component Library:** Consider extracting to separate package for reusability
 
 ---
 
@@ -1491,6 +1841,7 @@ npm run lint              # TypeScript type checking
 - AsyncStorage 2.2.0
 - Expo Linear Gradient 15.0.8
 - Expo Haptics 15.0.8
+- **react-native-svg** ⭐ NEW (2026-01-02) - SVG graphics support
 
 ### Development Dependencies
 - TypeScript 5.9.2
@@ -1517,11 +1868,11 @@ Follow conventional commits format:
 - `chore:` - Maintenance tasks
 
 ### Recent Commits
-- d0ae4d74 - Trainings feature begonnen
-- f7ecd5c7 - Merge branch 'feature/recovery' into main
-- 4e12a665 - feat: implement daily recovery tracking system
-- 6a2234b4 - feat: add profile edit system with comprehensive form and auto-refresh
-- 205643cd - Merge branch 'features/onboarding' into main
+- 42409681 - Merge feature/ui-modernization into main (2026-01-02)
+- 18a30409 - feat: modernize UI design system with comprehensive component updates (2026-01-02)
+- 2927bcd3 - Merge feature/training-section into main
+- ad49766e - neue änderungen bzgl. dynamischer und statischer pläne
+- e3cc42c6 - Trainingssection funtioniert jetzt weitesgehend. Kleinere Bugs sind noch zu fixen
 
 ---
 
