@@ -2,6 +2,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import { OnboardingProvider, useOnboarding } from '../contexts/OnboardingContext';
+import { OnboardingScreen0 } from '../screens/onboarding/OnboardingScreen0';
 import { OnboardingScreen1 } from '../screens/onboarding/OnboardingScreen1';
 import { OnboardingScreen2 } from '../screens/onboarding/OnboardingScreen2';
 import { OnboardingScreen3 } from '../screens/onboarding/OnboardingScreen3';
@@ -14,6 +15,8 @@ const OnboardingScreens: React.FC = () => {
   const { currentStep } = useOnboarding();
 
   switch (currentStep) {
+    case 0:
+      return <OnboardingScreen0 />;
     case 1:
       return <OnboardingScreen1 />;
     case 2:
@@ -27,7 +30,7 @@ const OnboardingScreens: React.FC = () => {
     case 6:
       return <OnboardingSummary />;
     default:
-      return <OnboardingScreen1 />;
+      return <OnboardingScreen0 />;
   }
 };
 

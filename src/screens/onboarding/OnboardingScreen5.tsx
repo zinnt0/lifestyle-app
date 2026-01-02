@@ -112,7 +112,7 @@ export const OnboardingScreen5: React.FC = () => {
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.stepIndicator}>Schritt 5 von 6</Text>
+          <Text style={styles.stepIndicator}>Schritt 6 von 7</Text>
           <Text style={styles.title}>Unverträglichkeiten</Text>
           <Text style={styles.subtitle}>
             Optional: Hilft uns bei der Ernährungsplanung

@@ -41,7 +41,7 @@ export const OnboardingScreen1: React.FC = () => {
 
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.stepIndicator}>Schritt 1 von 6</Text>
+          <Text style={styles.stepIndicator}>Schritt 2 von 7</Text>
           <Text style={styles.title}>Erzähl uns von dir</Text>
           <Text style={styles.subtitle}>
             Diese Informationen helfen uns, deinen perfekten Plan zu erstellen
