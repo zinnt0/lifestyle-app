@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Card } from "@/components/ui/Card";
@@ -45,9 +39,10 @@ export const ActivePlanCard: React.FC<ActivePlanCardProps> = ({
   const [menuVisible, setMenuVisible] = React.useState(false);
 
   // Only calculate progress if plan has a defined duration
-  const progress = plan.current_week && plan.total_weeks
-    ? (plan.current_week / plan.total_weeks) * 100
-    : 0;
+  const progress =
+    plan.current_week && plan.total_weeks
+      ? (plan.current_week / plan.total_weeks) * 100
+      : 0;
 
   const handleDelete = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -73,7 +68,7 @@ export const ActivePlanCard: React.FC<ActivePlanCardProps> = ({
   };
 
   return (
-    <Card gradient gradientColors={["#4A90E2", "#7B68EE"]}>
+    <Card gradient gradientColors={["#6FD89E", "#007879"]}>
       <View style={styles.container}>
         <View style={styles.headerRow}>
           <View style={styles.header}>
@@ -90,14 +85,13 @@ export const ActivePlanCard: React.FC<ActivePlanCardProps> = ({
         </View>
 
         <Text style={styles.planName}>{plan.name}</Text>
-        <Text style={styles.details}>
-          {plan.days_per_week} Tage pro Woche
-        </Text>
+        <Text style={styles.details}>{plan.days_per_week} Tage pro Woche</Text>
 
         {plan.current_week && (
           <>
             <Text style={styles.weekInfo}>
-              Woche {plan.current_week}{plan.total_weeks ? ` von ${plan.total_weeks}` : ''}
+              Woche {plan.current_week}
+              {plan.total_weeks ? ` von ${plan.total_weeks}` : ""}
             </Text>
             {plan.total_weeks && (
               <ProgressBar

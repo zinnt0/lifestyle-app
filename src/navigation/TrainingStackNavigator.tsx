@@ -109,8 +109,7 @@ export const TrainingStackNavigator: React.FC = () => {
         name="TrainingDashboard"
         component={TrainingDashboardScreen}
         options={{
-          title: "Training",
-          headerLargeTitle: true,
+          headerShown: false,
         }}
       />
 

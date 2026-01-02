@@ -80,12 +80,13 @@ export const InactivePlanCard: React.FC<InactivePlanCardProps> = ({
   };
 
   return (
-    <Card elevation="medium">
+    <Card padding="medium" elevation="medium" style={styles.card}>
       <View style={styles.container}>
         <View style={styles.content}>
           <Text style={styles.planName}>{plan.name}</Text>
           <Text style={styles.details}>
-            {plan.days_per_week} Tage • {getGoalLabel(plan.template?.primary_goal)}
+            {plan.days_per_week} Tage •{" "}
+            {getGoalLabel(plan.template?.primary_goal)}
           </Text>
         </View>
 
@@ -93,7 +94,7 @@ export const InactivePlanCard: React.FC<InactivePlanCardProps> = ({
           <Switch
             value={false}
             onValueChange={() => onToggle(plan.id)}
-            trackColor={{ false: "#ccc", true: "#4A90E2" }}
+            trackColor={{ false: "#E5E7EB", true: "#6FD89E" }}
             thumbColor="#fff"
             accessibilityLabel={`Plan ${plan.name} aktivieren`}
           />
@@ -103,7 +104,7 @@ export const InactivePlanCard: React.FC<InactivePlanCardProps> = ({
             style={styles.menuButton}
             accessibilityLabel="Menü öffnen"
           >
-            <Ionicons name="ellipsis-vertical" size={20} color="#666" />
+            <Ionicons name="ellipsis-vertical" size={20} color="#6B7280" />
           </TouchableOpacity>
         </View>
       </View>
@@ -115,7 +116,7 @@ export const InactivePlanCard: React.FC<InactivePlanCardProps> = ({
             style={styles.menuItem}
             accessibilityLabel="Plan löschen"
           >
-            <Ionicons name="trash-outline" size={18} color="#E74C3C" />
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
             <Text style={styles.menuItemTextDelete}>Löschen</Text>
           </TouchableOpacity>
         </View>
@@ -125,6 +126,9 @@ export const InactivePlanCard: React.FC<InactivePlanCardProps> = ({
 };
 
 const styles = StyleSheet.create({
+  card: {
+    marginBottom: 12,
+  },
   container: {
     flexDirection: "row",
     alignItems: "center",
@@ -137,11 +141,11 @@ const styles = StyleSheet.create({
   planName: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
+    color: "#1F2937",
   },
   details: {
     fontSize: 14,
-    color: "#666",
+    color: "#6B7280",
   },
   actions: {
     flexDirection: "row",
@@ -151,13 +155,13 @@ const styles = StyleSheet.create({
   menuButton: {
     padding: 8,
     borderRadius: 8,
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "#E5E7EB",
   },
   menu: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
+    borderTopColor: "#E5E7EB",
   },
   menuItem: {
     flexDirection: "row",
@@ -168,7 +172,7 @@ const styles = StyleSheet.create({
   },
   menuItemTextDelete: {
     fontSize: 16,
-    color: "#E74C3C",
+    color: "#EF4444",
     fontWeight: "500",
   },
 });

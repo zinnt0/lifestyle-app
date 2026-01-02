@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { COLORS, SPACING, TYPOGRAPHY, SHADOWS, BORDER_RADIUS } from './theme';
 
 interface MultiSelectChipsProps {
   /** Available option values */
@@ -80,47 +81,33 @@ export const MultiSelectChips: React.FC<MultiSelectChipsProps> = ({
   );
 };
 
-const COLORS = {
-  primary: '#007AFF',
-  text: '#000000',
-  textSecondary: '#8E8E93',
-  border: '#C6C6C8',
-  borderLight: '#E5E5EA',
-  background: '#FFFFFF',
-  backgroundSecondary: '#F2F2F7',
-};
-
-const SPACING = {
-  sm: 8,
-  md: 16,
-};
-
 const styles = StyleSheet.create({
   container: {
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   scrollContent: {
     gap: SPACING.sm,
     paddingVertical: SPACING.sm,
   },
   chip: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 2,
     borderColor: COLORS.borderLight,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
   },
   chipSelected: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
+    ...SHADOWS.sm,
   },
   chipText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: TYPOGRAPHY.weights.semibold,
     color: COLORS.text,
   },
   chipTextSelected: {
-    color: COLORS.background,
+    color: COLORS.white,
   },
 });

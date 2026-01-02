@@ -68,7 +68,7 @@ export const AlternativesModal: React.FC<AlternativesModalProps> = ({
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A90E2" />
+            <ActivityIndicator size="large" color="#3b82f6" />
           </View>
         ) : alternatives.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -190,6 +190,6 @@ const styles = StyleSheet.create({
   },
   selectIcon: {
     fontSize: 20,
-    color: "#4A90E2",
+    color: "#3b82f6",
   },
 });

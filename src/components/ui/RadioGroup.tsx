@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { COLORS, SPACING, TYPOGRAPHY, SHADOWS, BORDER_RADIUS } from './theme';
 
 interface RadioOption {
   label: string;
@@ -84,21 +85,6 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
   );
 };
 
-const COLORS = {
-  primary: '#007AFF',
-  text: '#000000',
-  textSecondary: '#8E8E93',
-  border: '#C6C6C8',
-  borderLight: '#E5E5EA',
-  background: '#FFFFFF',
-  backgroundSecondary: '#F2F2F7',
-};
-
-const SPACING = {
-  sm: 8,
-  md: 16,
-};
-
 const styles = StyleSheet.create({
   container: {
     gap: SPACING.md,
@@ -110,11 +96,11 @@ const styles = StyleSheet.create({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.md,
-    borderWidth: 1,
+    padding: SPACING.lg,
+    borderWidth: 2,
     borderColor: COLORS.borderLight,
-    borderRadius: 12,
-    backgroundColor: COLORS.background,
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: COLORS.surface,
   },
   optionHorizontal: {
     flex: 1,
@@ -123,38 +109,41 @@ const styles = StyleSheet.create({
   optionSelected: {
     borderColor: COLORS.primary,
     borderWidth: 2,
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: `${COLORS.primary}10`,
+    ...SHADOWS.sm,
   },
   radioOuter: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: BORDER_RADIUS.full,
     borderWidth: 2,
-    borderColor: COLORS.border,
+    borderColor: COLORS.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: SPACING.md,
+    backgroundColor: COLORS.white,
   },
   radioInner: {
     width: 12,
     height: 12,
-    borderRadius: 6,
+    borderRadius: BORDER_RADIUS.full,
     backgroundColor: COLORS.primary,
   },
   labelContainer: {
     flex: 1,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: TYPOGRAPHY.sizes.md,
+    fontWeight: TYPOGRAPHY.weights.medium,
     color: COLORS.text,
   },
   labelSelected: {
     color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.weights.semibold,
   },
   description: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.sizes.sm,
     color: COLORS.textSecondary,
-    marginTop: 4,
+    marginTop: SPACING.xs,
   },
 });

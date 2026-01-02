@@ -17,7 +17,7 @@ const WorkoutPerformanceComparison: React.FC<WorkoutPerformanceComparisonProps> 
       <View style={styles.container}>
         <Text style={styles.title}>Performance-Vergleich</Text>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#4A90E2" />
+          <ActivityIndicator size="small" color="#3b82f6" />
           <Text style={styles.loadingText}>Berechne Performance...</Text>
         </View>
       </View>

@@ -6,7 +6,14 @@
  */
 
 import React, { useState, useCallback } from "react";
-import { View, Text, StyleSheet, Button, TouchableOpacity, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "../../navigation/types";
@@ -18,8 +25,9 @@ import {
 } from "../../services/recovery.service";
 import { trainingService } from "../../services/trainingService";
 import { QuickWorkoutAction } from "../../components/training/QuickWorkoutAction";
-import { FitnessStats } from "../../components/training/FitnessStats";
 import { PausedSessionCard } from "../../components/training/PausedSessionCard";
+import { RecoveryCard } from "../../components/app/RecoveryCard";
+import { AppHeader } from "../../components/ui/AppHeader";
 import type { NextWorkout, WorkoutSession } from "../../types/training.types";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
@@ -38,8 +46,9 @@ export const HomeScreen: React.FC = () => {
   const [hasLogged, setHasLogged] = useState(false);
   const [recoveryScore, setRecoveryScore] = useState<number | null>(null);
   const [nextWorkout, setNextWorkout] = useState<NextWorkout | null>(null);
-  const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(
+    null
+  );
 
   /**
    * Check if user has logged today and fetch recovery score
@@ -49,9 +58,6 @@ export const HomeScreen: React.FC = () => {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-
-    // Set user ID for stats component
-    setUserId(user.id);
 
     const logged = await hasLoggedToday(user.id);
     setHasLogged(logged);
@@ -100,19 +106,6 @@ export const HomeScreen: React.FC = () => {
   );
 
   /**
-   * Handle user logout
-   * Signs out user and AppNavigator will automatically redirect to Login
-   */
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      // AppNavigator's auth state listener will handle redirect
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
-  };
-
-  /**
    * Handle resuming a paused workout session
    */
   const handleResumeSession = useCallback(async () => {
@@ -145,48 +138,39 @@ export const HomeScreen: React.FC = () => {
   }, [pausedSession, loadNextWorkout]);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      {/* Header - Logo left, Profile right */}
+      <AppHeader />
+
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Willkommen! 🎉</Text>
-
-        {/* Fitness Section - Shows paused workout or next workout + stats */}
+        {/* Fitness Section - Shows paused workout or next workout */}
         <View style={styles.fitnessSection}>
-          <Text style={styles.sectionTitle}>FITNESS</Text>
+          <Text style={styles.sectionHeader}>Fitness</Text>
 
-          <View style={styles.fitnessContent}>
-            {/* Left: Paused Session or Next Workout */}
-            <View style={styles.workoutColumn}>
-              {pausedSession ? (
-                <PausedSessionCard
-                  session={pausedSession}
-                  onResume={handleResumeSession}
-                  onCancel={handleCancelSession}
-                />
-              ) : (
-                <QuickWorkoutAction workout={nextWorkout || undefined} />
-              )}
-            </View>
-
-            {/* Right: Fitness Stats */}
-            <View style={styles.statsColumn}>
-              <FitnessStats userId={userId || undefined} />
-            </View>
-          </View>
+          {pausedSession ? (
+            <PausedSessionCard
+              session={pausedSession}
+              onResume={handleResumeSession}
+              onCancel={handleCancelSession}
+            />
+          ) : (
+            <QuickWorkoutAction workout={nextWorkout || undefined} />
+          )}
         </View>
 
         {/* Recovery Section */}
         {hasLogged ? (
-          <View style={styles.recoveryCard}>
-            <Text style={styles.recoveryLabel}>Heutiger Recovery Score</Text>
-            <Text style={styles.recoveryScore}>{recoveryScore}/100</Text>
-            <Text style={styles.recoveryEmoji}>
-              {getRecoveryScoreInterpretation(recoveryScore || 0).emoji}
-            </Text>
-          </View>
+          <RecoveryCard
+            score={recoveryScore || 0}
+            interpretation={
+              getRecoveryScoreInterpretation(recoveryScore || 0).label
+            }
+            emoji={getRecoveryScoreInterpretation(recoveryScore || 0).emoji}
+          />
         ) : (
           <TouchableOpacity
             style={styles.checkinButton}
@@ -195,61 +179,36 @@ export const HomeScreen: React.FC = () => {
             <Text style={styles.checkinText}>📋 Tägliches Check-in</Text>
           </TouchableOpacity>
         )}
-
-        <View style={styles.buttonContainer}>
-          <Button
-            title="Profil anzeigen"
-            onPress={() => navigation.navigate("Profile")}
-          />
-        </View>
-
-        <View style={styles.buttonContainer}>
-          <Button title="Ausloggen" onPress={handleLogout} color="#FF3B30" />
-        </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "transparent",
   },
   scrollView: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
-  scrollContent: {
-    padding: 24,
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    marginBottom: 24,
-    textAlign: "center",
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 32,
   },
   // Fitness Section Styles
   fitnessSection: {
     width: "100%",
     marginBottom: 24,
+    marginTop: 16,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    letterSpacing: 1,
-    color: "#8E8E93",
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 12,
-  },
-  fitnessContent: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  workoutColumn: {
-    flex: 2,
-  },
-  statsColumn: {
-    flex: 1,
+    marginLeft: 4,
   },
   // Recovery Section Styles
   recoveryCard: {
@@ -290,10 +249,5 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "600",
-  },
-  buttonContainer: {
-    marginTop: 16,
-    width: "100%",
-    maxWidth: 300,
   },
 });

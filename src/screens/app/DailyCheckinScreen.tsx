@@ -22,6 +22,8 @@ import {
 } from "../../services/recovery.service";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
+import { ActivityChip } from "../../components/ui/ActivityChip";
+import { getQualityEmoji, getStressEmoji, getMoodEmoji, getEnergyEmoji } from "../../utils/emojiHelpers";
 
 // ============================================================================
 // TYPES
@@ -467,27 +469,14 @@ export const DailyCheckinScreen: React.FC = () => {
                 "Foam Rolling",
                 "Yoga",
               ].map((activity) => (
-                <TouchableOpacity
+                <ActivityChip
                   key={activity}
-                  style={[
-                    styles.activityChip,
-                    formData.recovery_activities.includes(
-                      activity.toLowerCase()
-                    ) && styles.activityChipSelected,
-                  ]}
+                  label={activity}
+                  selected={formData.recovery_activities.includes(
+                    activity.toLowerCase()
+                  )}
                   onPress={() => toggleActivity(activity.toLowerCase())}
-                >
-                  <Text
-                    style={[
-                      styles.activityChipText,
-                      formData.recovery_activities.includes(
-                        activity.toLowerCase()
-                      ) && styles.activityChipTextSelected,
-                    ]}
-                  >
-                    {activity}
-                  </Text>
-                </TouchableOpacity>
+                />
               ))}
             </View>
 
@@ -545,39 +534,6 @@ export const DailyCheckinScreen: React.FC = () => {
 
 // ============================================================================
 // HELPER FUNCTIONS
-// ============================================================================
-
-const getQualityEmoji = (quality: number): string => {
-  if (quality >= 9) return "😴";
-  if (quality >= 7) return "😌";
-  if (quality >= 5) return "😐";
-  if (quality >= 3) return "😕";
-  return "😫";
-};
-
-const getStressEmoji = (stress: number): string => {
-  if (stress <= 2) return "😌";
-  if (stress <= 4) return "🙂";
-  if (stress <= 6) return "😐";
-  if (stress <= 8) return "😟";
-  return "😰";
-};
-
-const getMoodEmoji = (mood: number): string => {
-  if (mood >= 9) return "😁";
-  if (mood >= 7) return "😊";
-  if (mood >= 5) return "😐";
-  if (mood >= 3) return "😟";
-  return "😢";
-};
-
-const getEnergyEmoji = (energy: number): string => {
-  if (energy >= 8) return "⚡";
-  if (energy >= 6) return "💪";
-  if (energy >= 4) return "😐";
-  return "😴";
-};
-
 // ============================================================================
 // STYLES
 // ============================================================================
@@ -677,26 +633,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
     marginBottom: 16,
-  },
-  activityChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "#C6C6C8",
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
-  },
-  activityChipSelected: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
-  },
-  activityChipText: {
-    fontSize: 14,
-    color: "#000000",
-  },
-  activityChipTextSelected: {
-    color: "#FFFFFF",
-    fontWeight: "600",
   },
   scoreCard: {
     padding: 20,

@@ -7,39 +7,7 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
-
-// Design System Constants
-const COLORS = {
-  primary: "#4A90E2",
-  secondary: "#7B68EE",
-  success: "#34C759",
-  error: "#FF3B30",
-  danger: "#F44336",
-  background: "#FFFFFF",
-  backgroundSecondary: "#F2F2F7",
-  text: "#000000",
-  textSecondary: "#8E8E93",
-  border: "#C6C6C8",
-  disabled: "#C7C7CC",
-};
-
-const SPACING = {
-  sm: 8,
-  md: 16,
-  lg: 24,
-};
-
-const FONTS = {
-  sizes: {
-    small: 14,
-    medium: 16,
-    large: 18,
-  },
-  weights: {
-    medium: "500" as const,
-    semibold: "600" as const,
-  },
-};
+import { COLORS, SPACING, TYPOGRAPHY, SHADOWS, BORDER_RADIUS } from "./theme";
 
 export type ButtonVariant =
   | "primary"
@@ -141,8 +109,8 @@ export const Button: React.FC<ButtonProps> = ({
         baseStyle.backgroundColor = COLORS.secondary;
         break;
       case "outline":
-        baseStyle.backgroundColor = "transparent";
-        baseStyle.borderWidth = 2;
+        baseStyle.backgroundColor = COLORS.surface;
+        baseStyle.borderWidth = 1.5;
         baseStyle.borderColor = COLORS.primary;
         break;
       case "ghost":
@@ -150,23 +118,23 @@ export const Button: React.FC<ButtonProps> = ({
         baseStyle.backgroundColor = "transparent";
         break;
       case "danger":
-        baseStyle.backgroundColor = COLORS.danger;
+        baseStyle.backgroundColor = COLORS.error;
         break;
     }
 
     // Size styles
     switch (size) {
       case "small":
-        baseStyle.paddingVertical = SPACING.sm;
-        baseStyle.paddingHorizontal = 12;
+        baseStyle.paddingVertical = 10;
+        baseStyle.paddingHorizontal = 16;
         break;
       case "medium":
         baseStyle.paddingVertical = 14;
-        baseStyle.paddingHorizontal = 20;
+        baseStyle.paddingHorizontal = 24;
         break;
       case "large":
-        baseStyle.paddingVertical = 18;
-        baseStyle.paddingHorizontal = 24;
+        baseStyle.paddingVertical = 16;
+        baseStyle.paddingHorizontal = 28;
         break;
     }
 
@@ -175,7 +143,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   const getTextStyle = (): TextStyle => {
     const baseStyle: TextStyle = {
-      fontWeight: FONTS.weights.semibold,
+      fontWeight: TYPOGRAPHY.weights.semibold,
     };
 
     // Variant text colors
@@ -183,7 +151,7 @@ export const Button: React.FC<ButtonProps> = ({
       case "primary":
       case "secondary":
       case "danger":
-        baseStyle.color = COLORS.background;
+        baseStyle.color = COLORS.white;
         break;
       case "outline":
       case "ghost":
@@ -195,13 +163,13 @@ export const Button: React.FC<ButtonProps> = ({
     // Size text styles
     switch (size) {
       case "small":
-        baseStyle.fontSize = FONTS.sizes.small;
+        baseStyle.fontSize = TYPOGRAPHY.sizes.sm;
         break;
       case "medium":
-        baseStyle.fontSize = FONTS.sizes.medium;
+        baseStyle.fontSize = TYPOGRAPHY.sizes.md;
         break;
       case "large":
-        baseStyle.fontSize = FONTS.sizes.large;
+        baseStyle.fontSize = TYPOGRAPHY.sizes.lg;
         break;
     }
 
@@ -213,7 +181,7 @@ export const Button: React.FC<ButtonProps> = ({
       case "primary":
       case "secondary":
       case "danger":
-        return COLORS.background;
+        return COLORS.white;
       case "outline":
       case "ghost":
       case "text":
@@ -266,9 +234,11 @@ export const Button: React.FC<ButtonProps> = ({
     <TouchableOpacity
       onPress={onPress}
       disabled={isDisabled}
-      activeOpacity={0.7}
+      activeOpacity={0.85}
       style={[
         styles.button,
+        (variant === "primary" || variant === "secondary" || variant === "danger") &&
+          styles.buttonRaised,
         getButtonStyle(),
         fullWidth && styles.fullWidth,
         isDisabled && styles.buttonDisabled,
@@ -288,15 +258,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
-    gap: 8,
-    minHeight: 44, // iOS minimum touch target
+    borderRadius: BORDER_RADIUS.xxl,
+    gap: 10,
+    minHeight: 56, // Larger minimum height for better touch targets
+  },
+  buttonRaised: {
+    ...SHADOWS.lg,
   },
   buttonDisabled: {
     opacity: 0.5,
   },
   textDisabled: {
-    color: COLORS.disabled,
+    color: COLORS.textDisabled,
   },
   fullWidth: {
     width: "100%",

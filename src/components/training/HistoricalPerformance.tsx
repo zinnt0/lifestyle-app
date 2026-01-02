@@ -107,7 +107,7 @@ export const HistoricalPerformance: React.FC<HistoricalPerformanceProps> = ({
     return (
       <Card padding="medium" elevation="small">
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#4A90E2" />
+          <ActivityIndicator size="small" color="#3b82f6" />
           <Text style={styles.loadingText}>Lade Historie...</Text>
         </View>
       </Card>
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   },
   setRowHighlighted: {
     backgroundColor: "#E3F2FD",
-    borderColor: "#4A90E2",
+    borderColor: "#3b82f6",
   },
   setInfo: {
     flex: 1,
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   setDataHighlighted: {
-    color: "#4A90E2",
+    color: "#3b82f6",
   },
   rirText: {
     fontSize: 12,

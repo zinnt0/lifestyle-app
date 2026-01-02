@@ -169,7 +169,7 @@ export const QuickWorkoutAction: React.FC<QuickWorkoutActionProps> = ({
     return (
       <Card
         gradient
-        gradientColors={["#8E8E93", "#C7C7CC"]}
+        gradientColors={["#E8F3FF", "#F0F9FF"]}
         padding="large"
         elevation="medium"
         style={styles.card}
@@ -202,7 +202,7 @@ export const QuickWorkoutAction: React.FC<QuickWorkoutActionProps> = ({
     >
       <Card
         gradient
-        gradientColors={["#4A90E2", "#7B68EE"]}
+        gradientColors={["#5B9EFF", "#7DB9FF"]}
         padding="large"
         elevation="medium"
         style={styles.card}
@@ -307,18 +307,18 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: "#2C3E50",
     marginBottom: 8,
     textAlign: "center",
   },
   emptySubtitle: {
     fontSize: 15,
-    color: "rgba(255, 255, 255, 0.8)",
+    color: "#5A6C7D",
     marginBottom: 24,
     textAlign: "center",
     lineHeight: 22,
   },
   createButton: {
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#5B9EFF",
   },
 });

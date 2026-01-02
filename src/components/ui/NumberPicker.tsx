@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { COLORS, SPACING, TYPOGRAPHY, SHADOWS, BORDER_RADIUS } from './theme';
 
 interface NumberPickerProps {
   /** Label text */
@@ -105,28 +106,13 @@ export const NumberPicker: React.FC<NumberPickerProps> = ({
   );
 };
 
-const COLORS = {
-  primary: '#007AFF',
-  text: '#000000',
-  textSecondary: '#8E8E93',
-  border: '#C6C6C8',
-  borderLight: '#E5E5EA',
-  background: '#FFFFFF',
-  disabled: '#C7C7CC',
-};
-
-const SPACING = {
-  sm: 8,
-  md: 16,
-};
-
 const styles = StyleSheet.create({
   container: {
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: TYPOGRAPHY.weights.medium,
     color: COLORS.text,
     marginBottom: SPACING.sm,
   },
@@ -134,28 +120,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surfaceSecondary,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    borderRadius: 12,
-    padding: SPACING.sm,
+    borderColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.lg,
   },
   button: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: BORDER_RADIUS.full,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    ...SHADOWS.md,
   },
   buttonDisabled: {
-    backgroundColor: COLORS.disabled,
+    backgroundColor: COLORS.borderDark,
     opacity: 0.5,
+    ...SHADOWS.none,
   },
   buttonText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: COLORS.background,
+    fontSize: TYPOGRAPHY.sizes.xxl,
+    fontWeight: TYPOGRAPHY.weights.semibold,
+    color: COLORS.white,
     lineHeight: 28,
   },
   buttonTextDisabled: {
@@ -165,16 +153,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.lg,
   },
   value: {
-    fontSize: 24,
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.sizes.xxl,
+    fontWeight: TYPOGRAPHY.weights.semibold,
     color: COLORS.text,
   },
   unit: {
-    fontSize: 16,
-    fontWeight: '400',
+    fontSize: TYPOGRAPHY.sizes.md,
+    fontWeight: TYPOGRAPHY.weights.regular,
     color: COLORS.textSecondary,
   },
 });

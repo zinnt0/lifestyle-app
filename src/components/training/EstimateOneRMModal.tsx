@@ -187,7 +187,7 @@ export const EstimateOneRMModal: React.FC<EstimateOneRMModalProps> = ({
         {/* Content */}
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4A90E2" />
+            <ActivityIndicator size="large" color="#3b82f6" />
             <Text style={styles.loadingText}>Lade Workouts...</Text>
           </View>
         ) : error ? (
@@ -396,22 +396,22 @@ const styles = StyleSheet.create({
   },
   estimateLabel: {
     fontSize: 16,
-    color: "#4A90E2",
+    color: "#3b82f6",
   },
   estimateValue: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#4A90E2",
+    color: "#3b82f6",
   },
   estimateBadge: {
     fontSize: 12,
-    color: "#4A90E2",
+    color: "#3b82f6",
     fontWeight: "600",
   },
   selectButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#3b82f6",
     borderRadius: 8,
   },
   selectButtonText: {
