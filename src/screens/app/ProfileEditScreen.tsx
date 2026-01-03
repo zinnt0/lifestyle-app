@@ -22,6 +22,8 @@ import {
   getIntolerancesCatalog,
   Intolerance,
 } from '../../services/profile.service';
+import { NutritionGoalsService } from '../../../lib/services/nutrition-goals.service';
+import type { TrainingGoal, Gender } from '../../../lib/types/nutrition.types';
 import { NumericInput } from '../../components/ui/NumericInput';
 import { Button } from '../../components/ui/Button';
 import { RadioGroup } from '../../components/ui/RadioGroup';
@@ -66,6 +68,12 @@ interface ProfileFormData {
   // Section 4: Lifestyle
   sleep_hours_avg: number | null;
   stress_level: number | null;
+
+  // Section 5: Nutrition (for calorie calculation)
+  pal_factor: number | null;
+  target_weight_kg: number | null;
+  target_date: string | null;
+  body_fat_percentage: number | null;
 }
 
 /**
@@ -109,6 +117,10 @@ export const ProfileEditScreen: React.FC = () => {
     primary_goal: null,
     sleep_hours_avg: null,
     stress_level: null,
+    pal_factor: 1.55, // Default: moderately active
+    target_weight_kg: null,
+    target_date: null,
+    body_fat_percentage: null,
   });
 
 
@@ -159,6 +171,10 @@ export const ProfileEditScreen: React.FC = () => {
           primary_goal: profile.primary_goal,
           sleep_hours_avg: profile.sleep_hours_avg,
           stress_level: profile.stress_level,
+          pal_factor: profile.pal_factor ?? 1.55,
+          target_weight_kg: profile.target_weight_kg,
+          target_date: profile.target_date,
+          body_fat_percentage: profile.body_fat_percentage,
         });
       }
 
@@ -369,6 +385,48 @@ export const ProfileEditScreen: React.FC = () => {
       if (intolerancesError) {
         setError(intolerancesError.message);
         return;
+      }
+
+      // Recalculate nutrition goals if relevant fields changed
+      // Check if any nutrition-related fields are present
+      if (
+        formData.age &&
+        formData.weight &&
+        formData.height &&
+        formData.gender &&
+        formData.primary_goal &&
+        formData.pal_factor
+      ) {
+        try {
+          const nutritionService = new NutritionGoalsService();
+
+          // Map primary_goal to training_goal
+          const trainingGoalMap: Record<string, TrainingGoal> = {
+            'strength': 'strength',
+            'hypertrophy': 'muscle_gain',
+            'muscle_gain': 'muscle_gain',
+            'endurance': 'endurance',
+            'weight_loss': 'weight_loss',
+            'general_fitness': 'general_fitness',
+          };
+
+          await nutritionService.createNutritionGoal(user.id, {
+            weight_kg: formData.weight,
+            height_cm: formData.height,
+            age: formData.age,
+            gender: formData.gender as Gender,
+            target_weight_kg: formData.target_weight_kg ?? undefined,
+            target_date: formData.target_date ? new Date(formData.target_date) : undefined,
+            training_goal: trainingGoalMap[formData.primary_goal] || 'general_fitness',
+            pal_factor: formData.pal_factor,
+            body_fat_percentage: formData.body_fat_percentage ?? undefined,
+          });
+
+          console.log('✅ Nutrition goals recalculated successfully');
+        } catch (nutritionError: any) {
+          console.warn('Failed to recalculate nutrition goals:', nutritionError);
+          // Don't fail the whole save if nutrition calculation fails
+        }
       }
 
       // Success
@@ -690,7 +748,91 @@ export const ProfileEditScreen: React.FC = () => {
         />
       </View>
 
-      {/* Section 5: Unverträglichkeiten */}
+      {/* Section 5: Ernährungsziele */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Ernährungsziele</Text>
+        <Text style={styles.sectionHint}>
+          Diese Daten werden für die Berechnung deiner Kalorienziele verwendet
+        </Text>
+
+        <Text style={styles.label}>Aktivitätslevel (PAL-Faktor)</Text>
+        <Text style={styles.sectionHint}>
+          Wie aktiv bist du im Alltag und beim Training?
+        </Text>
+        <View style={styles.buttonGroup}>
+          <OptionButton
+            label="Sedentär (1.2)"
+            selected={formData.pal_factor === 1.2}
+            onPress={() => updateField('pal_factor', 1.2)}
+          />
+          <OptionButton
+            label="Leicht aktiv (1.375)"
+            selected={formData.pal_factor === 1.375}
+            onPress={() => updateField('pal_factor', 1.375)}
+          />
+        </View>
+        <View style={styles.buttonGroup}>
+          <OptionButton
+            label="Moderat aktiv (1.55)"
+            selected={formData.pal_factor === 1.55}
+            onPress={() => updateField('pal_factor', 1.55)}
+          />
+          <OptionButton
+            label="Sehr aktiv (1.725)"
+            selected={formData.pal_factor === 1.725}
+            onPress={() => updateField('pal_factor', 1.725)}
+          />
+        </View>
+        <View style={styles.buttonGroup}>
+          <OptionButton
+            label="Extrem aktiv (1.9)"
+            selected={formData.pal_factor === 1.9}
+            onPress={() => updateField('pal_factor', 1.9)}
+          />
+        </View>
+
+        <NumericInput
+          label="Zielgewicht (kg) - Optional"
+          value={formData.target_weight_kg}
+          onValueChange={(value) => updateField('target_weight_kg', value)}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 70"
+        />
+
+        <Text style={styles.label}>Zieldatum - Optional</Text>
+        <TouchableOpacity
+          style={styles.dateInput}
+          onPress={() => {
+            // TODO: Implement date picker
+            Alert.alert('Info', 'Datumswahl wird in Kürze verfügbar sein');
+          }}
+        >
+          <Text style={formData.target_date ? styles.dateText : styles.datePlaceholder}>
+            {formData.target_date
+              ? new Date(formData.target_date).toLocaleDateString('de-DE')
+              : 'Zieldatum auswählen'}
+          </Text>
+          <Ionicons name="calendar-outline" size={20} color="#8E8E93" />
+        </TouchableOpacity>
+        {formData.target_date && (
+          <TouchableOpacity
+            onPress={() => updateField('target_date', null)}
+            style={styles.clearDateButton}
+          >
+            <Text style={styles.clearDateText}>Datum löschen</Text>
+          </TouchableOpacity>
+        )}
+
+        <NumericInput
+          label="Körperfettanteil (%) - Optional"
+          value={formData.body_fat_percentage}
+          onValueChange={(value) => updateField('body_fat_percentage', value)}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 15"
+        />
+      </View>
+
+      {/* Section 6: Unverträglichkeiten */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Unverträglichkeiten</Text>
 
@@ -1009,6 +1151,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   removeButtonText: {
+    fontSize: 14,
+    color: '#FF3B30',
+    fontWeight: '500',
+  },
+  dateInput: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  dateText: {
+    fontSize: 16,
+    color: '#000000',
+  },
+  datePlaceholder: {
+    fontSize: 16,
+    color: '#8E8E93',
+  },
+  clearDateButton: {
+    marginTop: -8,
+    marginBottom: 16,
+    alignSelf: 'flex-start',
+  },
+  clearDateText: {
     fontSize: 14,
     color: '#FF3B30',
     fontWeight: '500',

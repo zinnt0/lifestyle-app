@@ -29,6 +29,13 @@ export interface Profile {
   stress_level: number | null; // 1-10
   has_gym_access: boolean;
   home_equipment: string[] | null;
+
+  // Nutrition calculation fields
+  pal_factor: number | null; // Physical Activity Level (1.2-2.5)
+  target_weight_kg: number | null; // Optional target weight
+  target_date: string | null; // Optional target date (ISO string)
+  body_fat_percentage: number | null; // Optional body fat % (0-100)
+
   onboarding_completed: boolean;
   created_at: string;
   updated_at: string;

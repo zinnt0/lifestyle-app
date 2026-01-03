@@ -38,7 +38,13 @@ export interface OnboardingData {
   sleep_hours_avg: number | null; // 6.5, 7.0, etc.
   stress_level: number | null; // 1-10
 
-  // Screen 5: Unverträglichkeiten (optional)
+  // Screen 5: Ernährungsziele
+  pal_factor: number | null; // Physical Activity Level (1.2-2.5)
+  target_weight_kg: number | null; // Optional target weight
+  target_date: string | null; // Optional target date (ISO string)
+  body_fat_percentage: number | null; // Optional body fat %
+
+  // Screen 6: Unverträglichkeiten (optional)
   intolerances: Array<{
     intolerance_id: string;
     severity: 'mild' | 'moderate' | 'severe' | 'life_threatening';
@@ -100,6 +106,12 @@ const initialData: OnboardingData = {
   stress_level: null,
 
   // Screen 5
+  pal_factor: 1.55, // Default: moderately active
+  target_weight_kg: null,
+  target_date: null,
+  body_fat_percentage: null,
+
+  // Screen 6
   intolerances: [],
 };
 
@@ -123,7 +135,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const totalSteps = 7;
+  const totalSteps = 8; // Increased from 7 to 8 (added nutrition goals screen)
 
   /**
    * Update onboarding data with partial updates
@@ -191,17 +203,26 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
         );
 
       case 5:
-        // Optional screen, always valid
-        return true;
+        // Nutrition goals - PAL factor is required, rest is optional
+        return !!(
+          data.pal_factor &&
+          data.pal_factor >= 1.2 &&
+          data.pal_factor <= 2.5
+        );
 
       case 6:
-        // Summary screen, check all previous steps
+        // Intolerances - optional screen, always valid
+        return true;
+
+      case 7:
+        // Summary screen, check all previous required steps
         return (
           isStepValid(0) &&
           isStepValid(1) &&
           isStepValid(2) &&
           isStepValid(3) &&
-          isStepValid(4)
+          isStepValid(4) &&
+          isStepValid(5)
         );
 
       default:
@@ -307,7 +328,16 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
         }
         break;
 
-      case 6:
+      case 5:
+        if (!data.pal_factor) {
+          errors.push('Aktivitätslevel ist erforderlich');
+        } else if (data.pal_factor < 1.2 || data.pal_factor > 2.5) {
+          errors.push('PAL-Faktor muss zwischen 1.2 und 2.5 liegen');
+        }
+        // target_weight_kg, target_date, body_fat_percentage are optional
+        break;
+
+      case 7:
         // Check all previous steps for summary
         const allErrors = [
           ...getStepErrors(0),
@@ -315,6 +345,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
           ...getStepErrors(2),
           ...getStepErrors(3),
           ...getStepErrors(4),
+          ...getStepErrors(5),
         ];
         return allErrors;
     }
@@ -383,8 +414,8 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
    */
   const submitOnboarding = async () => {
     // Validate all steps before submission
-    if (!isStepValid(6)) {
-      const errors = getStepErrors(6);
+    if (!isStepValid(7)) {
+      const errors = getStepErrors(7);
       setError(errors[0]);
       throw new Error(errors[0]);
     }

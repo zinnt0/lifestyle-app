@@ -273,6 +273,44 @@ export const ProfileScreen: React.FC = () => {
         </Card>
       </View>
 
+      {/* Nutrition Goals Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="nutrition-outline" size={24} color={COLORS.primary} />
+          <Text style={styles.sectionTitle}>Ernährungsziele</Text>
+        </View>
+
+        <Card elevation="small" padding="medium">
+          <ProfileField
+            label="Aktivitätslevel"
+            value={getPALLabel(profile.pal_factor)}
+          />
+          {profile.target_weight_kg && (
+            <ProfileField
+              label="Zielgewicht"
+              value={`${profile.target_weight_kg} kg`}
+            />
+          )}
+          {profile.target_date && (
+            <ProfileField
+              label="Zieldatum"
+              value={new Date(profile.target_date).toLocaleDateString('de-DE')}
+            />
+          )}
+          {profile.body_fat_percentage && (
+            <ProfileField
+              label="Körperfettanteil"
+              value={`${profile.body_fat_percentage}%`}
+            />
+          )}
+          {!profile.target_weight_kg && !profile.target_date && !profile.body_fat_percentage && (
+            <Text style={styles.noEquipmentText}>
+              Keine zusätzlichen Ernährungsziele angegeben
+            </Text>
+          )}
+        </Card>
+      </View>
+
       {/* Action Buttons */}
       <View style={styles.actionContainer}>
         <Button
@@ -307,6 +345,19 @@ const formatPreferredDays = (days: number[]): string => {
     .sort((a, b) => a - b)
     .map((day) => dayNames[day])
     .join(", ");
+};
+
+/**
+ * Get human-readable label for PAL factor
+ */
+const getPALLabel = (palFactor: number | null): string => {
+  if (!palFactor) return 'Moderat aktiv (Standard)';
+
+  if (palFactor <= 1.2) return 'Sedentär (1.2)';
+  if (palFactor <= 1.375) return 'Leicht aktiv (1.375)';
+  if (palFactor <= 1.55) return 'Moderat aktiv (1.55)';
+  if (palFactor <= 1.725) return 'Sehr aktiv (1.725)';
+  return 'Extrem aktiv (1.9)';
 };
 
 const styles = StyleSheet.create({
