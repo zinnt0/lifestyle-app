@@ -23,7 +23,12 @@ import {
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { ActivityChip } from "../../components/ui/ActivityChip";
-import { getQualityEmoji, getStressEmoji, getMoodEmoji, getEnergyEmoji } from "../../utils/emojiHelpers";
+import {
+  getQualityEmoji,
+  getStressEmoji,
+  getMoodEmoji,
+  getEnergyEmoji,
+} from "../../utils/emojiHelpers";
 
 // ============================================================================
 // TYPES
@@ -266,23 +271,21 @@ export const DailyCheckinScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>💤 Schlaf</Text>
 
           {/* Sleep Hours */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Schlafstunden</Text>
-            <View style={styles.inputWithSuffix}>
-              <Input
-                value={formData.sleep_hours.toString()}
-                onChangeText={(text) => {
-                  const value = parseFloat(text);
-                  if (!isNaN(value)) {
-                    updateField("sleep_hours", value);
-                  }
-                }}
-                keyboardType="decimal-pad"
-                placeholder="7.5"
-                style={{ flex: 1, marginBottom: 0 }}
-              />
-              <Text style={styles.suffixText}>h 😴</Text>
+          <View style={styles.sliderGroup}>
+            <View style={styles.sliderHeader}>
+              <Text style={styles.label}>Schlafstunden</Text>
+              <Text style={styles.sliderValue}>😴 {formData.sleep_hours}h</Text>
             </View>
+            <Slider
+              style={styles.slider}
+              minimumValue={0}
+              maximumValue={12}
+              step={0.5}
+              value={formData.sleep_hours}
+              onValueChange={(value) => updateField("sleep_hours", value)}
+              minimumTrackTintColor="#5856D6"
+              maximumTrackTintColor="#C6C6C8"
+            />
           </View>
 
           {/* Sleep Quality */}
