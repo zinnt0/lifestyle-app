@@ -4,9 +4,10 @@
  * Screen for choosing plan creation method:
  * - Option 1: Guided flow (AI-recommended plans based on user answers)
  * - Option 2: Custom plan creation (manual selection)
+ * - Option 3: Browse all available plans (sorted by rating)
  *
  * Features:
- * - Two large, touchable option cards
+ * - Three large, touchable option cards
  * - Clean, modern layout with emojis
  * - Type-safe navigation to respective flows
  */
@@ -66,6 +67,10 @@ export const PlanConfigurationScreen: React.FC<
 
   const handleCustomFlow = () => {
     navigation.navigate("CustomPlanFlow");
+  };
+
+  const handlePlanList = () => {
+    navigation.navigate("PlanList");
   };
 
   return (
@@ -130,6 +135,34 @@ export const PlanConfigurationScreen: React.FC<
             {/* Description */}
             <Text style={styles.cardDescription}>
               Wähle Trainingstage und Übungen selbst aus
+            </Text>
+
+            {/* Arrow Indicator */}
+            <View style={styles.arrowContainer}>
+              <Text style={styles.arrow}>→</Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* Option 3: Browse All Plans */}
+        <Card
+          onPress={handlePlanList}
+          padding="large"
+          elevation="medium"
+          style={styles.optionCard}
+        >
+          <View style={styles.cardContent}>
+            {/* Icon */}
+            <View style={styles.iconContainer}>
+              <Text style={styles.emoji}>📋</Text>
+            </View>
+
+            {/* Title */}
+            <Text style={styles.cardTitle}>Plan aus Liste auswählen</Text>
+
+            {/* Description */}
+            <Text style={styles.cardDescription}>
+              Alle verfügbaren Pläne durchsuchen und vergleichen
             </Text>
 
             {/* Arrow Indicator */}

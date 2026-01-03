@@ -1399,6 +1399,31 @@ async function getRecommendations(
 }
 
 /**
+ * Lädt ALLE verfügbaren Pläne mit Ratings für einen User
+ *
+ * Sortiert nach totalScore (höchste zuerst).
+ * Praktisch für PlanListScreen mit Browsing aller Pläne.
+ *
+ * @param userId - Die ID des Users
+ * @returns Liste aller Pläne mit Scores, sortiert nach Rating
+ */
+async function getAllPlansWithRatings(
+  userId: string
+): Promise<PlanRecommendation[]> {
+  try {
+    // Reuse getRecommendations logic but without limit
+    // Pass a very high number to get all templates
+    const allRecommendations = await getRecommendations(userId, 999);
+
+    // Already sorted by score in getTopRecommendations()
+    return allRecommendations;
+  } catch (error) {
+    console.error('[getAllPlansWithRatings] Failed', error);
+    throw error;
+  }
+}
+
+/**
  * Lädt die beste Plan-Empfehlung für einen User
  *
  * Praktisch für direkten Plan-Vorschlag nach Onboarding.
@@ -1666,6 +1691,7 @@ export const trainingService = {
   // Plan Recommendations (Scoring System)
   getRecommendations,
   getBestPlanRecommendation,
+  getAllPlansWithRatings,
 
   // Plan Creation
   createPlanFromTemplate,
