@@ -43,6 +43,7 @@ export type MainStackParamList = {
   ProfileEdit: undefined;
   Settings: undefined;
   DailyCheckin: undefined;
+  NutritionTest: undefined;
 };
 
 /**
@@ -68,7 +69,7 @@ export type TrainingStackParamList = {
 export type TabNavigatorParamList = {
   HomeTab: undefined;
   TrainingTab: undefined;
-  MoreTab: undefined;
+  NutritionTab: undefined;
 };
 
 /**

@@ -15,6 +15,8 @@ import { Ionicons } from "@expo/vector-icons";
 // Import Stack Navigators
 import { MainNavigator } from "./MainNavigator";
 import { TrainingStackNavigator } from "./TrainingStackNavigator";
+import { NutritionStackNavigator } from "./NutritionStackNavigator";
+import { supabase } from "../lib/supabase";
 
 const Tab = createBottomTabNavigator();
 
@@ -24,14 +26,29 @@ const Tab = createBottomTabNavigator();
  * Provides bottom tab navigation with:
  * - Home tab (Main features)
  * - Training tab (Workout plans and tracking)
- * - More tab (Profile and settings)
+ * - Nutrition tab (Food tracking and nutrition)
  */
 export const TabNavigator: React.FC = () => {
+  const [userId, setUserId] = React.useState<string>("");
+
+  // Get current user ID
+  React.useEffect(() => {
+    const getUserId = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+    getUserId();
+  }, []);
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#4A90E2",
+        tabBarActiveTintColor: "#6FD89E",
         tabBarInactiveTintColor: "#999",
         tabBarStyle: {
           borderTopWidth: 1,
@@ -71,17 +88,18 @@ export const TabNavigator: React.FC = () => {
         }}
       />
 
-      {/* More Tab */}
+      {/* Nutrition Tab */}
       <Tab.Screen
-        name="MoreTab"
-        component={MainNavigator}
+        name="NutritionTab"
         options={{
-          tabBarLabel: "Mehr",
+          tabBarLabel: "Ernährung",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="ellipsis-horizontal" size={size} color={color} />
+            <Ionicons name="nutrition-outline" size={size} color={color} />
           ),
         }}
-      />
+      >
+        {() => <NutritionStackNavigator userId={userId} />}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 };

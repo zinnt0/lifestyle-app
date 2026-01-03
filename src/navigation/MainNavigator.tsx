@@ -14,6 +14,7 @@ import { HomeScreen } from "../screens/app/HomeScreen";
 import { ProfileScreen } from "../screens/app/ProfileScreen";
 import { ProfileEditScreen } from "../screens/app/ProfileEditScreen";
 import { DailyCheckinScreen } from "../screens/app/DailyCheckinScreen";
+import NutritionTestScreen from "../screens/NutritionTestScreen";
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
@@ -59,6 +60,13 @@ export const MainNavigator: React.FC = () => {
         component={DailyCheckinScreen}
         options={{
           title: "Tägliches Check-in",
+        }}
+      />
+      <Stack.Screen
+        name="NutritionTest"
+        component={NutritionTestScreen}
+        options={{
+          title: "Nutrition API Test",
         }}
       />
     </Stack.Navigator>

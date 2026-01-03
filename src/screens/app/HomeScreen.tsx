@@ -179,6 +179,14 @@ export const HomeScreen: React.FC = () => {
             <Text style={styles.checkinText}>📋 Tägliches Check-in</Text>
           </TouchableOpacity>
         )}
+
+        {/* Nutrition API Test Button - Development Only */}
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => navigation.navigate("NutritionTest")}
+        >
+          <Text style={styles.testButtonText}>🧪 Nutrition API Test</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -248,6 +256,20 @@ const styles = StyleSheet.create({
   checkinText: {
     color: "#FFFFFF",
     fontSize: 18,
+    fontWeight: "600",
+  },
+  testButton: {
+    backgroundColor: "#FF6B6B",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginTop: 16,
+    width: "100%",
+    maxWidth: 300,
+  },
+  testButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
     fontWeight: "600",
   },
 });
