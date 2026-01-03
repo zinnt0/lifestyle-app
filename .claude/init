@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-01-02
 **Project Type:** React Native (Expo) Lifestyle Application
-**Branch:** main
+**Branch:** main (features/user-profile merged)
 **Status:** Active Development
 
 ---
@@ -41,13 +41,14 @@ lifestyle-app/
 │   │   └── training/           # ✅ Training feature components
 │   ├── screens/
 │   │   ├── Training/           # ✅ Training screens (NEW)
-│   │   ├── onboarding/         # ✅ 6 Onboarding Screens + Summary
+│   │   ├── onboarding/         # ✅ 7 Onboarding Screens (0-5 + Summary)
 │   │   ├── app/                # ✅ Main app screens (Home, Profile, DailyCheckin)
 │   │   ├── auth/               # ⏸️ Login, Register
 │   │   └── nutrition/          # ⏸️ Nutrition screens
 │   ├── services/               # Business logic & API services
 │   │   ├── auth.service.ts     # ✅ Authentication service
 │   │   ├── profile.service.ts  # ✅ Profile & onboarding service
+│   │   ├── storage.service.ts  # ✅ Centralized AsyncStorage service (NEW)
 │   │   ├── recovery.service.ts # ✅ Recovery tracking service
 │   │   ├── trainingService.ts  # ✅ Training service with caching
 │   │   └── calorieCalculationService.ts  # ✅ Calorie calculations (NEW)
@@ -57,7 +58,7 @@ lifestyle-app/
 │   │   ├── planRecommendationScoring.ts  # ✅ 4D Scoring Algorithm
 │   │   └── recommendationAnalytics.ts    # ✅ Analytics System
 │   ├── contexts/               # React Context providers
-│   │   └── OnboardingContext.tsx  # ✅ 6-step onboarding state
+│   │   └── OnboardingContext.tsx  # ✅ 7-step onboarding state (Screen 0-5 + Summary)
 │   ├── hooks/                  # Custom React hooks
 │   │   └── useForm.ts          # ✅ Form state management
 │   ├── types/                  # TypeScript type definitions
@@ -86,6 +87,283 @@ lifestyle-app/
 ---
 
 ## Recent Major Changes (December 2024 - January 2026)
+
+### User Profile Management System (Feature Branch: features/user-profile) ⭐ NEW
+
+**Date:** 2026-01-02
+**Status:** ✅ Merged to main (Commit: 21be7867)
+**Merge Commit:** feat: implement comprehensive user profile management system (998341c9)
+
+Ein umfassendes User Profile Management System mit neuen UI-Komponenten, erweitertem Onboarding-Flow und zentralisiertem Storage Service.
+
+#### 1. New Storage Service
+
+**Location:** `src/services/storage.service.ts`
+
+**Purpose:** Zentralisierte AsyncStorage-Verwaltung für persistente Daten
+
+**Features:**
+- Type-safe storage operations
+- Unified error handling
+- Automatic JSON serialization/deserialization
+- Key-value storage abstraction
+- Error logging and recovery
+
+**Key Functions:**
+```typescript
+saveData<T>(key: string, value: T): Promise<void>
+getData<T>(key: string): Promise<T | null>
+removeData(key: string): Promise<void>
+clearAll(): Promise<void>
+getAllKeys(): Promise<string[]>
+```
+
+**Benefits:**
+- Single source of truth für AsyncStorage access
+- Consistent error handling über alle storage operations
+- Type-safe data access mit TypeScript generics
+- Einfacher zu testen und zu mocken
+- Reduziert duplicate code in services
+
+**Integration:**
+- Verwendet in profile.service.ts
+- Ersetzt direkte AsyncStorage calls
+- Foundation für weitere Storage-Nutzung
+
+#### 2. NumericInput Component
+
+**Location:** `src/components/ui/NumericInput.tsx`
+
+**Purpose:** Spezialisierte numerische Input-Komponente für bessere Zahleneingabe
+
+**Features:**
+- Optimierte Tastatur-Typen (numeric, decimal)
+- Built-in validation für numerische Werte
+- Min/Max value constraints
+- Decimal precision control
+- Better UX für numerische Werte
+- Error state handling
+- Theme integration
+
+**Props:**
+- `value: string` - Current input value
+- `onChangeText: (text: string) => void` - Change handler
+- `placeholder?: string` - Placeholder text
+- `min?: number` - Minimum value
+- `max?: number` - Maximum value
+- `decimals?: number` - Decimal places allowed
+- `error?: string` - Error message
+- `label?: string` - Input label
+- `disabled?: boolean` - Disabled state
+
+**Use Cases:**
+- Weight input (kg/lbs)
+- Height input (cm/inches)
+- Age input
+- Metric inputs (calories, macros, etc.)
+
+**Benefits:**
+- Bessere UX als generic Input für Zahlen
+- Automatic validation
+- Consistent numeric input behavior
+- Mobile-optimized keyboard
+
+#### 3. OnboardingScreen0 - Welcome Screen
+
+**Location:** `src/screens/onboarding/OnboardingScreen0.tsx`
+
+**Purpose:** Willkommens-Screen vor dem eigentlichen Onboarding-Flow
+
+**Features:**
+- Welcome message und App-Introduction
+- Brand presentation (MODO Logo)
+- Motivational copy
+- "Los geht's" CTA Button
+- Smooth transition zu Screen 1
+
+**Content:**
+- App-Vorstellung
+- Feature-Highlights
+- User-Benefits
+- Privacy/Data-Hinweise (optional)
+
+**UI/UX:**
+- AppHeader mit Logo
+- Clean, minimalistisches Design
+- Call-to-Action Button
+- Kein "Zurück"-Button (erster Screen)
+
+**Integration:**
+- Erweitert Onboarding von 6 auf 7 Screens
+- Screen 0 → Screen 1 → ... → Screen 5 → Summary
+- OnboardingContext updated für 7-step flow
+- OnboardingNavigator routed alle 7 Screens
+
+**Navigation Flow:**
+```
+Screen 0 (Welcome)
+  ↓ "Los geht's"
+Screen 1 (Basisdaten)
+  ↓
+Screen 2 (Training)
+  ↓
+Screen 3 (Ziele)
+  ↓
+Screen 4 (Lifestyle)
+  ↓
+Screen 5 (Unverträglichkeiten)
+  ↓
+Summary (Submit)
+```
+
+#### 4. Onboarding Updates
+
+**Updated Files:**
+- `src/contexts/OnboardingContext.tsx` - Extended für 7-step flow
+- `src/navigation/OnboardingNavigator.tsx` - Integration von Screen 0
+- `src/screens/onboarding/index.tsx` - Export von Screen 0
+
+**OnboardingContext Changes:**
+- `totalSteps` updated von 6 auf 7
+- State-Handling für Screen 0
+- Navigation logic updated
+- Progress calculation adjusted (0-100% über 7 Screens)
+
+**OnboardingNavigator Changes:**
+- Neue Route für Screen 0
+- Updated Screen numbering (0-5 statt 1-6)
+- Initial screen = Screen 0
+- Switch-Statement updated
+
+**Benefits:**
+- Bessere User Onboarding Experience
+- Klarere App-Präsentation
+- Professionellerer First Impression
+- Strukturierter Flow
+
+#### 5. Profile Screen Updates
+
+**Updated File:** `src/screens/app/ProfileScreen.tsx`
+
+**Changes:**
+- Enhanced profile display
+- Better section organization
+- Improved data visualization
+- Updated UI components integration
+- Better error handling
+- Loading state improvements
+
+**Features:**
+- Comprehensive profile information display
+- Edit navigation
+- Stats integration
+- Better user feedback
+- Modernized design
+
+#### 6. Profile Edit Screen Updates
+
+**Updated File:** `src/screens/app/ProfileEditScreen.tsx`
+
+**Changes:**
+- NumericInput integration für numerische Felder
+- Improved form validation
+- Better UX für numeric inputs
+- Enhanced error handling
+- Streamlined save flow
+
+**NumericInput Usage:**
+- Age input (13-120 Jahre)
+- Weight input (kg, decimal)
+- Height input (cm, decimal)
+- Training experience (Monate)
+
+**Benefits:**
+- Bessere mobile keyboard experience
+- Automatic numeric validation
+- Cleaner input handling
+- Reduced validation complexity
+
+#### 7. Updated Onboarding Screens (1-5)
+
+**Updated Files:**
+- `src/screens/onboarding/OnboardingScreen1.tsx` - Basisdaten
+- `src/screens/onboarding/OnboardingScreen2.tsx` - Training
+- `src/screens/onboarding/OnboardingScreen3.tsx` - Ziele
+- `src/screens/onboarding/OnboardingScreen4.tsx` - Lifestyle
+- `src/screens/onboarding/OnboardingScreen5.tsx` - Unverträglichkeiten
+
+**Common Updates:**
+- NumericInput integration wo applicable
+- Theme integration improvements
+- Better validation feedback
+- Enhanced error messaging
+- Improved layout consistency
+- Updated screen numbering (accounting für Screen 0)
+
+**Specific Updates:**
+- **Screen 1:** NumericInput für Age, Weight, Height
+- **Screen 2:** NumericInput für Years of Experience, Days per Week
+- **Screen 3:** Improved goal selection UI
+- **Screen 4:** Better slider integration
+- **Screen 5:** Enhanced multi-select UI
+
+#### 8. UI Component Updates
+
+**Updated Files:**
+- `src/components/ui/AppHeader.tsx` - Enhanced header design
+- `src/components/ui/Input.tsx` - Better validation integration
+
+**AppHeader Updates:**
+- Improved logo display
+- Better gradient implementation
+- Enhanced branding
+- Responsive sizing
+
+**Input Updates:**
+- Better error state handling
+- Enhanced accessibility
+- Theme integration improvements
+- Validation state styling
+
+#### 9. Dependencies Updates
+
+**Updated Files:**
+- `package.json` - New dependencies added
+- `package-lock.json` - Dependency tree updated
+- `node_modules/.package-lock.json` - Package lock updates
+
+**New Dependencies:**
+- (Dependencies für NumericInput support)
+- Updated expo-file-system
+- Other dependency updates
+
+#### 10. Benefits & Impact
+
+**User Experience:**
+- ✅ Professionellerer Onboarding-Flow mit Welcome Screen
+- ✅ Bessere numerische Input-Erfahrung
+- ✅ Klarere Profil-Verwaltung
+- ✅ Konsistentere UX über alle Screens
+
+**Developer Experience:**
+- ✅ Zentralisierter Storage Service (DRY)
+- ✅ Wiederverwendbare NumericInput Component
+- ✅ Bessere Code-Organisation
+- ✅ Type-safe storage operations
+
+**Technical:**
+- ✅ Reduzierter duplicate code
+- ✅ Bessere Testbarkeit
+- ✅ Klarere Service-Struktur
+- ✅ Foundation für weitere Features
+
+**Scalability:**
+- ✅ Storage Service ready für weitere Features
+- ✅ NumericInput verwendbar in allen Screens
+- ✅ 7-Screen Onboarding erweiterbar
+- ✅ Konsistente Architektur-Patterns
+
+---
 
 ### UI Modernization (Feature Branch: feature/ui-modernization) ⭐ NEW
 
@@ -872,6 +1150,7 @@ const { values, errors, isSubmitting, handleChange, handleSubmit, reset } = useF
 
 **Form Components**:
 - `FormGroup.tsx` ⭐ NEW - Form field wrapper with label/error
+- `NumericInput.tsx` ⭐ NEW (User Profile Feature) - Specialized numeric input
 - `OptionButton.tsx` ⭐ NEW - Selectable option button
 - `RadioGroup.tsx` - Theme integration, better spacing
 - `NumberPicker.tsx` - Improved styling, haptic feedback
@@ -893,7 +1172,7 @@ const { values, errors, isSubmitting, handleChange, handleSubmit, reset } = useF
 - `PageHeader.tsx` ⭐ NEW - Page-level header
 - `SectionTitle.tsx` ⭐ NEW - Section header with divider
 
-**Total:** 23+ UI Components
+**Total:** 24+ UI Components (includes NumericInput from User Profile Feature)
 
 **Design System Features**:
 - Single source of truth für Design-Tokens
@@ -916,7 +1195,40 @@ import { theme } from '@/components/ui/theme';
 const primaryColor = theme.colors.primary.blue500;
 ```
 
-### 4. Profile Service (✅ Komplett) - **NEU 2025-12-26**
+### 4. Storage Service (✅ Komplett) - **NEU 2026-01-02**
+
+**Datei**: `src/services/storage.service.ts`
+
+**Zweck**: Zentralisierte AsyncStorage-Verwaltung für persistente Daten
+
+**Funktionen**:
+- `saveData<T>(key, value)` - Speichert Daten mit type-safe serialization
+- `getData<T>(key)` - Lädt Daten mit automatic deserialization
+- `removeData(key)` - Entfernt einzelnen Key
+- `clearAll()` - Löscht alle Daten (mit Confirmation)
+- `getAllKeys()` - Lädt alle Storage-Keys
+
+**Features**:
+- Type-safe operations mit TypeScript generics
+- Unified error handling
+- Automatic JSON serialization/deserialization
+- Error logging und recovery
+- Fail-safe error handling (crashes nie die App)
+
+**Response Format**: Generic promises mit type inference
+
+**Integration**:
+- Verwendet in profile.service.ts
+- Foundation für weitere storage-basierte Services
+- Replaces direkte AsyncStorage calls
+
+**Benefits**:
+- Single source of truth für storage access
+- Consistent error handling
+- Einfacher zu testen und mocken
+- Reduziert duplicate code
+
+### 5. Profile Service (✅ Komplett) - **NEU 2025-12-26, Updated 2026-01-02**
 
 **Datei**: `src/services/profile.service.ts`
 
@@ -937,26 +1249,34 @@ const primaryColor = theme.colors.primary.blue500;
 - TypeScript strict typing
 - Service Layer Pattern (Trennung von UI und Business Logic)
 - Integration mit Supabase (profiles + user_intolerances tables)
+- Integration mit storage.service.ts für persistente Daten
 - Wiederverwendbare Funktionen für verschiedene Screens
 
 **Response Format**: `{ data: T | null, error: string | null }`
 
-### 5. Onboarding Screens (✅ Komplett - 2025-12-26)
+### 6. Onboarding Screens (✅ Komplett - Updated 2026-01-02)
 
 **Location**: `src/screens/onboarding/`
 
-**6 Onboarding Screens**:
+**7 Onboarding Screens** (0-5 + Summary):
+
+0. **OnboardingScreen0.tsx** ⭐ NEW - Welcome Screen
+   - App-Introduction und Branding
+   - MODO Logo Display
+   - Motivational copy
+   - "Los geht's" CTA Button
+   - Einstieg in Onboarding-Flow
 
 1. **OnboardingScreen1.tsx** - Basisdaten
-   - Age (NumberPicker: 13-120)
-   - Weight (NumberPicker: 40-200 kg)
-   - Height (NumberPicker: 140-220 cm)
+   - Age (NumericInput: 13-120) ⭐ UPDATED
+   - Weight (NumericInput: 40-200 kg, decimal) ⭐ UPDATED
+   - Height (NumericInput: 140-220 cm, decimal) ⭐ UPDATED
    - Gender (RadioGroup: Male/Female/Diverse)
 
 2. **OnboardingScreen2.tsx** - Trainingserfahrung
    - Training Level (RadioGroup: Beginner/Intermediate/Advanced/Elite)
-   - Years of Experience (NumberPicker: 0-50)
-   - Days per Week (NumberPicker: 1-7)
+   - Years of Experience (NumericInput: 0-50) ⭐ UPDATED
+   - Days per Week (NumericInput: 1-7) ⭐ UPDATED
    - Equipment Access (RadioGroup: Gym/Home/Both/Bodyweight)
 
 3. **OnboardingScreen3.tsx** - Fitnessziele
@@ -986,13 +1306,15 @@ const primaryColor = theme.colors.primary.blue500;
 **Gemeinsame Features**:
 - ✅ Integration mit `OnboardingContext` via `useOnboarding()` hook
 - ✅ Automatische Validierung vor `nextStep()`
-- ✅ ProgressBar in jedem Screen (currentStep / totalSteps * 100)
+- ✅ ProgressBar in jedem Screen (currentStep / totalSteps * 100) - 7-step calculation
 - ✅ KeyboardAvoidingView für iOS/Android Keyboard-Handling
 - ✅ ScrollView für alle Inhalte (responsive auf kleinen Screens)
+- ✅ NumericInput für bessere numerische Eingabe (Screens 1-2) ⭐ NEW
 - ✅ Deutsche Fehlermeldungen
 - ✅ Loading States (Screen 5 beim Laden, Summary beim Submit)
 - ✅ Error Handling mit User-Feedback
 - ✅ Navigation: `nextStep()`, `previousStep()`, `goToStep(n)`
+- ✅ Screen 0 als Welcome Screen (kein "Zurück"-Button) ⭐ NEW
 
 **Supabase Integration**:
 - Screen 5: `getIntolerancesCatalog()` lädt Optionen
@@ -1000,22 +1322,22 @@ const primaryColor = theme.colors.primary.blue500;
 
 **Dokumentation**: `src/screens/onboarding/README.md`
 
-### 6. Onboarding Context (✅ Komplett - 2025-12-26)
+### 7. Onboarding Context (✅ Komplett - Updated 2026-01-02)
 
 **Datei**: `src/contexts/OnboardingContext.tsx`
 
-**Zweck**: Zentrale State-Management für 6-stufigen Onboarding-Flow
+**Zweck**: Zentrale State-Management für 7-stufigen Onboarding-Flow
 
 **Architektur**:
 - React Context + useReducer Pattern
-- 6 separate Screens mit eigener Validation
+- 7 separate Screens (0-5 + Summary) mit eigener Validation
 - Integration mit ProfileService
-- Progress Tracking (0-100%)
+- Progress Tracking (0-100% über 7 Screens)
 
 **State Structure**:
 ```typescript
 {
-  currentScreen: number,           // 0-5
+  currentScreen: number,           // 0-6 (Screen 0-5 + Summary)
   data: {
     gender: string | null,
     age: number | null,
@@ -1023,6 +1345,7 @@ const primaryColor = theme.colors.primary.blue500;
     weight: number | null,
     goal: string | null,
     intolerances: string[]
+    // ... other fields
   },
   errors: Record<string, string>,  // Field-level errors
   isSubmitting: boolean
@@ -1043,7 +1366,12 @@ const primaryColor = theme.colors.primary.blue500;
 - Deutsche Fehlermeldungen
 - Automatisches Error-Clearing bei Field-Update
 
-### 7. Profile Edit System (✅ Komplett - 2025-12-27)
+**Updates (2026-01-02):**
+- ✅ Extended für 7-screen flow (Screen 0 added)
+- ✅ Progress calculation adjusted für 7 steps
+- ✅ State handling für welcome screen
+
+### 8. Profile Edit System (✅ Komplett - Updated 2026-01-02)
 
 **Location**: `src/screens/app/ProfileEditScreen.tsx`, `src/screens/app/ProfileScreen.tsx`
 
@@ -1062,14 +1390,14 @@ const primaryColor = theme.colors.primary.blue500;
 **Form Sections**:
 
 1. **Basisdaten** (Section 1)
-   - Age (Input mit NumberPad, 13-120 Jahre)
-   - Weight (Input mit DecimalPad, kg)
-   - Height (Input mit DecimalPad, cm)
+   - Age (NumericInput, 13-120 Jahre) ⭐ UPDATED
+   - Weight (NumericInput mit DecimalPad, kg) ⭐ UPDATED
+   - Height (NumericInput mit DecimalPad, cm) ⭐ UPDATED
    - Gender (RadioGroup: Male/Female/Other)
 
 2. **Training** (Section 2)
    - Fitness Level (OptionButtons: Beginner/Intermediate/Advanced)
-   - Training Experience (Input, Monate)
+   - Training Experience (NumericInput, Monate) ⭐ UPDATED
    - Training Days per Week (NumberPicker: 1-7)
    - Gym Access (Switch: Ja/Nein)
    - Home Equipment (MultiSelectChips, conditional on no gym access)
@@ -1086,11 +1414,13 @@ const primaryColor = theme.colors.primary.blue500;
    - Severity Picker (Mild/Moderate/Severe/Life-threatening) per Intolerance
 
 **Input Handling Strategy**:
-- **Numeric Fields**: Separate `inputStrings` state preserves comma/period during typing
-- **Reason**: Prevents value disappearing when user types "75," for weight
+- **NumericInput Component**: Verwendet für alle numerischen Felder ⭐ UPDATED
+- **Better UX**: Mobile-optimized keyboard, automatic validation
+- **Reason**: Cleaner implementation, bessere mobile experience
 
 **Validation**:
 - Client-side validation via `validateForm()` before save
+- NumericInput handles numeric validation automatically ⭐ NEW
 - Field-level validations
 - German error messages
 - Validation errors displayed in error banner
@@ -1129,7 +1459,7 @@ useFocusEffect(
 ProfileScreen → ProfileEditScreen → Edit → Save → Navigate back → Auto-Refresh
 ```
 
-### 8. Daily Recovery Tracking System (✅ Komplett - 2025-12-28)
+### 9. Daily Recovery Tracking System (✅ Komplett - 2025-12-28)
 
 **Dateien**: `src/services/recovery.service.ts`, `src/screens/app/DailyCheckinScreen.tsx`
 
@@ -1221,7 +1551,7 @@ getRecommendation(score: number): string
 - Auto-refresh on screen focus
 - Navigation to DailyCheckinScreen
 
-### 9. Training Module (✅ Major Features Implementiert - 2024-12-28 to 2025-12-30)
+### 10. Training Module (✅ Major Features Implementiert - 2024-12-28 to 2025-12-30)
 
 **Status**: Production-Ready Components, Active Development für Screens
 
@@ -1255,7 +1585,7 @@ getRecommendation(score: number): string
 
 **Core Components**: Siehe "Recent Major Changes - Training Section Enhancement" oben
 
-### 10. Navigation System (✅ Komplett - 2025-12-26, updated 2025-12-28)
+### 11. Navigation System (✅ Komplett - Updated 2026-01-02)
 
 **Location**: `src/navigation/`
 
@@ -1293,14 +1623,15 @@ return <MainNavigator />;
 
 **Datei**: `src/navigation/OnboardingNavigator.tsx`
 
-**Zweck**: Managed den 6-Screen Onboarding Flow
+**Zweck**: Managed den 7-Screen Onboarding Flow (Updated 2026-01-02)
 
 **Architektur**:
 - State-based Navigation (nicht Stack-based)
-- OnboardingContext managed `currentStep` (1-6)
+- OnboardingContext managed `currentStep` (0-6)
 - Switch-Statement rendert passenden Screen basierend auf Step
 
 **Screen Mapping**:
+- Step 0 → OnboardingScreen0 (Welcome) ⭐ NEW
 - Step 1 → OnboardingScreen1 (Basisdaten)
 - Step 2 → OnboardingScreen2 (Trainingserfahrung)
 - Step 3 → OnboardingScreen3 (Fitnessziele)
@@ -1390,12 +1721,17 @@ AppNavigator (Root)
 │                  │                     │                  │
 ↓                  ↓                     ↓
 AuthNavigator      OnboardingNavigator   MainNavigator
-(Login, Register)  (6 Screens)          (Home, Profile, DailyCheckin)
+(Login, Register)  (7 Screens: 0-6)     (Home, Profile, DailyCheckin)
     ↓                     ↓
 Sign In/Up         submitOnboarding()
     ↓                     ↓
 OnboardingNavigator  → MainNavigator
 ```
+
+**Updates (2026-01-02):**
+- ✅ OnboardingNavigator extended für 7-screen flow
+- ✅ Screen 0 (Welcome) added as initial screen
+- ✅ Progress calculation adjusted für 7 steps
 
 ---
 
@@ -1473,19 +1809,28 @@ The project uses specialized AI agents for different development tasks:
 **Abgeschlossen**:
 - ✅ Authentication Service
 - ✅ Form Validation System
-- ✅ UI Components (13 Components)
+- ✅ UI Components (24+ Components) - Updated 2026-01-02
 - ✅ Testing Setup
-- ✅ Profile Service
-- ✅ Onboarding Context
-- ✅ Onboarding Screens (6 Screens + Summary)
-- ✅ **Navigation System**:
+- ✅ Storage Service ⭐ NEW (2026-01-02)
+- ✅ Profile Service (Updated 2026-01-02)
+- ✅ Onboarding Context (Extended für 7 screens, 2026-01-02)
+- ✅ Onboarding Screens (7 Screens: 0-5 + Summary) ⭐ UPDATED (2026-01-02)
+  - ✅ OnboardingScreen0 (Welcome) ⭐ NEW
+  - ✅ NumericInput integration in Screens 1-2 ⭐ NEW
+- ✅ **Navigation System** (Updated 2026-01-02):
   - ✅ AppNavigator (Root with Auth/Onboarding/Main routing)
-  - ✅ OnboardingNavigator (State-based 6-screen flow)
+  - ✅ OnboardingNavigator (State-based 7-screen flow) ⭐ UPDATED
   - ✅ MainNavigator (Home/Profile/ProfileEdit/DailyCheckin stack)
   - ✅ Navigation Types (TypeScript param lists)
 - ✅ Main App Screens (Home, Profile)
-- ✅ **Profile Edit System**
+- ✅ **Profile Edit System** (Updated mit NumericInput, 2026-01-02)
 - ✅ **Daily Recovery Tracking System**
+- ✅ **User Profile Management System** ⭐ NEW (2026-01-02):
+  - ✅ NumericInput Component
+  - ✅ Storage Service Layer
+  - ✅ Enhanced Onboarding Flow
+  - ✅ Profile Screen Updates
+  - ✅ Profile Edit Updates
 - ✅ **Training Module** (Major Features):
   - ✅ Training Components (CalorieCard, ScoreBreakdownChart, etc.)
   - ✅ Training Services (trainingService, calorieCalculationService)
@@ -1868,6 +2213,8 @@ Follow conventional commits format:
 - `chore:` - Maintenance tasks
 
 ### Recent Commits
+- 21be7867 - Merge features/user-profile into main (2026-01-02) ⭐ NEW
+- 998341c9 - feat: implement comprehensive user profile management system (2026-01-02) ⭐ NEW
 - 42409681 - Merge feature/ui-modernization into main (2026-01-02)
 - 18a30409 - feat: modernize UI design system with comprehensive component updates (2026-01-02)
 - 2927bcd3 - Merge feature/training-section into main
