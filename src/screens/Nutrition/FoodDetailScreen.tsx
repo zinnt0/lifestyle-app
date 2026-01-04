@@ -26,6 +26,7 @@ import {
 } from "../../components/ui/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { addFoodToDiary, type FoodItem } from "../../services/nutritionApi";
+import { nutritionSyncService } from "../../services/NutritionSyncService";
 
 type FoodDetailRouteProp = RouteProp<NutritionStackParamList, "FoodDetail">;
 
@@ -92,6 +93,9 @@ export function FoodDetailScreen({ userId }: { userId: string }) {
         quantity,
         unit: "g",
       });
+
+      // Invalidate cache for the updated date to ensure fresh data
+      await nutritionSyncService.syncSingleDay(userId, mealDate);
 
       Alert.alert(
         "Erfolgreich",

@@ -22,6 +22,9 @@
  */
 
 import { localFoodCache } from './cache/LocalFoodCache';
+import { localNutritionCache } from './cache/LocalNutritionCache';
+import { localProfileCache } from './cache/LocalProfileCache';
+import { profileSyncService } from './ProfileSyncService';
 import { cloudFoodCache } from './cache/CloudFoodCache';
 import { openFoodFactsAPI } from './api/OpenFoodFactsAPI';
 import { foodSearchRanker } from './FoodSearchRanker';
@@ -58,8 +61,13 @@ export class FoodService {
     try {
       console.log(`${LOG_PREFIX} Initializing...`);
 
-      // Initialize local cache (SQLite)
+      // Initialize local caches (SQLite) - all use same DB
       await localFoodCache.initialize();
+      await localNutritionCache.initialize();
+      await localProfileCache.initialize();
+
+      // Initialize profile sync service (event listeners)
+      profileSyncService.initialize();
 
       // Prefetch popular foods in background (don't await)
       this.prefetchPopularFoods().catch((error) => {

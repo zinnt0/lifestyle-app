@@ -29,7 +29,7 @@ import { PausedSessionCard } from "../../components/training/PausedSessionCard";
 import { RecoveryCard } from "../../components/app/RecoveryCard";
 import { AppHeader } from "../../components/ui/AppHeader";
 import type { NextWorkout, WorkoutSession } from "../../types/training.types";
-import { getDailySummary } from "../../services/nutritionApi";
+import { useLocalNutrition } from "../../hooks/useLocalNutrition";
 import Svg, { Circle } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -94,18 +94,33 @@ const CalorieRing = ({
  */
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
+  const [userId, setUserId] = useState<string | null>(null);
   const [hasLogged, setHasLogged] = useState(false);
   const [recoveryScore, setRecoveryScore] = useState<number | null>(null);
   const [nextWorkout, setNextWorkout] = useState<NextWorkout | null>(null);
   const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(
     null
   );
-  const [calorieData, setCalorieData] = useState({
-    consumed: 0,
-    burned: 0,
-    goal: 2500,
-    remaining: 2500,
+
+  // Get today's date for nutrition data
+  const today = new Date().toISOString().split("T")[0];
+
+  // Use cache-first nutrition hook for instant calorie display
+  const { data: nutritionData } = useLocalNutrition(today, {
+    autoSync: true,
+    syncInterval: 5, // Sync every 5 minutes
   });
+
+  // Derive calorie data from nutrition cache
+  const calorieData = {
+    consumed: nutritionData?.calories_consumed || 0,
+    burned: nutritionData?.calories_burned || 0,
+    goal: nutritionData?.calorie_goal || 2500,
+    remaining:
+      (nutritionData?.calorie_goal || 2500) -
+      (nutritionData?.calories_consumed || 0) +
+      (nutritionData?.calories_burned || 0),
+  };
 
   /**
    * Check if user has logged today and fetch recovery score
@@ -115,6 +130,8 @@ export const HomeScreen: React.FC = () => {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
+
+    setUserId(user.id);
 
     const logged = await hasLoggedToday(user.id);
     setHasLogged(logged);
@@ -150,51 +167,20 @@ export const HomeScreen: React.FC = () => {
     }
   }, []);
 
-  /**
-   * Load nutrition data (calories)
-   */
-  const loadNutritionData = useCallback(async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const today = new Date();
-      const dateStr = today.toISOString().split("T")[0];
-
-      const summary = await getDailySummary(user.id, dateStr);
-
-      if (summary && summary.summary) {
-        const { calories } = summary.summary;
-
-        setCalorieData({
-          consumed: calories.consumed || 0,
-          burned: calories.burned || 0,
-          goal: calories.goal || 2500,
-          remaining:
-            (calories.goal || 2500) -
-            (calories.consumed || 0) +
-            (calories.burned || 0),
-        });
-      }
-    } catch (error) {
-      console.error("Error loading nutrition data:", error);
-      // Fail silently
-    }
-  }, []);
+  // Nutrition data is now loaded automatically via useLocalNutrition hook
+  // No manual loading needed - it's cache-first and auto-syncs!
 
   /**
    * Refresh data when screen comes into focus
    * This ensures the home screen updates after completing daily check-in
    * or starting a workout
+   * Note: Nutrition data auto-syncs via useLocalNutrition hook
    */
   useFocusEffect(
     useCallback(() => {
       checkTodayLog();
       loadNextWorkout();
-      loadNutritionData();
-    }, [checkTodayLog, loadNextWorkout, loadNutritionData])
+    }, [checkTodayLog, loadNextWorkout])
   );
 
   /**
@@ -323,6 +309,17 @@ export const HomeScreen: React.FC = () => {
             <Text style={styles.checkinText}>📋 Tägliches Check-in</Text>
           </TouchableOpacity>
         )}
+
+        {/* Cache Debug Button (Development) */}
+        {__DEV__ && (
+          <TouchableOpacity
+            style={styles.debugButton}
+            onPress={() => navigation.navigate("CacheDebug" as any, { userId })}
+          >
+            <Ionicons name="construct-outline" size={20} color="#666" />
+            <Text style={styles.debugButtonText}>Cache Debug</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -393,6 +390,22 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "600",
+  },
+  debugButton: {
+    backgroundColor: "#F0F0F0",
+    borderRadius: 12,
+    padding: 14,
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 24,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  debugButtonText: {
+    color: "#666",
+    fontSize: 16,
+    fontWeight: "500",
   },
   // Calorie Card Styles
   calorieCard: {

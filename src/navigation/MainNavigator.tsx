@@ -15,6 +15,7 @@ import { ProfileScreen } from "../screens/app/ProfileScreen";
 import { ProfileEditScreen } from "../screens/app/ProfileEditScreen";
 import { DailyCheckinScreen } from "../screens/app/DailyCheckinScreen";
 import NutritionTestScreen from "../screens/NutritionTestScreen";
+import CacheDebugScreen from "../screens/debug/CacheDebugScreen";
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
@@ -67,6 +68,14 @@ export const MainNavigator: React.FC = () => {
         component={NutritionTestScreen}
         options={{
           title: "Nutrition API Test",
+        }}
+      />
+      <Stack.Screen
+        name="CacheDebug"
+        component={CacheDebugScreen}
+        options={{
+          title: "Cache Debug",
+          headerBackTitle: "Zurück",
         }}
       />
     </Stack.Navigator>
