@@ -215,6 +215,9 @@ export function NutritionDashboardScreen({
       // Load water intake data
       await loadWaterIntake(dateStr);
 
+      // Load burned calories from workouts
+      await loadBurnedCalories(dateStr);
+
       // Load weight data from profile
       await loadWeightData();
 
@@ -289,6 +292,41 @@ export function NutritionDashboardScreen({
       });
     } catch (error) {
       console.error("Error loading weight data:", error);
+    }
+  };
+
+  // Load burned calories from completed workouts
+  const loadBurnedCalories = async (date: string) => {
+    try {
+      // Get all completed workout sessions for the day
+      const { data: sessions, error } = await supabase
+        .from("workout_sessions")
+        .select("total_calories_burned")
+        .eq("user_id", userId)
+        .eq("date", date)
+        .eq("status", "completed")
+        .not("total_calories_burned", "is", null);
+
+      if (error) throw error;
+
+      if (sessions && sessions.length > 0) {
+        // Sum up all calories burned from workouts on this day
+        const totalBurned = sessions.reduce(
+          (sum, session) => sum + (session.total_calories_burned || 0),
+          0
+        );
+
+        // Update calorie data with burned calories
+        setCalorieData((prev) => ({
+          ...prev,
+          burned: totalBurned,
+          remaining: prev.goal - prev.consumed + totalBurned,
+        }));
+
+        console.log("Loaded burned calories:", totalBurned);
+      }
+    } catch (error) {
+      console.error("Error loading burned calories:", error);
     }
   };
 
@@ -424,8 +462,8 @@ export function NutritionDashboardScreen({
         consumed: Math.min(prev.consumed + amount, prev.goal * 2),
       }));
 
-      // Reload data to get accurate totals from database
-      await loadNutritionData();
+      // Reload only water intake data to get accurate totals from database
+      await loadWaterIntake(dateStr);
     } catch (error) {
       console.error("Error adding water intake:", error);
       Alert.alert("Fehler", "Wasserzufuhr konnte nicht gespeichert werden.");

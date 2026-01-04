@@ -110,8 +110,8 @@ export function FoodSearchScreen() {
 
   // Navigate to barcode scanner
   const handleOpenScanner = useCallback(() => {
-    navigation.navigate('BarcodeScanner');
-  }, [navigation]);
+    navigation.navigate('BarcodeScanner', { mealType });
+  }, [navigation, mealType]);
 
   // Navigate to food detail
   const handleSelectFood = useCallback((food: FoodItem) => {

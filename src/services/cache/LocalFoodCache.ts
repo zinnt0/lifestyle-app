@@ -314,11 +314,11 @@ export class LocalFoodCache {
   }
 
   /**
-   * Insert new food item
+   * Insert new food item (or replace if already exists)
    */
   private async insertFood(food: FoodItem): Promise<void> {
     await this.db!.runAsync(
-      `INSERT INTO user_foods (
+      `INSERT OR REPLACE INTO user_foods (
         barcode, name, brand, calories, protein, carbs, fat, fiber, sugar, sodium,
         serving_size, serving_unit, nutriscore_grade, nova_group, ecoscore_grade,
         usage_count, last_used, cached_at, source

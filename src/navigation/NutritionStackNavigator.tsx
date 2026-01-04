@@ -14,7 +14,7 @@ import type { FoodItem } from "../services/nutritionApi";
 export type NutritionStackParamList = {
   NutritionDashboard: undefined;
   FoodSearch: { mealType?: "breakfast" | "lunch" | "dinner" | "snacks" };
-  BarcodeScanner: undefined;
+  BarcodeScanner: { mealType?: "breakfast" | "lunch" | "dinner" | "snacks" };
   FoodDetail: {
     food: FoodItem;
     mealType?: "breakfast" | "lunch" | "dinner" | "snacks";

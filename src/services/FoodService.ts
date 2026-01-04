@@ -24,6 +24,7 @@
 import { localFoodCache } from './cache/LocalFoodCache';
 import { cloudFoodCache } from './cache/CloudFoodCache';
 import { openFoodFactsAPI } from './api/OpenFoodFactsAPI';
+import { foodSearchRanker } from './FoodSearchRanker';
 import {
   FoodItem,
   SearchResult,
@@ -154,14 +155,15 @@ export class FoodService {
   }
 
   /**
-   * Search foods across all layers with intelligent merging
+   * Search foods across all layers with intelligent merging and relevance ranking
    *
    * Flow:
    * 1. Search LOCAL cache
    * 2. If <5 results: Search CLOUD cache
    * 3. If <5 results: Search EXTERNAL API
    * 4. Merge & deduplicate results
-   * 5. Cache new results
+   * 5. RANK by relevance (new!)
+   * 6. Cache new results
    */
   async searchFoods(query: string): Promise<SearchResult> {
     this.ensureInitialized();
@@ -183,14 +185,14 @@ export class FoodService {
       let primarySource: 'local' | 'cloud' | 'external' = 'local';
 
       // LAYER 1: Local search
-      const localResults = await localFoodCache.searchFoodsByName(query, 20);
+      const localResults = await localFoodCache.searchFoodsByName(query, 50);
       allResults = [...localResults];
       console.log(`${LOG_PREFIX} Local results: ${localResults.length}`);
 
       // LAYER 2: Cloud search (if local results insufficient)
       if (allResults.length < this.config.minSearchResults) {
         primarySource = 'cloud';
-        const cloudResults = await cloudFoodCache.searchFoods(query, 20);
+        const cloudResults = await cloudFoodCache.searchFoods(query, 50);
         console.log(`${LOG_PREFIX} Cloud results: ${cloudResults.length}`);
 
         // Merge with local results (deduplicate by barcode)
@@ -207,7 +209,7 @@ export class FoodService {
       // LAYER 3: External API search (if still insufficient)
       if (allResults.length < this.config.minSearchResults) {
         primarySource = 'external';
-        const externalResults = await openFoodFactsAPI.searchProducts(query, 20);
+        const externalResults = await openFoodFactsAPI.searchProducts(query, 50);
         console.log(`${LOG_PREFIX} External results: ${externalResults.length}`);
 
         // Merge with existing results
@@ -224,16 +226,22 @@ export class FoodService {
         });
       }
 
+      // RANK RESULTS BY RELEVANCE
+      const rankedResults = foodSearchRanker.rankResults(allResults, query);
+      console.log(
+        `${LOG_PREFIX} Ranked ${allResults.length} → ${rankedResults.length} relevant results`
+      );
+
       const elapsed = Date.now() - startTime;
       console.log(
-        `${LOG_PREFIX} Search complete: ${allResults.length} results (${elapsed}ms)`
+        `${LOG_PREFIX} Search complete: ${rankedResults.length} results (${elapsed}ms)`
       );
 
       return {
-        items: allResults,
+        items: rankedResults,
         source: primarySource,
         query_time_ms: elapsed,
-        total_count: allResults.length,
+        total_count: rankedResults.length,
       };
     } catch (error) {
       const elapsed = Date.now() - startTime;

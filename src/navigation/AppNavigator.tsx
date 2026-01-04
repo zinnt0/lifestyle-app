@@ -17,6 +17,7 @@ import { OnboardingNavigator } from "./OnboardingNavigator";
 import { TabNavigator } from "./TabNavigator";
 import { getCurrentUser, onAuthStateChange } from "../services/auth.service";
 import { isOnboardingCompleted } from "../services/profile.service";
+import { foodService } from "../services/FoodService";
 import type { AuthUser } from "../services/auth.service";
 
 /**
@@ -59,6 +60,13 @@ export const AppNavigator: React.FC = () => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Initialize FoodService on app start
+  useEffect(() => {
+    foodService.initialize().catch((error) => {
+      console.error("Failed to initialize FoodService:", error);
+    });
+  }, []);
 
   // Check initial auth and onboarding state
   useEffect(() => {
