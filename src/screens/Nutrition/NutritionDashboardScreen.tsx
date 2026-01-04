@@ -20,6 +20,7 @@ import {
   RefreshControl,
   Image,
   Alert,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -150,6 +151,10 @@ export function NutritionDashboardScreen({
     snacks: false,
   });
 
+  // Modal state for calorie info
+  const [showCalorieInfoModal, setShowCalorieInfoModal] = useState(false);
+  const [nutritionGoalData, setNutritionGoalData] = useState<any>(null);
+
   // Load nutrition data
   const loadNutritionData = useCallback(async () => {
     try {
@@ -212,11 +217,38 @@ export function NutritionDashboardScreen({
 
       // Load weight data from profile
       await loadWeightData();
+
+      // Load nutrition goal details for info modal
+      await loadNutritionGoalDetails();
     } catch (error) {
       console.error("Error loading nutrition data:", error);
       // Keep existing data on error
     }
   }, [userId]);
+
+  // Load nutrition goal details for info modal
+  const loadNutritionGoalDetails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("user_nutrition_goals")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== "PGRST116") {
+        console.error("Error loading nutrition goal details:", error);
+        return;
+      }
+
+      setNutritionGoalData(data);
+      console.log("Loaded nutrition goal details:", data);
+    } catch (error) {
+      console.error("Error loading nutrition goal details:", error);
+    }
+  };
 
   // Load weight data from profile and nutrition goals
   const loadWeightData = async () => {
@@ -591,14 +623,29 @@ export function NutritionDashboardScreen({
       >
         {/* Calorie Overview Card */}
         <View style={styles.calorieCard}>
-          <Text style={styles.sectionTitle}>Heute</Text>
-          <Text style={styles.dateText}>
-            {new Date().toLocaleDateString("de-DE", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
-          </Text>
+          <View style={styles.calorieCardHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Heute</Text>
+              <Text style={styles.dateText}>
+                {new Date().toLocaleDateString("de-DE", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.infoButton}
+              onPress={() => setShowCalorieInfoModal(true)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={28}
+                color={COLORS.primary}
+              />
+            </TouchableOpacity>
+          </View>
 
           {/* Main Calorie Circle */}
           <View style={styles.calorieCircle}>
@@ -841,6 +888,149 @@ export function NutritionDashboardScreen({
         {/* Bottom Spacing */}
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      {/* Calorie Info Modal */}
+      <Modal
+        visible={showCalorieInfoModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowCalorieInfoModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Wie wird dein Kalorienziel berechnet?</Text>
+              <TouchableOpacity
+                onPress={() => setShowCalorieInfoModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={28} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {nutritionGoalData ? (
+                <>
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>📊 Deine Werte</Text>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>Gewicht:</Text>
+                      <Text style={styles.modalValue}>{nutritionGoalData.current_weight_kg} kg</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>Größe:</Text>
+                      <Text style={styles.modalValue}>{nutritionGoalData.height_cm} cm</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>Alter:</Text>
+                      <Text style={styles.modalValue}>{nutritionGoalData.age} Jahre</Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>Geschlecht:</Text>
+                      <Text style={styles.modalValue}>
+                        {nutritionGoalData.gender === 'male' ? 'Männlich' : 'Weiblich'}
+                      </Text>
+                    </View>
+                    {nutritionGoalData.target_weight_kg && (
+                      <View style={styles.modalInfoRow}>
+                        <Text style={styles.modalLabel}>Zielgewicht:</Text>
+                        <Text style={styles.modalValue}>{nutritionGoalData.target_weight_kg} kg</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>🔥 Grundumsatz (BMR)</Text>
+                    <Text style={styles.modalDescription}>
+                      Dein Körper verbraucht {Math.round(nutritionGoalData.bmr_mifflin)} kcal pro Tag im Ruhezustand.
+                      {'\n\n'}
+                      Berechnet mit der Mifflin-St Jeor Formel - dem wissenschaftlichen Goldstandard für BMR-Berechnungen.
+                    </Text>
+                  </View>
+
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>⚡ Gesamtumsatz (TDEE)</Text>
+                    <Text style={styles.modalDescription}>
+                      Mit deinem Aktivitätslevel (PAL {nutritionGoalData.pal_factor}) verbrauchst du täglich {Math.round(nutritionGoalData.tdee_calculated)} kcal.
+                      {'\n\n'}
+                      TDEE = BMR × PAL-Faktor{'\n'}
+                      {Math.round(nutritionGoalData.bmr_mifflin)} × {nutritionGoalData.pal_factor} = {Math.round(nutritionGoalData.tdee_calculated)} kcal
+                    </Text>
+                  </View>
+
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>🎯 Dein Ziel</Text>
+                    <Text style={styles.modalDescription}>
+                      {nutritionGoalData.training_goal === 'weight_loss' &&
+                        `Du möchtest abnehmen. Dein Kalorienziel liegt ${Math.abs(nutritionGoalData.calorie_adjustment)} kcal unter deinem Gesamtumsatz, um ein gesundes Defizit zu erreichen.`
+                      }
+                      {nutritionGoalData.training_goal === 'muscle_gain' &&
+                        `Du möchtest Muskeln aufbauen. Dein Kalorienziel liegt ${nutritionGoalData.calorie_adjustment} kcal über deinem Gesamtumsatz für optimalen Muskelaufbau.`
+                      }
+                      {nutritionGoalData.training_goal === 'strength' &&
+                        `Du trainierst für Kraft. Dein Kalorienziel ist auf deinen Gesamtumsatz abgestimmt für maximale Leistung.`
+                      }
+                      {nutritionGoalData.training_goal === 'endurance' &&
+                        `Du trainierst für Ausdauer. Dein Kalorienziel berücksichtigt den erhöhten Energiebedarf.`
+                      }
+                      {nutritionGoalData.training_goal === 'general_fitness' &&
+                        `Du trainierst für allgemeine Fitness. Dein Kalorienziel hält dein Gewicht stabil.`
+                      }
+                    </Text>
+                    <View style={styles.modalHighlight}>
+                      <Text style={styles.modalHighlightLabel}>Tägliches Kalorienziel</Text>
+                      <Text style={styles.modalHighlightValue}>
+                        {Math.round(nutritionGoalData.target_calories)} kcal
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>🥗 Makronährstoffe</Text>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>Protein:</Text>
+                      <Text style={styles.modalValue}>
+                        {Math.round(nutritionGoalData.protein_g_target)}g ({nutritionGoalData.protein_per_kg}g/kg)
+                      </Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>Kohlenhydrate:</Text>
+                      <Text style={styles.modalValue}>
+                        {Math.round(nutritionGoalData.carbs_g_target)}g ({Math.round(nutritionGoalData.carbs_percentage)}%)
+                      </Text>
+                    </View>
+                    <View style={styles.modalInfoRow}>
+                      <Text style={styles.modalLabel}>Fett:</Text>
+                      <Text style={styles.modalValue}>
+                        {Math.round(nutritionGoalData.fat_g_target)}g ({Math.round(nutritionGoalData.fat_percentage)}%)
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.modalFooter}>
+                    <Text style={styles.modalFooterText}>
+                      💡 Diese Werte basieren auf wissenschaftlichen Formeln und können nach 4 Wochen mit deinen echten Ergebnissen kalibriert werden.
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalDescription}>
+                    Keine Ernährungsziele gefunden. Erstelle zuerst ein Ernährungsziel in den Einstellungen.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowCalorieInfoModal(false)}
+            >
+              <Text style={styles.modalCloseButtonText}>Schließen</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1137,5 +1327,120 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     color: COLORS.text,
+  },
+
+  // Calorie Card Header Styles
+  calorieCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: SPACING.xl,
+  },
+  infoButton: {
+    padding: SPACING.xs,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.lg,
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    width: "100%",
+    maxHeight: "85%",
+    ...SHADOWS.md,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: SPACING.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: COLORS.text,
+    flex: 1,
+    marginRight: SPACING.md,
+  },
+  modalScroll: {
+    maxHeight: 500,
+  },
+  modalSection: {
+    padding: SPACING.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  modalInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: SPACING.sm,
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  modalValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+  modalHighlight: {
+    backgroundColor: COLORS.primary + "10",
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginTop: SPACING.md,
+    alignItems: "center",
+  },
+  modalHighlightLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
+  },
+  modalHighlightValue: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: COLORS.primary,
+  },
+  modalFooter: {
+    padding: SPACING.xl,
+    backgroundColor: COLORS.surfaceSecondary,
+  },
+  modalFooterText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  modalCloseButton: {
+    backgroundColor: COLORS.primary,
+    padding: SPACING.md,
+    margin: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: "center",
+  },
+  modalCloseButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

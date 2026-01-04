@@ -1,9 +1,9 @@
 # Lifestyle App - Fitness & Nutrition Tracker
 
-**Last Updated:** 2026-01-02
+**Last Updated:** 2026-01-04
 **Project Type:** React Native (Expo) Lifestyle Application
-**Branch:** main (features/user-profile merged)
-**Status:** Active Development
+**Branch:** features/nutrition/data-correction
+**Status:** Active Development - Nutrition Module Implementation
 
 ---
 
@@ -87,6 +87,570 @@ lifestyle-app/
 ---
 
 ## Recent Major Changes (December 2024 - January 2026)
+
+### Nutrition Goals & Calculation System (Feature Branch: features/nutrition/data-correction) ⭐ NEW
+
+**Date:** 2026-01-03 to 2026-01-04
+**Status:** ✅ Implemented (Commit: ca17a48d)
+**Feature:** Komplettes Onboarding für Ernährungsziele mit anschließender Kalorienberechnung
+
+Ein umfassendes, wissenschaftlich fundiertes Ernährungsziel- und Kalorienbersystemberechnung mit Integration in den Onboarding-Flow.
+
+#### 1. Nutrition Calculator Service
+
+**Location:** `/Users/tristanzinn/Desktop/App-Entwicklung/lifestyle-app/lib/services/nutrition-calculator.service.ts` (636 lines)
+
+**Purpose:** Evidence-based calorie and macronutrient calculations for personalized nutrition planning
+
+**Scientific Foundations:**
+- **BMR Calculation:** Mifflin-St Jeor Equation (DOI: 10.1093/ajcn/51.2.241)
+- **Protein Requirements:** ISSN Position Stand (DOI: 10.1186/s12970-017-0177-8)
+- **Deficit Limits:** Sports Medicine Review (DOI: 10.1111/sms.14075)
+- **Protein in Deficit:** Clinical Nutrition Review (DOI: 10.1097/MCO.0000000000000980)
+- **PAL Factors:** WHO/FAO/UNU Expert Consultation (ISBN: 92-5-105212-3)
+
+**Core Calculation Methods:**
+
+1. **BMR (Basal Metabolic Rate):**
+   - Uses Mifflin-St Jeor equation (most accurate for modern populations)
+   - Men: `BMR = (10 × weight[kg]) + (6.25 × height[cm]) - (5 × age) + 5`
+   - Women: `BMR = (10 × weight[kg]) + (6.25 × height[cm]) - (5 × age) - 161`
+
+2. **TDEE (Total Daily Energy Expenditure):**
+   - `TDEE = BMR × PAL_Factor`
+   - PAL Factors: 1.2 (Sedentary) to 1.9 (Extremely Active)
+
+3. **Goal-Specific Adjustments:**
+   - **Strength:** +250 kcal, 1.9g protein/kg, +0.1 kg/week
+   - **Muscle Gain:** +400 kcal, 2.0g protein/kg, +0.35 kg/week
+   - **Weight Loss:** -500 kcal, 2.2g protein/kg (high for muscle preservation), -0.5 kg/week
+   - **Endurance:** +100 kcal, 1.5g protein/kg, 55% carbs for glycogen
+   - **General Fitness:** Adaptive (-300 kcal if BF% high, else maintenance), 1.7g protein/kg
+
+4. **Macronutrient Distribution:**
+   - **Protein:** Goal-specific (1.5-2.2 g/kg) - highest priority for body composition
+   - **Fat:** 27% of total calories - optimal for hormonal health
+   - **Carbs:** Remaining calories - energy and performance
+
+**Key Features:**
+
+- **Conflict Detection:** Identifies physiologically incompatible goals (e.g., muscle gain + weight loss)
+- **Automatic Adjustments:** Switches to body recomposition approach when conflicts detected
+- **Progression Tracking:** Calculates weeks to goal and validates against target dates
+- **Safety Warnings:** Alerts for too aggressive rates (>1 kg/week) or unrealistic timelines
+- **Calculation Transparency:** Provides detailed methodology breakdown for user verification
+
+**Key Functions:**
+```typescript
+calculate(profile: UserNutritionProfile): CalorieCalculationResult
+  - Orchestrates all calculations
+  - Returns: bmr, tdee, targetCalories, macros, progression, warnings, recommendations
+
+calculateBMR(profile): number
+  - Mifflin-St Jeor equation
+
+calculateTDEE(bmr, palFactor): number
+  - BMR × PAL multiplier
+
+getGoalSettings(goal, bodyFat?, gender?): GoalSettings
+  - Returns goal-specific calorie adjustment, protein target, expected weekly change
+
+detectConflicts(profile, goalSettings): ConflictAnalysis
+  - Identifies incompatible goal combinations
+  - Returns adjusted settings if needed
+
+calculateProgression(profile, tdee, targetCalories, expectedWeeklyChange)
+  - Validates timeline feasibility
+  - Warns about aggressive or slow approaches
+
+calculateMacros(targetCalories, proteinPerKg, weightKg, carbsPercentage?)
+  - Distributes calories across macros
+
+generateCalculationMethod(...): CalculationMethod
+  - Creates human-readable calculation breakdown with DOI references
+```
+
+**Benefits:**
+- ✅ Scientific rigor with published research citations
+- ✅ Transparent calculations users can verify
+- ✅ Personalized to individual profiles and goals
+- ✅ Conflict resolution for unrealistic goal combinations
+- ✅ Safety-first approach with aggressive rate warnings
+
+#### 2. Nutrition Goals Service
+
+**Location:** `/Users/tristanzinn/Desktop/App-Entwicklung/lifestyle-app/lib/services/nutrition-goals.service.ts` (633 lines)
+
+**Purpose:** Database operations for user nutrition goals including CRUD, calculation storage, and TDEE calibration
+
+**Core Functionality:**
+
+1. **Goal Creation & Management:**
+   ```typescript
+   createNutritionGoal(userId, data: CreateNutritionGoalInput): Promise<UserNutritionGoal>
+     - Validates input data
+     - Calculates BMR, TDEE, macros via NutritionCalculatorService
+     - Deactivates previous goals (sets is_active = false)
+     - Inserts new goal with all calculated fields
+     - Maps to database schema (user_nutrition_goals table)
+
+   getCurrentNutritionGoal(userId): Promise<UserNutritionGoal | null>
+     - Returns active nutrition goal
+
+   updateNutritionGoal(goalId, updates): Promise<UserNutritionGoal>
+     - Recalculates if key fields change (weight, goal, PAL, etc.)
+
+   getNutritionGoalHistory(userId, limit): Promise<UserNutritionGoal[]>
+     - Returns historical goals (newest first)
+   ```
+
+2. **TDEE Calibration Based on Real-World Data:**
+   ```typescript
+   calibrateTDEE(userId): Promise<TDEECalibrationResult>
+     - Uses last 4 weeks of nutrition logs and weight measurements
+     - Formula: calibrated_TDEE = avg_calories - daily_surplus_or_deficit
+     - daily_surplus_or_deficit = (weight_change_kg × 7700 kcal) / days_tracked
+     - Confidence levels: high/medium/low based on data quality
+     - Auto-updates goal with calibrated TDEE
+   ```
+
+**TDEE Calibration Logic:**
+
+- **Minimum Data Required:** 14 days of nutrition logs, 2 weight measurements
+- **Calculation:** Compares actual calorie intake vs. weight change to determine real TDEE
+- **Confidence Scoring:**
+  - **High:** 25+ nutrition logs, 8+ weight measurements, <10% adjustment
+  - **Medium:** 20-24 logs, 4-7 measurements, 10-20% adjustment
+  - **Low:** <20 logs, <4 measurements, or >20% adjustment (indicates inconsistent tracking)
+
+**Recommendations Generated:**
+- Small adjustment (<100 kcal): "Very accurate, keep current plan"
+- Medium adjustment (100-300 kcal): "Adjusted plan, continue tracking"
+- Large adjustment (>300 kcal): Investigates possible causes (water weight, activity changes, PAL mismatch)
+
+**Database Schema Integration:**
+
+Maps to `user_nutrition_goals` table with fields:
+- Basic: `weight_kg`, `height_cm`, `age`, `gender`
+- Goals: `target_weight_kg`, `target_date`, `training_goal`
+- Activity: `pal_factor`, `body_fat_percentage`
+- Calculated: `bmr_mifflin`, `tdee_calculated`, `tdee_calibrated`, `target_calories`
+- Macros: `protein_g_target`, `protein_per_kg`, `carbs_g_target`, `carbs_percentage`, `fat_g_target`, `fat_percentage`
+- Progression: `expected_weekly_weight_change_kg`, `weeks_to_goal`
+- Metadata: `has_goal_conflict`, `conflict_warning`, `recommendations`, `calculation_method`
+- Status: `is_active`, `last_calibration_date`
+
+**Validation:**
+- Weight: 0-300 kg
+- Height: 0-250 cm
+- Age: 0-120 years
+- PAL Factor: 1.2-2.5
+- Body Fat: 3-60%
+- Target date: Cannot be in past
+
+#### 3. Nutrition Types System
+
+**Location:** `/Users/tristanzinn/Desktop/App-Entwicklung/lifestyle-app/lib/types/nutrition.types.ts` (218 lines)
+
+**Purpose:** TypeScript type definitions for nutrition system with comprehensive JSDoc documentation
+
+**Core Types:**
+
+1. **Training Goals:**
+   ```typescript
+   type TrainingGoal = 'strength' | 'muscle_gain' | 'weight_loss' | 'endurance' | 'general_fitness'
+   ```
+
+2. **Activity Levels (WHO/FAO/UNU Standards):**
+   ```typescript
+   ACTIVITY_LEVELS = {
+     SEDENTARY: { factor: 1.2, label: 'Sedentär', description: 'Bürojob...' },
+     LIGHTLY_ACTIVE: { factor: 1.375, label: 'Leicht aktiv', description: '1-3 Tage Sport...' },
+     MODERATELY_ACTIVE: { factor: 1.55, label: 'Moderat aktiv', description: '3-5 Tage Sport...' },
+     VERY_ACTIVE: { factor: 1.725, label: 'Sehr aktiv', description: '6-7 Tage Sport...' },
+     EXTRA_ACTIVE: { factor: 1.9, label: 'Extrem aktiv', description: '2x täglich Training...' },
+   }
+   ```
+
+3. **User Nutrition Profile:**
+   - Complete user data for calculations
+   - Includes optional `body_fat_percentage` for advanced calculations
+
+4. **Calculation Result:**
+   - BMR, TDEE, target calories, calorie adjustment
+   - Detailed macros with ratios and percentages
+   - Progression estimates (weekly change, weeks to goal, target date)
+   - Warnings and recommendations arrays
+   - Full calculation methodology for transparency
+
+5. **Calculation Method (Transparency):**
+   - BMR formula used and human-readable calculation
+   - PAL factor with description
+   - Goal adjustment details (type, amount, reason)
+   - Protein rationale
+   - Scientific sources (DOI links)
+
+**Features:**
+- ✅ Comprehensive JSDoc with scientific references
+- ✅ Type-safe database operations
+- ✅ German labels for UI
+- ✅ Explicit scientific citations in code
+
+#### 4. Extended Onboarding Flow (8 Screens)
+
+**Updated Onboarding Screens:**
+
+The onboarding flow has been extended from 7 to 8 screens to include nutrition goal collection:
+
+**Screen 6 (NEW):** `/Users/tristanzinn/Desktop/App-Entwicklung/lifestyle-app/src/screens/onboarding/OnboardingScreen6.tsx`
+- **Purpose:** Nutrition Goal Selection
+- **Content:**
+  - PAL (Physical Activity Level) selection with WHO-based factors
+  - Training goal selection (already collected in Screen 3, potentially refined here)
+  - Target weight input (optional)
+  - Target date selection (optional)
+  - Body fat percentage input (optional, for advanced calculations)
+
+**Screen 7:** `/Users/tristanzinn/Desktop/App-Entwicklung/lifestyle-app/src/screens/onboarding/OnboardingScreen7.tsx` (previously Screen 6)
+- **Purpose:** Unverträglichkeiten (Food Intolerances)
+- **Updated:** Step indicator changed from "Schritt 6 von 7" to "Schritt 7 von 8"
+- **Content:** Unchanged - intolerance selection with severity
+
+**OnboardingContext Updates:**
+- `totalSteps` increased from 7 to 8
+- Added nutrition goal fields to state
+- Added validation for nutrition goal inputs
+
+**OnboardingNavigator Updates:**
+- Routes 8 screens (0-7)
+- Proper step mapping for nutrition screens
+
+**Flow:**
+```
+Screen 0: Welcome
+Screen 1: Basisdaten (Age, Weight, Height, Gender)
+Screen 2: Trainingserfahrung (Fitness Level, Experience, Days/Week, Equipment)
+Screen 3: Fitnessziele (Primary Goal)
+Screen 4: Lifestyle (Sleep, Stress)
+Screen 5: Unverträglichkeiten (Food Intolerances) ⭐ MOVED FROM SCREEN 6
+Screen 6: Ernährungsziele (PAL, Target Weight, Body Fat) ⭐ NEW
+Screen 7: Zusammenfassung (Summary + Calorie Calculation Display) ⭐ UPDATED
+```
+
+**Summary Screen Integration:**
+- Displays calculated nutrition goals (BMR, TDEE, target calories, macros)
+- Shows warnings and recommendations from calculator
+- Visualizes progression estimates
+- Allows editing before final submission
+
+#### 5. Nutrition Components
+
+**Location:** `/Users/tristanzinn/Desktop/App-Entwicklung/lifestyle-app/src/components/Nutrition/`
+
+**New Components:**
+
+1. **NutritionGoalForm.tsx** (34,401 bytes)
+   - Comprehensive form for creating/editing nutrition goals
+   - Integrates with NutritionCalculatorService
+   - Real-time calculation preview
+   - Validation and error handling
+   - Used in onboarding and settings
+
+2. **CalculationMethodViewer.tsx** (28,752 bytes)
+   - Displays detailed calculation methodology
+   - Shows BMR formula with actual numbers
+   - Explains PAL factor application
+   - Lists macronutrient rationale
+   - Provides scientific sources (DOI links)
+   - Collapsible sections for detailed view
+
+3. **NutritionFAQ.tsx** (20,498 bytes)
+   - Comprehensive FAQ system for nutrition concepts
+   - Explains BMR, TDEE, macros, PAL factors
+   - Provides scientific context
+   - Answers common questions
+   - Educational resource for users
+
+4. **NutritionFAQScreen.example.tsx** (1,197 bytes)
+   - Example implementation of FAQ screen
+   - Integration guide
+
+**Dashboard Widget:**
+
+5. **NutritionOverviewWidget.tsx** (in `/Users/tristanzinn/Desktop/App-Entwicklung/lifestyle-app/src/components/dashboard/`)
+   - Home screen widget for nutrition summary
+   - Shows daily calorie progress
+   - Displays macro breakdown
+   - Quick access to nutrition tracking
+
+#### 6. Nutrition Dashboard Screen Updates
+
+**Location:** `/Users/tristanzinn/Desktop/App-Entwicklung/lifestyle-app/src/screens/Nutrition/NutritionDashboardScreen.tsx`
+
+**Major Updates:**
+
+1. **Calorie Info Modal with Goal Explanation:**
+   - Info button (ℹ️) in calorie card header
+   - Modal displays complete calculation breakdown:
+     - User's values (weight, height, age, gender, target weight)
+     - BMR calculation with formula
+     - TDEE calculation with PAL factor
+     - Goal explanation (why deficit/surplus was chosen)
+     - Daily calorie target highlighted
+     - Macronutrient breakdown with rationales
+   - Data loaded from `user_nutrition_goals` table
+   - Scientific transparency for user trust
+
+2. **Data Integration:**
+   - Loads nutrition goal details on screen focus
+   - Displays goals from database in dashboard
+   - Shows calculated vs. calibrated TDEE (if calibration exists)
+
+**Modal Implementation:**
+```typescript
+// Modal sections:
+- 📊 Deine Werte (Current stats)
+- 🔥 Grundumsatz (BMR) (BMR calculation explanation)
+- ⚡ Gesamtumsatz (TDEE) (TDEE calculation with PAL)
+- 🎯 Dein Ziel (Goal-specific explanation)
+- 🥗 Makronährstoffe (Macro targets with rationales)
+- 💡 Footer (Calibration note after 4 weeks)
+```
+
+**Benefits:**
+- ✅ Educational - users understand their numbers
+- ✅ Transparent - shows calculation methodology
+- ✅ Trustworthy - backed by scientific formulas
+- ✅ Actionable - users see why their targets are set
+
+#### 7. Comprehensive Food Tracking System (Merged: 922e49c2)
+
+**Previous Commit:** "feat: implement comprehensive nutrition tracking system with food caching"
+
+**Features Integrated:**
+- Open Food Facts API integration
+- Local and cloud food caching system
+- Barcode scanner for quick food entry
+- Food search with autocomplete
+- Meal diary tracking
+- Water intake tracking
+- Sugar tracking in macros
+- Comprehensive nutrition database
+
+**Key Services:**
+- `FoodService.ts` - Food data management
+- `OpenFoodFactsAPI.ts` - External API integration
+- `RateLimiter.ts` - API rate limiting
+- `CloudFoodCache.ts` - Supabase food cache
+- `LocalFoodCache.ts` - AsyncStorage cache
+- `nutritionApi.ts` - Nutrition data aggregation
+
+**Database Tables:**
+- `food_items` - Cached food database
+- `user_food_diary` - Meal tracking
+- `water_intake` - Water consumption tracking
+
+**Documentation:**
+- `FOOD_CACHING_SYSTEM_README.md`
+- `NUTRITION_CHEATSHEET.md`
+- `NUTRITION_COMPONENT_REFERENCE.md`
+- `NUTRITION_QUICK_START.md`
+- `NUTRITION_UI_README.md`
+- `SUGAR_IMPLEMENTATION.md`
+
+#### 8. Testing Infrastructure
+
+**Location:** `/Users/tristanzinn/Desktop/App-Entwicklung/lifestyle-app/__tests__/`
+
+**New Test Files:**
+
+1. **nutrition-calculator.test.ts**
+   - Unit tests for NutritionCalculatorService
+   - Tests all calculation methods
+   - Validates goal-specific adjustments
+   - Tests conflict detection
+   - Validates progression calculations
+   - Tests macro distribution
+
+**Test Documentation:**
+- `__tests__/README.md` - Test setup and usage guide
+- `__tests__/QUICKSTART.md` - Quick test execution guide
+- `__tests__/TEST_SUMMARY.md` - Test coverage summary
+- `__tests__/setup.ts` - Jest configuration
+
+**Test Scripts:**
+```json
+{
+  "test:nutrition": "jest __tests__/nutrition-calculator.test.ts"
+}
+```
+
+#### 9. Documentation
+
+**New Documentation Files:**
+
+1. **docs/nutrition-calculation-guide.md**
+   - Complete guide to nutrition calculation system
+   - Scientific foundations explained
+   - Formula derivations
+   - Example calculations
+   - Integration guide for developers
+
+2. **docs/README.md**
+   - Updated with nutrition module documentation
+   - Links to calculation guide
+   - API references
+
+#### 10. Database Schema Updates
+
+**New Table:** `user_nutrition_goals`
+
+```sql
+CREATE TABLE user_nutrition_goals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users NOT NULL,
+
+  -- Basic metrics
+  current_weight_kg DECIMAL(5,2) NOT NULL,
+  height_cm DECIMAL(5,2) NOT NULL,
+  age INTEGER NOT NULL,
+  gender TEXT NOT NULL CHECK (gender IN ('male', 'female')),
+
+  -- Goals
+  target_weight_kg DECIMAL(5,2),
+  target_date DATE,
+  training_goal TEXT NOT NULL CHECK (training_goal IN ('strength', 'muscle_gain', 'weight_loss', 'endurance', 'general_fitness')),
+
+  -- Activity & Body Composition
+  pal_factor DECIMAL(3,2) NOT NULL CHECK (pal_factor >= 1.2 AND pal_factor <= 2.5),
+  body_fat_percentage DECIMAL(4,2) CHECK (body_fat_percentage >= 3 AND body_fat_percentage <= 60),
+
+  -- Calculated Targets (from Mifflin-St Jeor)
+  bmr_mifflin INTEGER,
+  tdee_calculated INTEGER,
+  tdee_calibrated INTEGER, -- Calibrated TDEE after 4 weeks
+  target_calories INTEGER,
+  calorie_adjustment INTEGER, -- Deficit/Surplus amount
+
+  -- Macros
+  protein_g_target DECIMAL(6,2),
+  protein_per_kg DECIMAL(3,2),
+  carbs_g_target DECIMAL(6,2),
+  carbs_percentage DECIMAL(5,2),
+  fat_g_target DECIMAL(6,2),
+  fat_percentage DECIMAL(5,2),
+
+  -- Progression
+  expected_weekly_weight_change_kg DECIMAL(4,2),
+  weeks_to_goal INTEGER,
+
+  -- Metadata
+  has_goal_conflict BOOLEAN DEFAULT FALSE,
+  conflict_warning TEXT,
+  recommendations TEXT[],
+  calculation_method JSONB, -- Stores full CalculationMethod object
+
+  -- Status
+  is_active BOOLEAN DEFAULT TRUE,
+  last_calibration_date TIMESTAMP,
+
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_nutrition_goals_user_active ON user_nutrition_goals(user_id, is_active);
+```
+
+**Benefits:**
+- ✅ Complete calculation history stored
+- ✅ Enables TDEE calibration over time
+- ✅ Stores methodology for transparency
+- ✅ Tracks goal conflicts and warnings
+- ✅ Supports multiple goals per user with active flag
+
+#### 11. Integration with Existing Systems
+
+**Profile Service Integration:**
+- Nutrition goals pull weight/height from profiles table
+- Auto-updates when profile changes
+- Synchronizes with onboarding data
+
+**Training Module Integration:**
+- Training goals inform nutrition calculations
+- Training days affect PAL factor recommendations
+- Coordinated progression tracking
+
+**Navigation Updates:**
+- Nutrition stack navigator includes goal screens
+- Onboarding navigator routes to nutrition screens
+- Deep linking to nutrition goal editor
+
+#### 12. Scientific Rigor & Transparency
+
+**Key Differentiators:**
+
+1. **Evidence-Based Formulas:**
+   - All calculations backed by peer-reviewed research
+   - DOI citations in code and UI
+   - Mifflin-St Jeor (1990) - most accurate modern BMR formula
+   - WHO/FAO/UNU PAL factors (2001)
+   - ISSN protein recommendations (2017)
+
+2. **Transparent Calculations:**
+   - Users see exact formulas used
+   - Step-by-step breakdown available
+   - Can verify calculations independently
+   - Links to scientific sources
+
+3. **Safety-First Design:**
+   - Warns against aggressive deficits (>1 kg/week)
+   - Detects unrealistic goal timelines
+   - Adjusts for conflicting goals automatically
+   - High protein in deficit to preserve muscle
+
+4. **Personalization:**
+   - Adapts to user's training goal
+   - Considers body fat percentage when provided
+   - Gender-specific BMR formulas
+   - Age-adjusted calculations
+
+**German Language:**
+- All UI text in German
+- German error messages
+- German labels for scientific concepts
+- Culturally appropriate units (kg, cm, metric)
+
+#### 13. Benefits & Impact
+
+**User Experience:**
+- ✅ Science-backed nutrition targets (not arbitrary)
+- ✅ Transparent calculations build trust
+- ✅ Personalized to individual goals and profiles
+- ✅ Educational - users learn nutrition science
+- ✅ Safe - warns against unhealthy approaches
+
+**Developer Experience:**
+- ✅ Type-safe nutrition data handling
+- ✅ Well-documented calculation logic
+- ✅ Testable service layer
+- ✅ Scientific citations make code reviewable
+- ✅ Modular design allows easy updates
+
+**Technical:**
+- ✅ Database-backed goal history
+- ✅ TDEE calibration improves accuracy over time
+- ✅ Conflict detection prevents bad plans
+- ✅ Comprehensive validation prevents bad data
+- ✅ Performance-optimized calculations
+
+**Scalability:**
+- ✅ Ready for multi-goal tracking
+- ✅ Supports goal history and analytics
+- ✅ Calibration system learns from user data
+- ✅ Extensible to new training goals
+- ✅ Can add more advanced formulas (Katch-McArdle, etc.)
+
+---
 
 ### User Profile Management System (Feature Branch: features/user-profile) ⭐ NEW
 
@@ -1063,26 +1627,37 @@ Enhanced TypeScript Definitionen inklusive:
 
 ## Supabase Schema
 
-**18 Tabellen, alle erstellt:**
+**19+ Tabellen, alle erstellt:**
 
 - Core: profiles, exercises (6 rows), intolerances_catalog (8 rows)
 - Training: training_plans, plan_workouts, plan_exercises, workout_sessions, workout_sets, user_1rm, plan_templates, training_max_progression
-- Nutrition: nutrition_goals, meal_plans, meals, meal_items, food_items, daily_nutrition_log
+- Nutrition: user_nutrition_goals (NEW 2026-01-03), nutrition_goals, meal_plans, meals, meal_items, food_items, daily_nutrition_log, user_food_diary, water_intake
 - Supplements: supplements, user_supplements
-- Analytics: recommendation_events (NEW)
+- Analytics: recommendation_events (2024-12-29)
 
-**Wichtige Schema-Änderungen (2024-12-28 to 2024-12-30):**
-- `plan_templates` enhanced mit: `estimated_sets_per_week`, `exercises_per_workout`, `completion_status`, `popularity_score`
-- `profiles` enhanced mit: `preferred_training_days` (INTEGER[])
-- `training_plans` enhanced mit: `current_week`, `total_weeks`
-- `recommendation_events` für Analytics
-- **NEW Functions:** `calculate_current_week()`, `update_plan_current_week()`, `update_all_active_plans_weeks()`
+**Wichtige Schema-Änderungen (2024-12-28 to 2026-01-04):**
+- **Training Module (2024-12-28 to 2024-12-30):**
+  - `plan_templates` enhanced mit: `estimated_sets_per_week`, `exercises_per_workout`, `completion_status`, `popularity_score`
+  - `profiles` enhanced mit: `preferred_training_days` (INTEGER[])
+  - `training_plans` enhanced mit: `current_week`, `total_weeks`
+  - `recommendation_events` für Analytics
+  - **NEW Functions:** `calculate_current_week()`, `update_plan_current_week()`, `update_all_active_plans_weeks()`
+
+- **Nutrition Module (2026-01-03 to 2026-01-04):**
+  - `user_nutrition_goals` (NEW) - Comprehensive nutrition goal tracking mit BMR, TDEE, macros, progression
+    - Stores calculated and calibrated TDEE
+    - Tracks goal conflicts and warnings
+    - Stores full calculation methodology (JSONB)
+    - Supports goal history with `is_active` flag
+  - `food_items` enhanced - Sugar columns added (`sugars_100g`, `sugars_serving`)
+  - `user_food_diary` - Meal tracking with food relationships
+  - `water_intake` - Daily water consumption tracking
 
 **RLS aktiviert** auf allen User-Tabellen.
 
 ---
 
-## Implementierte Features (Stand: 2025-12-30)
+## Implementierte Features (Stand: 2026-01-04)
 
 ### 1. Authentication System (✅ Komplett)
 
@@ -1254,11 +1829,75 @@ const primaryColor = theme.colors.primary.blue500;
 
 **Response Format**: `{ data: T | null, error: string | null }`
 
-### 6. Onboarding Screens (✅ Komplett - Updated 2026-01-02)
+### 6. Nutrition Goals & Calculation System (✅ Komplett) - **NEU 2026-01-04**
+
+**Services:**
+- `lib/services/nutrition-calculator.service.ts` (636 lines) - Evidence-based calorie calculations
+- `lib/services/nutrition-goals.service.ts` (633 lines) - Database operations & TDEE calibration
+- `lib/types/nutrition.types.ts` (218 lines) - TypeScript type definitions
+
+**Zweck:** Wissenschaftlich fundierte Ernährungsziel-Berechnung mit BMR, TDEE und Makronährstoffverteilung
+
+**Features:**
+- **BMR Calculation:** Mifflin-St Jeor Equation (DOI: 10.1093/ajcn/51.2.241)
+- **TDEE Calculation:** BMR × PAL Factor (WHO/FAO/UNU standards)
+- **Goal-Specific Adjustments:**
+  - Strength: +250 kcal, 1.9g protein/kg
+  - Muscle Gain: +400 kcal, 2.0g protein/kg
+  - Weight Loss: -500 kcal, 2.2g protein/kg (high for muscle preservation)
+  - Endurance: +100 kcal, 1.5g protein/kg, 55% carbs
+  - General Fitness: Adaptive based on body fat percentage
+- **Macro Distribution:** Protein (goal-specific), Fat (27%), Carbs (remaining)
+- **Conflict Detection:** Identifies incompatible goals (e.g., muscle gain + weight loss)
+- **Safety Warnings:** Alerts for aggressive rates (>1 kg/week) or unrealistic timelines
+- **TDEE Calibration:** Uses 4 weeks of real data to adjust calculated TDEE
+- **Calculation Transparency:** Full methodology with DOI citations shown to users
+
+**Components:**
+- `NutritionGoalForm.tsx` - Comprehensive goal creation/editing form
+- `CalculationMethodViewer.tsx` - Displays detailed calculation breakdown
+- `NutritionFAQ.tsx` - Educational FAQ system
+- `NutritionOverviewWidget.tsx` - Dashboard widget
+
+**Database:**
+- `user_nutrition_goals` table - Stores goals with calculated values, progression, and methodology
+- Supports goal history with `is_active` flag
+- Stores calibrated vs. calculated TDEE
+
+**Validation:**
+- Weight: 0-300 kg, Height: 0-250 cm, Age: 0-120 years
+- PAL Factor: 1.2-2.5, Body Fat: 3-60%
+- Target date cannot be in past
+
+**Integration:**
+- Onboarding Screen 6 collects nutrition goals
+- NutritionDashboardScreen displays info modal with calculation details
+- Profile data syncs with nutrition goals
+
+**Testing:**
+- `__tests__/nutrition-calculator.test.ts` - Unit tests for calculator service
+
+**Response Format:**
+```typescript
+{
+  bmr: number,
+  tdee: number,
+  targetCalories: number,
+  calorieAdjustment: number,
+  macros: { protein_g, carbs_g, fat_g, percentages, protein_per_kg },
+  progression: { expectedWeeklyChange, weeksToGoal, estimatedTargetDate },
+  warnings: string[],
+  recommendations: string[],
+  hasConflict: boolean,
+  calculationMethod: CalculationMethod // with DOI sources
+}
+```
+
+### 7. Onboarding Screens (✅ Komplett - Updated 2026-01-04)
 
 **Location**: `src/screens/onboarding/`
 
-**7 Onboarding Screens** (0-5 + Summary):
+**8 Onboarding Screens** (0-7 including Summary) ⭐ EXTENDED:
 
 0. **OnboardingScreen0.tsx** ⭐ NEW - Welcome Screen
    - App-Introduction und Branding
@@ -1298,15 +1937,25 @@ const primaryColor = theme.colors.primary.blue500;
    - Optional (Skip möglich)
    - Error Handling mit Retry-Button
 
-6. **OnboardingSummary.tsx** - Zusammenfassung & Submit
+6. **OnboardingScreen6.tsx** - Ernährungsziele ⭐ NEW (2026-01-04)
+   - PAL (Physical Activity Level) selection mit WHO/FAO/UNU factors
+   - Target Weight Input (optional)
+   - Target Date Selection (optional)
+   - Body Fat Percentage Input (optional, für advanced calculations)
+   - Integration mit NutritionGoalForm component
+
+7. **OnboardingScreen7.tsx** - Zusammenfassung & Submit ⭐ UPDATED
    - Zeigt alle Eingaben in Kategorien
+   - **NEW:** Displays calculated nutrition goals (BMR, TDEE, target calories, macros)
+   - **NEW:** Shows warnings and recommendations from NutritionCalculatorService
+   - **NEW:** Visualizes progression estimates (weeks to goal, expected weekly change)
    - "Bearbeiten" Links zu jedem Screen via `goToStep()`
-   - Submit Button → `submitOnboarding()` → Supabase
+   - Submit Button → `submitOnboarding()` → Supabase (creates profile + nutrition goal)
 
 **Gemeinsame Features**:
 - ✅ Integration mit `OnboardingContext` via `useOnboarding()` hook
 - ✅ Automatische Validierung vor `nextStep()`
-- ✅ ProgressBar in jedem Screen (currentStep / totalSteps * 100) - 7-step calculation
+- ✅ ProgressBar in jedem Screen (currentStep / totalSteps * 100) - 8-step calculation
 - ✅ KeyboardAvoidingView für iOS/Android Keyboard-Handling
 - ✅ ScrollView für alle Inhalte (responsive auf kleinen Screens)
 - ✅ NumericInput für bessere numerische Eingabe (Screens 1-2) ⭐ NEW
@@ -1322,30 +1971,37 @@ const primaryColor = theme.colors.primary.blue500;
 
 **Dokumentation**: `src/screens/onboarding/README.md`
 
-### 7. Onboarding Context (✅ Komplett - Updated 2026-01-02)
+### 8. Onboarding Context (✅ Komplett - Updated 2026-01-04)
 
 **Datei**: `src/contexts/OnboardingContext.tsx`
 
-**Zweck**: Zentrale State-Management für 7-stufigen Onboarding-Flow
+**Zweck**: Zentrale State-Management für 8-stufigen Onboarding-Flow (inkl. Ernährungsziele)
 
 **Architektur**:
 - React Context + useReducer Pattern
-- 7 separate Screens (0-5 + Summary) mit eigener Validation
-- Integration mit ProfileService
-- Progress Tracking (0-100% über 7 Screens)
+- 8 separate Screens (0-7: Welcome → Basisdaten → Training → Ziele → Lifestyle → Intolerances → Nutrition Goals → Summary)
+- Integration mit ProfileService und NutritionGoalsService
+- Progress Tracking (0-100% über 8 Screens)
 
 **State Structure**:
 ```typescript
 {
-  currentScreen: number,           // 0-6 (Screen 0-5 + Summary)
+  currentScreen: number,           // 0-7 (Screen 0-6 + Summary)
   data: {
+    // Profile data
     gender: string | null,
     age: number | null,
     height: number | null,
     weight: number | null,
     goal: string | null,
-    intolerances: string[]
-    // ... other fields
+    intolerances: string[],
+    // ... other profile fields
+
+    // Nutrition goal data (NEW)
+    pal_factor: number | null,
+    target_weight_kg: number | null,
+    target_date: Date | null,
+    body_fat_percentage: number | null,
   },
   errors: Record<string, string>,  // Field-level errors
   isSubmitting: boolean
@@ -1366,10 +2022,12 @@ const primaryColor = theme.colors.primary.blue500;
 - Deutsche Fehlermeldungen
 - Automatisches Error-Clearing bei Field-Update
 
-**Updates (2026-01-02):**
-- ✅ Extended für 7-screen flow (Screen 0 added)
-- ✅ Progress calculation adjusted für 7 steps
-- ✅ State handling für welcome screen
+**Updates (2026-01-04):**
+- ✅ Extended für 8-screen flow (Screen 6 nutrition goals added)
+- ✅ Progress calculation adjusted für 8 steps
+- ✅ Added nutrition goal fields to state
+- ✅ Integration mit NutritionGoalsService für calorie calculation
+- ✅ Summary screen displays calculated nutrition targets
 
 ### 8. Profile Edit System (✅ Komplett - Updated 2026-01-02)
 
@@ -1804,7 +2462,7 @@ The project uses specialized AI agents for different development tasks:
 
 ---
 
-## Aktuelle Phase: MVP + Training Module
+## Aktuelle Phase: MVP + Training + Nutrition Modules
 
 **Abgeschlossen**:
 - ✅ Authentication Service
@@ -1813,41 +2471,44 @@ The project uses specialized AI agents for different development tasks:
 - ✅ Testing Setup
 - ✅ Storage Service ⭐ NEW (2026-01-02)
 - ✅ Profile Service (Updated 2026-01-02)
-- ✅ Onboarding Context (Extended für 7 screens, 2026-01-02)
-- ✅ Onboarding Screens (7 Screens: 0-5 + Summary) ⭐ UPDATED (2026-01-02)
-  - ✅ OnboardingScreen0 (Welcome) ⭐ NEW
-  - ✅ NumericInput integration in Screens 1-2 ⭐ NEW
-- ✅ **Navigation System** (Updated 2026-01-02):
+- ✅ Onboarding Context (Extended für 8 screens, 2026-01-04)
+- ✅ Onboarding Screens (8 Screens: 0-6 + Summary) ⭐ UPDATED (2026-01-04)
+  - ✅ OnboardingScreen0 (Welcome)
+  - ✅ OnboardingScreen6 (Nutrition Goals) ⭐ NEW (2026-01-04)
+  - ✅ NumericInput integration in Screens 1-2
+- ✅ **Navigation System** (Updated 2026-01-04):
   - ✅ AppNavigator (Root with Auth/Onboarding/Main routing)
-  - ✅ OnboardingNavigator (State-based 7-screen flow) ⭐ UPDATED
+  - ✅ OnboardingNavigator (State-based 8-screen flow) ⭐ UPDATED
   - ✅ MainNavigator (Home/Profile/ProfileEdit/DailyCheckin stack)
+  - ✅ NutritionStackNavigator (Nutrition screens)
   - ✅ Navigation Types (TypeScript param lists)
 - ✅ Main App Screens (Home, Profile)
 - ✅ **Profile Edit System** (Updated mit NumericInput, 2026-01-02)
 - ✅ **Daily Recovery Tracking System**
-- ✅ **User Profile Management System** ⭐ NEW (2026-01-02):
-  - ✅ NumericInput Component
-  - ✅ Storage Service Layer
-  - ✅ Enhanced Onboarding Flow
-  - ✅ Profile Screen Updates
-  - ✅ Profile Edit Updates
-- ✅ **Training Module** (Major Features):
-  - ✅ Training Components (CalorieCard, ScoreBreakdownChart, etc.)
-  - ✅ Training Services (trainingService, calorieCalculationService)
-  - ✅ Training Utilities (4D Scoring Algorithm, Analytics)
-  - ✅ Training Screens (Dashboard, Guided Flow, Custom Flow, etc.)
+- ✅ **User Profile Management System** (2026-01-02)
+- ✅ **Training Module** (Major Features)
+- ✅ **Nutrition Goals & Calculation System** ⭐ NEW (2026-01-04):
+  - ✅ NutritionCalculatorService (Evidence-based BMR, TDEE, macro calculations)
+  - ✅ NutritionGoalsService (Database operations, TDEE calibration)
+  - ✅ Nutrition Types System (TypeScript definitions with scientific citations)
+  - ✅ Extended Onboarding Flow (8 screens with nutrition goal collection)
+  - ✅ Nutrition Components (GoalForm, CalculationViewer, FAQ, Dashboard Widget)
+  - ✅ NutritionDashboardScreen with Info Modal
+  - ✅ Food Tracking System (Open Food Facts, Caching, Barcode Scanner)
+  - ✅ Database Schema (`user_nutrition_goals` table)
   - ✅ Testing Infrastructure
   - ✅ Comprehensive Documentation
 
 **In Arbeit**:
 - 🔄 Login & Registrierung Screens
 - 🔄 AuthNavigator Implementation
-- 🔄 App.tsx Integration & Testing
+- 🔄 Nutrition Module Bug Fixes (features/nutrition/data-correction branch)
 
 **Nächste Schritte**:
 - ⏸️ Auth Screens fertigstellen (Login, Register, ForgotPassword)
+- ⏸️ Nutrition Module Testing & Refinement
 - ⏸️ Training Module Integration Testing
-- ⏸️ Nutrition Tracking
+- ⏸️ TDEE Calibration Feature Implementation (requires 4 weeks of user data)
 - ⏸️ Production Deployment Vorbereitung
 
 ---
@@ -2055,6 +2716,78 @@ The project uses specialized AI agents for different development tasks:
 - `StatsCard` statt duplicate stat displays
 - `FormGroup` statt manual label+input+error rendering
 **Trade-off**: Initiale Investment in Component-Creation, aber massive Langzeit-Benefits
+
+### 24. Evidence-Based Nutrition Calculations mit Mifflin-St Jeor
+**Entscheidung**: Mifflin-St Jeor Equation für BMR statt Harris-Benedict oder andere Formeln
+**Grund**:
+- Mifflin-St Jeor (1990) ist der aktuelle wissenschaftliche Goldstandard
+- Genauer für moderne Bevölkerungen als Harris-Benedict (1919)
+- Validiert in peer-reviewed research (DOI: 10.1093/ajcn/51.2.241)
+- Von führenden Ernährungsorganisationen empfohlen
+**Alternative Formulas Considered**:
+- Harris-Benedict: Älter, weniger genau
+- Katch-McArdle: Benötigt Body Fat % (nicht immer verfügbar)
+- WHO/FAO/UNU: Komplexer, ähnliche Genauigkeit
+**Trade-off**: Katch-McArdle wäre genauer bei bekanntem BF%, aber Mifflin-St Jeor funktioniert ohne
+
+### 25. TDEE Calibration System für Langzeit-Genauigkeit
+**Entscheidung**: Implementierung eines 4-Wochen Calibration Systems für TDEE
+**Grund**:
+- Formeln sind Durchschnittswerte - individuelle Variation ist hoch
+- Real-world data (calories + weight change) ist genauer als Formeln
+- Users profitieren von personalisierten Targets
+- Wissenschaftlich validierter Ansatz
+**Implementation**:
+- Minimum 14 Tage Nutrition Logs + 2 Weight Measurements
+- Formula: `calibrated_TDEE = avg_calories - (weight_change × 7700 / days_tracked)`
+- Confidence Scoring basierend auf Datenqualität
+- Automatische Plan-Adjustierung
+**Trade-off**: Benötigt 4 Wochen consistent tracking, aber massive Verbesserung der Genauigkeit
+
+### 26. Transparent Calculation Methodology mit DOI Citations
+**Entscheidung**: Zeige Users exakte Formeln und wissenschaftliche Quellen
+**Grund**:
+- Builds Trust: Users sehen, dass es nicht willkürlich ist
+- Educational: Users lernen Nutrition Science
+- Verifiable: Users können Berechnungen selbst nachprüfen
+- Professional: Zeigt wissenschaftliche Fundierung
+**Implementation**:
+- Calculation breakdown modal in NutritionDashboardScreen
+- CalculationMethodViewer component zeigt step-by-step Formeln
+- DOI links zu peer-reviewed papers
+- German language explanations
+**Trade-off**: Mehr UI Complexity, aber massiv bessere User Trust und Education
+
+### 27. Conflict Detection für unrealistische Ziel-Kombinationen
+**Entscheidung**: Automatische Erkennung und Warnung bei widersprüchlichen Zielen
+**Grund**:
+- Muscle gain + weight loss ist physiologisch extrem schwierig
+- Users setzen oft unrealistische Kombinationen
+- Prevents frustration und failed attempts
+- Educates users über realistic expectations
+**Implementation**:
+- `detectConflicts()` Funktion in NutritionCalculatorService
+- Automatic adjustment zu "body recomposition" approach
+- Clear warnings und alternative recommendations
+- Erhöhtes Protein bei Konflikten (2.2 g/kg)
+**Examples**:
+- Muscle gain + Gewichtsverlust → Body Recomposition (-200 kcal, 2.2g protein/kg)
+- Strength + >10kg weight loss → Moderates Defizit (-300 kcal, 2.0g protein/kg)
+**Trade-off**: Könnte Users frustrieren, aber verhindert unrealistische Erwartungen
+
+### 28. Safety-First mit Aggressive Rate Warnings
+**Entscheidung**: Warne bei zu aggressiven Zielen (>1 kg/week weight loss)
+**Grund**:
+- Sehr aggressive Diäten führen zu Muskelverlust
+- Jo-Jo-Effekt Risiko erhöht
+- Health risks bei extremen Defiziten (>1000 kcal)
+- Long-term sustainability wichtiger als schnelle Results
+**Implementation**:
+- Warnung bei expected weekly change >1.0 kg
+- Warnung bei required deficit/surplus >1000 kcal
+- Recommendations für healthier approach
+- Keine Prevention - nur Education
+**Trade-off**: Users könnten ignorieren, aber Pflicht zur Information erfüllt
 
 ---
 

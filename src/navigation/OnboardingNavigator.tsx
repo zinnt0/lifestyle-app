@@ -8,6 +8,7 @@ import { OnboardingScreen2 } from '../screens/onboarding/OnboardingScreen2';
 import { OnboardingScreen3 } from '../screens/onboarding/OnboardingScreen3';
 import { OnboardingScreen4 } from '../screens/onboarding/OnboardingScreen4';
 import { OnboardingScreen5 } from '../screens/onboarding/OnboardingScreen5';
+import { OnboardingScreen6 } from '../screens/onboarding/OnboardingScreen6';
 import { OnboardingSummary } from '../screens/onboarding/OnboardingSummary';
 
 // Wrapper Component das den aktuellen Screen basierend auf currentStep rendert
@@ -28,6 +29,8 @@ const OnboardingScreens: React.FC = () => {
     case 5:
       return <OnboardingScreen5 />;
     case 6:
+      return <OnboardingScreen6 />;
+    case 7:
       return <OnboardingSummary />;
     default:
       return <OnboardingScreen0 />;
