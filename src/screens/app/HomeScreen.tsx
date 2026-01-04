@@ -29,11 +29,62 @@ import { PausedSessionCard } from "../../components/training/PausedSessionCard";
 import { RecoveryCard } from "../../components/app/RecoveryCard";
 import { AppHeader } from "../../components/ui/AppHeader";
 import type { NextWorkout, WorkoutSession } from "../../types/training.types";
+import { getDailySummary } from "../../services/nutritionApi";
+import Svg, { Circle } from "react-native-svg";
+import { Ionicons } from "@expo/vector-icons";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   MainStackParamList,
   "Home"
 >;
+
+// Calorie Ring Component
+const CalorieRing = ({
+  consumed,
+  goal,
+  size = 180,
+  strokeWidth = 12,
+}: {
+  consumed: number;
+  goal: number;
+  size?: number;
+  strokeWidth?: number;
+}) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const percentage = Math.min((consumed / goal) * 100, 100);
+  const strokeDashoffset = circumference - (circumference * percentage) / 100;
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size}>
+        {/* Background ring (green) */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#6FD89E"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        {/* Progress ring (blue) */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#007AFF"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          rotation="-90"
+          origin={`${size / 2}, ${size / 2}`}
+        />
+      </Svg>
+    </View>
+  );
+};
 
 /**
  * HomeScreen Component
@@ -49,6 +100,12 @@ export const HomeScreen: React.FC = () => {
   const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(
     null
   );
+  const [calorieData, setCalorieData] = useState({
+    consumed: 0,
+    burned: 0,
+    goal: 2500,
+    remaining: 2500,
+  });
 
   /**
    * Check if user has logged today and fetch recovery score
@@ -94,6 +151,40 @@ export const HomeScreen: React.FC = () => {
   }, []);
 
   /**
+   * Load nutrition data (calories)
+   */
+  const loadNutritionData = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0];
+
+      const summary = await getDailySummary(user.id, dateStr);
+
+      if (summary && summary.summary) {
+        const { calories } = summary.summary;
+
+        setCalorieData({
+          consumed: calories.consumed || 0,
+          burned: calories.burned || 0,
+          goal: calories.goal || 2500,
+          remaining:
+            (calories.goal || 2500) -
+            (calories.consumed || 0) +
+            (calories.burned || 0),
+        });
+      }
+    } catch (error) {
+      console.error("Error loading nutrition data:", error);
+      // Fail silently
+    }
+  }, []);
+
+  /**
    * Refresh data when screen comes into focus
    * This ensures the home screen updates after completing daily check-in
    * or starting a workout
@@ -102,7 +193,8 @@ export const HomeScreen: React.FC = () => {
     useCallback(() => {
       checkTodayLog();
       loadNextWorkout();
-    }, [checkTodayLog, loadNextWorkout])
+      loadNutritionData();
+    }, [checkTodayLog, loadNextWorkout, loadNutritionData])
   );
 
   /**
@@ -162,6 +254,58 @@ export const HomeScreen: React.FC = () => {
           )}
         </View>
 
+        {/* Calorie Overview Card */}
+        <TouchableOpacity
+          style={styles.calorieCard}
+          onPress={() => navigation.navigate("NutritionTab" as any)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.sectionHeader}>Kalorien</Text>
+
+          <View style={styles.calorieContent}>
+            {/* Ring on the left */}
+            <View style={styles.calorieRingContainer}>
+              <CalorieRing
+                consumed={calorieData.consumed}
+                goal={calorieData.goal}
+                size={100}
+                strokeWidth={8}
+              />
+              <View style={styles.calorieRingInner}>
+                <Text style={styles.calorieRingNumber}>
+                  {calorieData.remaining.toLocaleString()}
+                </Text>
+                <Text style={styles.calorieRingLabel}>Übrig</Text>
+              </View>
+            </View>
+
+            {/* Values on the right */}
+            <View style={styles.calorieStats}>
+              <View style={styles.calorieStatRow}>
+                <Ionicons name="restaurant" size={18} color="#6FD89E" />
+                <Text style={styles.calorieStatLabel}>Gegessen</Text>
+                <Text style={styles.calorieStatValue}>
+                  {calorieData.consumed}
+                </Text>
+              </View>
+
+              <View style={styles.calorieStatRow}>
+                <Ionicons name="flame" size={18} color="#FF9500" />
+                <Text style={styles.calorieStatLabel}>Verbrannt</Text>
+                <Text style={styles.calorieStatValue}>
+                  {calorieData.burned}
+                </Text>
+              </View>
+
+              <View style={styles.calorieStatRow}>
+                <Ionicons name="trophy" size={18} color="#007AFF" />
+                <Text style={styles.calorieStatLabel}>Ziel</Text>
+                <Text style={styles.calorieStatValue}>{calorieData.goal}</Text>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+
         {/* Recovery Section */}
         {hasLogged ? (
           <RecoveryCard
@@ -179,14 +323,6 @@ export const HomeScreen: React.FC = () => {
             <Text style={styles.checkinText}>📋 Tägliches Check-in</Text>
           </TouchableOpacity>
         )}
-
-        {/* Nutrition API Test Button - Development Only */}
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => navigation.navigate("NutritionTest")}
-        >
-          <Text style={styles.testButtonText}>🧪 Nutrition API Test</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -258,18 +394,69 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  testButton: {
-    backgroundColor: "#FF6B6B",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    marginTop: 16,
+  // Calorie Card Styles
+  calorieCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
     width: "100%",
-    maxWidth: 300,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  testButtonText: {
-    color: "#FFFFFF",
+  calorieContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 20,
+    marginTop: 8,
+  },
+  calorieRingContainer: {
+    position: "relative",
+    width: 100,
+    height: 100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  calorieRingInner: {
+    position: "absolute",
+    width: 84,
+    height: 84,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  calorieRingNumber: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  calorieRingLabel: {
+    fontSize: 11,
+    color: "#8E8E93",
+    marginTop: 2,
+  },
+  calorieStats: {
+    flex: 1,
+    gap: 12,
+  },
+  calorieStatRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  calorieStatLabel: {
+    fontSize: 14,
+    color: "#8E8E93",
+    minWidth: 80,
+  },
+  calorieStatValue: {
     fontSize: 16,
     fontWeight: "600",
+    color: "#333",
   },
 });
