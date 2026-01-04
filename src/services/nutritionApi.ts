@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { localFoodCache } from './cache/LocalFoodCache';
 
 const FUNCTIONS_URL = 'https://wnbxenverpjyyfsyevyj.supabase.co/functions/v1';
 
@@ -104,6 +105,32 @@ export async function addFoodToDiary(data: {
 
     const cachedFood = await cacheResponse.json();
     foodItemId = cachedFood.food.id;
+
+    // Also cache in local SQLite for offline access
+    try {
+      // Convert to the format expected by LocalFoodCache
+      const foodForCache = {
+        barcode: food.barcode || '',
+        name: food.name,
+        brand: food.brand,
+        source: (food.source || 'openfoodfacts') as 'openfoodfacts',
+        calories: food.calories_per_100g || food.calories || 0,
+        protein: food.protein_per_100g || food.protein || 0,
+        carbs: food.carbs_per_100g || food.carbs || 0,
+        fat: food.fat_per_100g || food.fat || 0,
+        fiber: food.fiber_per_100g || food.fiber,
+        sugar: food.sugar_per_100g || food.sugar,
+        sodium: food.sodium_per_100g || food.sodium,
+        serving_size: typeof food.serving_size === 'number' ? food.serving_size : undefined,
+        allergens: food.allergens,
+      };
+
+      await localFoodCache.cacheFood(foodForCache);
+      console.log('[NutritionAPI] Food cached locally:', food.name);
+    } catch (error) {
+      console.warn('[NutritionAPI] Failed to cache food locally:', error);
+      // Don't throw - local caching is not critical
+    }
   }
 
   if (!foodItemId) {
@@ -142,7 +169,15 @@ export async function getDailySummary(userId: string, date: string) {
   url.searchParams.set('userId', userId);
   url.searchParams.set('date', date);
 
-  const response = await fetch(url.toString());
+  // Get auth token from supabase session
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      'Authorization': `Bearer ${session?.access_token}`,
+      'Content-Type': 'application/json',
+    },
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to get daily summary: ${response.statusText}`);

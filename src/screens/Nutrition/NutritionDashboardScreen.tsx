@@ -36,6 +36,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { getDailySummary, DiaryEntry } from "../../services/nutritionApi";
 import { AppHeader } from "../../components/ui/AppHeader";
 import { supabase } from "../../lib/supabase";
+import { nutritionSyncService } from "../../services/NutritionSyncService";
 import Svg, { Circle } from "react-native-svg";
 
 type NavigationProp = NativeStackNavigationProp<
@@ -464,6 +465,9 @@ export function NutritionDashboardScreen({
 
       // Reload only water intake data to get accurate totals from database
       await loadWaterIntake(dateStr);
+
+      // Update nutrition cache for today to reflect new water intake
+      await nutritionSyncService.syncSingleDay(userId, dateStr);
     } catch (error) {
       console.error("Error adding water intake:", error);
       Alert.alert("Fehler", "Wasserzufuhr konnte nicht gespeichert werden.");

@@ -5,7 +5,7 @@
  * Modernized with design system components and improved visual hierarchy.
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,12 +15,11 @@ import {
   Alert,
   Image,
 } from "react-native";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
-import { getProfile } from "../../services/profile.service";
-import type { Profile } from "../../services/profile.service";
+import { useLocalProfile } from "../../hooks/useLocalProfile";
 import type { MainStackParamList } from "../../navigation/types";
 import { Button } from "../../components/ui/Button";
 import { ProfileField } from "../../components/ui/ProfileField";
@@ -41,51 +40,23 @@ type ProfileScreenNavigationProp = NativeStackNavigationProp<
 /**
  * ProfileScreen Component
  *
- * Fetches and displays user profile data from Supabase.
+ * Displays user profile data using local cache with automatic Supabase fallback.
  * Shows all onboarding data in a read-only format.
+ * Loads instantly from cache on subsequent visits!
  */
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  /**
-   * Reload profile whenever screen comes into focus
-   * This ensures we see updated data after editing
-   */
-  useFocusEffect(
-    useCallback(() => {
-      loadProfile();
-    }, [])
-  );
+  // Get user ID from Supabase auth
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUserId(user?.id || null);
+    });
+  }, []);
 
-  /**
-   * Load user profile from Supabase
-   */
-  const loadProfile = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      const { profile, error } = await getProfile(user.id);
-
-      if (error) {
-        console.error("Error loading profile:", error.message);
-      } else {
-        setProfile(profile);
-      }
-    } catch (error) {
-      console.error("Unexpected error loading profile:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Use cache-first profile hook for instant loading
+  const { profile, loading, error, refreshProfile } = useLocalProfile(userId, true);
 
   const handleLogout = () => {
     Alert.alert("Abmelden", "Möchtest du dich wirklich abmelden?", [
@@ -114,17 +85,19 @@ export const ProfileScreen: React.FC = () => {
     );
   }
 
-  if (!profile) {
+  if (error || !profile) {
     return (
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={64} color={COLORS.error} />
-        <Text style={styles.errorTitle}>Profil nicht gefunden</Text>
+        <Text style={styles.errorTitle}>
+          {error || "Profil nicht gefunden"}
+        </Text>
         <Text style={styles.errorSubtitle}>
           Bitte versuche es später erneut
         </Text>
         <Button
           title="Erneut laden"
-          onPress={loadProfile}
+          onPress={refreshProfile}
           variant="primary"
           size="large"
           style={styles.retryButton}

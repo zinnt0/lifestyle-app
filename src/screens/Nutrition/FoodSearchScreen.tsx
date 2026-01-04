@@ -27,6 +27,7 @@ import type { NutritionStackParamList } from '../../navigation/NutritionStackNav
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../../components/ui/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { searchFood, type FoodItem } from '../../services/nutritionApi';
+import { localFoodCache } from '../../services/cache/LocalFoodCache';
 
 type NavigationProp = NativeStackNavigationProp<
   NutritionStackParamList,
@@ -114,7 +115,34 @@ export function FoodSearchScreen() {
   }, [navigation, mealType]);
 
   // Navigate to food detail
-  const handleSelectFood = useCallback((food: FoodItem) => {
+  const handleSelectFood = useCallback(async (food: FoodItem) => {
+    // Cache the food locally when user shows interest
+    // This ensures searched foods are also available in local cache
+    try {
+      // Convert to the format expected by LocalFoodCache
+      const foodForCache = {
+        barcode: food.barcode || '',
+        name: food.name,
+        brand: food.brand,
+        source: (food.source || 'openfoodfacts') as 'openfoodfacts',
+        calories: food.calories_per_100g || food.calories || 0,
+        protein: food.protein_per_100g || food.protein || 0,
+        carbs: food.carbs_per_100g || food.carbs || 0,
+        fat: food.fat_per_100g || food.fat || 0,
+        fiber: food.fiber_per_100g || food.fiber,
+        sugar: food.sugar_per_100g || food.sugar,
+        sodium: food.sodium_per_100g || food.sodium,
+        serving_size: typeof food.serving_size === 'number' ? food.serving_size : undefined,
+        allergens: food.allergens,
+      };
+
+      await localFoodCache.cacheFood(foodForCache);
+      console.log('[FoodSearch] Food cached locally:', food.name);
+    } catch (error) {
+      console.warn('[FoodSearch] Failed to cache food locally:', error);
+      // Don't block navigation on cache failure
+    }
+
     navigation.navigate('FoodDetail', { food, mealType });
   }, [navigation, mealType]);
 

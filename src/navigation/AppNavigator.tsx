@@ -18,6 +18,8 @@ import { TabNavigator } from "./TabNavigator";
 import { getCurrentUser, onAuthStateChange } from "../services/auth.service";
 import { isOnboardingCompleted } from "../services/profile.service";
 import { foodService } from "../services/FoodService";
+import { profileSyncService } from "../services/ProfileSyncService";
+import { nutritionSyncService } from "../services/NutritionSyncService";
 import type { AuthUser } from "../services/auth.service";
 
 /**
@@ -61,11 +63,16 @@ export const AppNavigator: React.FC = () => {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize FoodService on app start
+  // Initialize all cache services on app start
   useEffect(() => {
+    // Initialize FoodService (includes Food, Nutrition, and Profile caches)
     foodService.initialize().catch((error) => {
       console.error("Failed to initialize FoodService:", error);
     });
+
+    // Initialize ProfileSyncService (event listeners for profile updates)
+    profileSyncService.initialize();
+    console.log("[AppNavigator] Cache services initialized");
   }, []);
 
   // Check initial auth and onboarding state
@@ -108,6 +115,16 @@ export const AppNavigator: React.FC = () => {
       // 2. Check if onboarding is completed
       const completed = await isOnboardingCompleted(currentUser.id);
       setHasCompletedOnboarding(completed);
+
+      // 3. Sync today's nutrition data on app start (fire and forget)
+      if (completed) {
+        nutritionSyncService.syncNutritionData(currentUser.id, {
+          force: false,
+          daysToSync: 1,
+        }).catch((error) => {
+          console.warn("[AppNavigator] Failed to sync nutrition on startup:", error);
+        });
+      }
     } catch (error) {
       console.error("Error checking auth/onboarding:", error);
       setUser(null);

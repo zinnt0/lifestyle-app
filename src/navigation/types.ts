@@ -44,6 +44,7 @@ export type MainStackParamList = {
   Settings: undefined;
   DailyCheckin: undefined;
   NutritionTest: undefined;
+  CacheDebug: { userId?: string };
 };
 
 /**
