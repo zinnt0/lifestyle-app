@@ -21,6 +21,7 @@ import {
   Image,
   Alert,
   Modal,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -37,7 +38,8 @@ import { getDailySummary, DiaryEntry } from "../../services/nutritionApi";
 import { AppHeader } from "../../components/ui/AppHeader";
 import { supabase } from "../../lib/supabase";
 import { nutritionSyncService } from "../../services/NutritionSyncService";
-import Svg, { Circle } from "react-native-svg";
+import { DailyNutritionData } from "../../services/cache/LocalNutritionCache";
+import Svg, { Circle, Line, Polyline, Text as SvgText } from "react-native-svg";
 
 type NavigationProp = NativeStackNavigationProp<
   NutritionStackParamList,
@@ -47,6 +49,259 @@ type NavigationProp = NativeStackNavigationProp<
 interface NutritionDashboardScreenProps {
   userId: string;
 }
+
+// Multi-Line Chart Component for 30-day view (scrollable 7-day segments)
+const MultiLineChart = ({
+  data,
+  calorieGoal,
+}: {
+  data: DailyNutritionData[];
+  calorieGoal: number;
+}) => {
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const screenWidth = Dimensions.get("window").width;
+  const chartWidth = screenWidth - 2 * SPACING.lg - 2 * SPACING.xl;
+  const height = 220;
+  const padding = { top: 20, right: 10, bottom: 30, left: 40 };
+
+  // Calculate total width needed to show all data (each data point gets equal space)
+  const pointSpacing = 50; // Space between each data point
+  const totalWidth = Math.max(
+    chartWidth,
+    data.length * pointSpacing + padding.left + padding.right
+  );
+
+  // Scroll to the end (newest data) when data loads
+  React.useEffect(() => {
+    if (scrollViewRef.current && data.length > 0) {
+      // Small delay to ensure layout is complete
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+    }
+  }, [data.length]);
+
+  if (data.length === 0) {
+    return (
+      <View style={{ height, justifyContent: "center", alignItems: "center" }}>
+        <Text style={{ color: COLORS.textSecondary }}>
+          Keine Daten verfügbar
+        </Text>
+      </View>
+    );
+  }
+
+  // Calculate min and max values for scaling
+  const allValues = data.flatMap((d) => [
+    d.calories_consumed,
+    d.calories_burned,
+    d.net_calories,
+    calorieGoal,
+  ]);
+  const maxValue = Math.max(...allValues, calorieGoal * 1.2);
+  const minValue = 0;
+
+  // Scale functions
+  const scaleX = (index: number) => {
+    if (data.length === 1) {
+      // Center single data point
+      return padding.left + (totalWidth - padding.left - padding.right) / 2;
+    }
+    return padding.left + index * pointSpacing;
+  };
+  const scaleY = (value: number) =>
+    height -
+    padding.bottom -
+    ((value - minValue) / (maxValue - minValue)) *
+      (height - padding.top - padding.bottom);
+
+  // Generate points for each line
+  const consumedPoints = data
+    .map((d, i) => `${scaleX(i)},${scaleY(d.calories_consumed)}`)
+    .join(" ");
+  const burnedPoints = data
+    .map((d, i) => `${scaleX(i)},${scaleY(d.calories_burned)}`)
+    .join(" ");
+  const netPoints = data
+    .map((d, i) => `${scaleX(i)},${scaleY(d.net_calories)}`)
+    .join(" ");
+
+  // Goal line (horizontal)
+  const goalY = scaleY(calorieGoal);
+
+  return (
+    <View>
+      {/* Scroll hint - show only if data is scrollable */}
+      {data.length > 7 && (
+        <View style={styles.scrollHint}>
+          <Ionicons name="chevron-back" size={16} color={COLORS.textTertiary} />
+          <Text style={styles.scrollHintText}>Nach links wischen für mehr Daten</Text>
+          <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+        </View>
+      )}
+
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingRight: SPACING.lg }}
+      >
+        <Svg width={totalWidth} height={height}>
+        {/* Y-axis labels */}
+        <SvgText
+          x={5}
+          y={scaleY(maxValue) + 5}
+          fontSize="10"
+          fill={COLORS.textSecondary}
+        >
+          {Math.round(maxValue)}
+        </SvgText>
+        <SvgText
+          x={5}
+          y={scaleY(maxValue / 2) + 5}
+          fontSize="10"
+          fill={COLORS.textSecondary}
+        >
+          {Math.round(maxValue / 2)}
+        </SvgText>
+        <SvgText
+          x={5}
+          y={scaleY(0) + 5}
+          fontSize="10"
+          fill={COLORS.textSecondary}
+        >
+          0
+        </SvgText>
+
+        {/* Grid lines */}
+        <Line
+          x1={padding.left}
+          y1={scaleY(maxValue / 2)}
+          x2={totalWidth - padding.right}
+          y2={scaleY(maxValue / 2)}
+          stroke={COLORS.border}
+          strokeWidth="1"
+          strokeDasharray="4,4"
+        />
+        <Line
+          x1={padding.left}
+          y1={scaleY(0)}
+          x2={totalWidth - padding.right}
+          y2={scaleY(0)}
+          stroke={COLORS.border}
+          strokeWidth="1"
+        />
+
+        {/* Goal line (static) */}
+        <Line
+          x1={padding.left}
+          y1={goalY}
+          x2={totalWidth - padding.right}
+          y2={goalY}
+          stroke={COLORS.primary}
+          strokeWidth="2"
+          strokeDasharray="8,4"
+        />
+
+        {/* Gegessen line */}
+        <Polyline
+          points={consumedPoints}
+          fill="none"
+          stroke={COLORS.success}
+          strokeWidth="3"
+        />
+
+        {/* Verbrannt line */}
+        <Polyline
+          points={burnedPoints}
+          fill="none"
+          stroke={COLORS.warning}
+          strokeWidth="3"
+        />
+
+        {/* Gesamt (Net) line */}
+        <Polyline
+          points={netPoints}
+          fill="none"
+          stroke="#FF6B6B"
+          strokeWidth="3"
+        />
+
+        {/* Data points (circles) for better visibility */}
+        {data.map((d, i) => (
+          <React.Fragment key={`points-${i}`}>
+            <Circle
+              cx={scaleX(i)}
+              cy={scaleY(d.calories_consumed)}
+              r="4"
+              fill={COLORS.success}
+            />
+            <Circle
+              cx={scaleX(i)}
+              cy={scaleY(d.calories_burned)}
+              r="4"
+              fill={COLORS.warning}
+            />
+            <Circle
+              cx={scaleX(i)}
+              cy={scaleY(d.net_calories)}
+              r="4"
+              fill="#FF6B6B"
+            />
+          </React.Fragment>
+        ))}
+
+        {/* X-axis labels (always show all in scrollable view) */}
+        {data.map((d, i) => {
+          const date = new Date(d.date);
+          const label = `${date.getDate()}.${date.getMonth() + 1}`;
+          return (
+            <SvgText
+              key={i}
+              x={scaleX(i)}
+              y={height - 10}
+              fontSize="10"
+              fill={COLORS.textSecondary}
+              textAnchor="middle"
+            >
+              {label}
+            </SvgText>
+          );
+        })}
+      </Svg>
+      </ScrollView>
+
+      {/* Legend */}
+      <View style={styles.chartLegend}>
+        <View style={styles.legendItem}>
+          <View
+            style={[styles.legendDot, { backgroundColor: COLORS.success }]}
+          />
+          <Text style={styles.legendText}>Gegessen</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View
+            style={[styles.legendDot, { backgroundColor: COLORS.warning }]}
+          />
+          <Text style={styles.legendText}>Verbrannt</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: "#FF6B6B" }]} />
+          <Text style={styles.legendText}>Gesamt Kalorien</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View
+            style={[
+              styles.legendDot,
+              { backgroundColor: COLORS.primary, borderStyle: "dashed" },
+            ]}
+          />
+          <Text style={styles.legendText}>Ziel</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
 
 // Calorie Ring Component
 const CalorieRing = ({
@@ -102,6 +357,14 @@ export function NutritionDashboardScreen({
   const navigation = useNavigation<NavigationProp>();
   const [refreshing, setRefreshing] = useState(false);
 
+  // Tab state for calorie view
+  const [calorieViewTab, setCalorieViewTab] = useState<"today" | "30days">(
+    "today"
+  );
+
+  // 30-day nutrition data
+  const [thirtyDayData, setThirtyDayData] = useState<DailyNutritionData[]>([]);
+
   // Mock data - will be replaced with real data from service
   const [calorieData, setCalorieData] = useState({
     consumed: 0,
@@ -155,6 +418,38 @@ export function NutritionDashboardScreen({
   // Modal state for calorie info
   const [showCalorieInfoModal, setShowCalorieInfoModal] = useState(false);
   const [nutritionGoalData, setNutritionGoalData] = useState<any>(null);
+
+  // Load 30-day nutrition data
+  const load30DayData = useCallback(async () => {
+    try {
+      console.log("Loading 30-day nutrition data for user:", userId);
+
+      // Get date range for last 30 days
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 29); // Last 30 days including today
+
+      const endDateStr = endDate.toISOString().split("T")[0];
+      const startDateStr = startDate.toISOString().split("T")[0];
+
+      // Fetch data from cache/service
+      const data = await nutritionSyncService.getNutritionDataRange(
+        userId,
+        startDateStr,
+        endDateStr
+      );
+
+      // Sort data chronologically (oldest first, newest last) for chart display
+      const sortedData = data.sort((a, b) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
+      setThirtyDayData(sortedData);
+      console.log("Loaded 30-day data:", sortedData.length, "days");
+    } catch (error) {
+      console.error("Error loading 30-day data:", error);
+    }
+  }, [userId]);
 
   // Load nutrition data
   const loadNutritionData = useCallback(async () => {
@@ -425,15 +720,16 @@ export function NutritionDashboardScreen({
   useFocusEffect(
     useCallback(() => {
       loadNutritionData();
-    }, [loadNutritionData])
+      load30DayData();
+    }, [loadNutritionData, load30DayData])
   );
 
   // Pull to refresh
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadNutritionData();
+    await Promise.all([loadNutritionData(), load30DayData()]);
     setRefreshing(false);
-  }, [loadNutritionData]);
+  }, [loadNutritionData, load30DayData]);
 
   // Navigate to food search for specific meal
   const handleAddFood = (
@@ -667,7 +963,7 @@ export function NutritionDashboardScreen({
         <View style={styles.calorieCard}>
           <View style={styles.calorieCardHeader}>
             <View>
-              <Text style={styles.sectionTitle}>Heute</Text>
+              <Text style={styles.sectionTitle}>Kalorien</Text>
               <Text style={styles.dateText}>
                 {new Date().toLocaleDateString("de-DE", {
                   weekday: "long",
@@ -676,57 +972,117 @@ export function NutritionDashboardScreen({
                 })}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.infoButton}
-              onPress={() => setShowCalorieInfoModal(true)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons
-                name="information-circle-outline"
-                size={28}
-                color={COLORS.primary}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Main Calorie Circle */}
-          <View style={styles.calorieCircle}>
-            <CalorieRing
-              consumed={calorieData.consumed}
-              goal={calorieData.goal}
-              size={180}
-              strokeWidth={12}
-            />
-            <View style={styles.calorieCircleInner}>
-              <Text style={styles.calorieMainNumber}>
-                {calorieData.remaining.toLocaleString()}
-              </Text>
-              <Text style={styles.calorieLabel}>Übrig</Text>
+            <View style={styles.calorieTabs}>
+              <TouchableOpacity
+                style={[
+                  styles.calorieTab,
+                  calorieViewTab === "today" && styles.calorieTabActive,
+                ]}
+                onPress={() => setCalorieViewTab("today")}
+              >
+                <Text
+                  style={[
+                    styles.calorieTabText,
+                    calorieViewTab === "today" && styles.calorieTabTextActive,
+                  ]}
+                >
+                  Heute
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.calorieTab,
+                  calorieViewTab === "30days" && styles.calorieTabActive,
+                ]}
+                onPress={() => setCalorieViewTab("30days")}
+              >
+                <Text
+                  style={[
+                    styles.calorieTabText,
+                    calorieViewTab === "30days" && styles.calorieTabTextActive,
+                  ]}
+                >
+                  30 Tage
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* Calorie Breakdown */}
-          <View style={styles.calorieBreakdown}>
-            <View style={styles.calorieItem}>
-              <Ionicons name="restaurant" size={20} color={COLORS.success} />
-              <Text style={styles.calorieItemNumber}>
-                {calorieData.consumed}
-              </Text>
-              <Text style={styles.calorieItemLabel}>Gegessen</Text>
-            </View>
+          {calorieViewTab === "today" ? (
+            <>
+              {/* Main Calorie Circle */}
+              <View style={styles.calorieCircle}>
+                <CalorieRing
+                  consumed={calorieData.consumed}
+                  goal={calorieData.goal}
+                  size={180}
+                  strokeWidth={12}
+                />
+                <View style={styles.calorieCircleInner}>
+                  <Text style={styles.calorieMainNumber}>
+                    {calorieData.remaining.toLocaleString()}
+                  </Text>
+                  <Text style={styles.calorieLabel}>Übrig</Text>
+                </View>
+              </View>
 
-            <View style={styles.calorieItem}>
-              <Ionicons name="flame" size={20} color={COLORS.warning} />
-              <Text style={styles.calorieItemNumber}>{calorieData.burned}</Text>
-              <Text style={styles.calorieItemLabel}>Verbrannt</Text>
-            </View>
+              {/* Calorie Breakdown */}
+              <View style={styles.calorieBreakdown}>
+                <View style={styles.calorieItem}>
+                  <Ionicons
+                    name="restaurant"
+                    size={20}
+                    color={COLORS.success}
+                  />
+                  <Text style={styles.calorieItemNumber}>
+                    {calorieData.consumed}
+                  </Text>
+                  <Text style={styles.calorieItemLabel}>Gegessen</Text>
+                </View>
 
-            <View style={styles.calorieItem}>
-              <Ionicons name="trophy" size={20} color={COLORS.primary} />
-              <Text style={styles.calorieItemNumber}>{calorieData.goal}</Text>
-              <Text style={styles.calorieItemLabel}>Ziel</Text>
-            </View>
-          </View>
+                <View style={styles.calorieItem}>
+                  <Ionicons name="flame" size={20} color={COLORS.warning} />
+                  <Text style={styles.calorieItemNumber}>
+                    {calorieData.burned}
+                  </Text>
+                  <Text style={styles.calorieItemLabel}>Verbrannt</Text>
+                </View>
+
+                <View style={styles.calorieItem}>
+                  <Ionicons name="trophy" size={20} color={COLORS.primary} />
+                  <Text style={styles.calorieItemNumber}>
+                    {calorieData.goal}
+                  </Text>
+                  <Text style={styles.calorieItemLabel}>Ziel</Text>
+                </View>
+              </View>
+
+              {/* Info Button */}
+              <TouchableOpacity
+                style={styles.infoButtonBottom}
+                onPress={() => setShowCalorieInfoModal(true)}
+              >
+                <Ionicons
+                  name="information-circle-outline"
+                  size={20}
+                  color={COLORS.primary}
+                />
+                <Text style={styles.infoButtonText}>
+                  Wie wird mein Ziel berechnet?
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* 30-Day Chart */}
+              <View style={styles.chartContainer}>
+                <MultiLineChart
+                  data={thirtyDayData}
+                  calorieGoal={calorieData.goal}
+                />
+              </View>
+            </>
+          )}
         </View>
 
         {/* Macronutrients Progress */}
@@ -941,7 +1297,9 @@ export function NutritionDashboardScreen({
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Wie wird dein Kalorienziel berechnet?</Text>
+              <Text style={styles.modalTitle}>
+                Wie wird dein Kalorienziel berechnet?
+              </Text>
               <TouchableOpacity
                 onPress={() => setShowCalorieInfoModal(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -950,77 +1308,100 @@ export function NutritionDashboardScreen({
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalScroll}
+              showsVerticalScrollIndicator={false}
+            >
               {nutritionGoalData ? (
                 <>
                   <View style={styles.modalSection}>
                     <Text style={styles.modalSectionTitle}>📊 Deine Werte</Text>
                     <View style={styles.modalInfoRow}>
                       <Text style={styles.modalLabel}>Gewicht:</Text>
-                      <Text style={styles.modalValue}>{nutritionGoalData.current_weight_kg} kg</Text>
+                      <Text style={styles.modalValue}>
+                        {nutritionGoalData.current_weight_kg} kg
+                      </Text>
                     </View>
                     <View style={styles.modalInfoRow}>
                       <Text style={styles.modalLabel}>Größe:</Text>
-                      <Text style={styles.modalValue}>{nutritionGoalData.height_cm} cm</Text>
+                      <Text style={styles.modalValue}>
+                        {nutritionGoalData.height_cm} cm
+                      </Text>
                     </View>
                     <View style={styles.modalInfoRow}>
                       <Text style={styles.modalLabel}>Alter:</Text>
-                      <Text style={styles.modalValue}>{nutritionGoalData.age} Jahre</Text>
+                      <Text style={styles.modalValue}>
+                        {nutritionGoalData.age} Jahre
+                      </Text>
                     </View>
                     <View style={styles.modalInfoRow}>
                       <Text style={styles.modalLabel}>Geschlecht:</Text>
                       <Text style={styles.modalValue}>
-                        {nutritionGoalData.gender === 'male' ? 'Männlich' : 'Weiblich'}
+                        {nutritionGoalData.gender === "male"
+                          ? "Männlich"
+                          : "Weiblich"}
                       </Text>
                     </View>
                     {nutritionGoalData.target_weight_kg && (
                       <View style={styles.modalInfoRow}>
                         <Text style={styles.modalLabel}>Zielgewicht:</Text>
-                        <Text style={styles.modalValue}>{nutritionGoalData.target_weight_kg} kg</Text>
+                        <Text style={styles.modalValue}>
+                          {nutritionGoalData.target_weight_kg} kg
+                        </Text>
                       </View>
                     )}
                   </View>
 
                   <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>🔥 Grundumsatz (BMR)</Text>
+                    <Text style={styles.modalSectionTitle}>
+                      🔥 Grundumsatz (BMR)
+                    </Text>
                     <Text style={styles.modalDescription}>
-                      Dein Körper verbraucht {Math.round(nutritionGoalData.bmr_mifflin)} kcal pro Tag im Ruhezustand.
-                      {'\n\n'}
-                      Berechnet mit der Mifflin-St Jeor Formel - dem wissenschaftlichen Goldstandard für BMR-Berechnungen.
+                      Dein Körper verbraucht{" "}
+                      {Math.round(nutritionGoalData.bmr_mifflin)} kcal pro Tag
+                      im Ruhezustand.
+                      {"\n\n"}
+                      Berechnet mit der Mifflin-St Jeor Formel - dem
+                      wissenschaftlichen Goldstandard für BMR-Berechnungen.
                     </Text>
                   </View>
 
                   <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>⚡ Gesamtumsatz (TDEE)</Text>
+                    <Text style={styles.modalSectionTitle}>
+                      ⚡ Gesamtumsatz (TDEE)
+                    </Text>
                     <Text style={styles.modalDescription}>
-                      Mit deinem Aktivitätslevel (PAL {nutritionGoalData.pal_factor}) verbrauchst du täglich {Math.round(nutritionGoalData.tdee_calculated)} kcal.
-                      {'\n\n'}
-                      TDEE = BMR × PAL-Faktor{'\n'}
-                      {Math.round(nutritionGoalData.bmr_mifflin)} × {nutritionGoalData.pal_factor} = {Math.round(nutritionGoalData.tdee_calculated)} kcal
+                      Mit deinem Aktivitätslevel (PAL{" "}
+                      {nutritionGoalData.pal_factor}) verbrauchst du täglich{" "}
+                      {Math.round(nutritionGoalData.tdee_calculated)} kcal.
+                      {"\n\n"}
+                      TDEE = BMR × PAL-Faktor{"\n"}
+                      {Math.round(nutritionGoalData.bmr_mifflin)} ×{" "}
+                      {nutritionGoalData.pal_factor} ={" "}
+                      {Math.round(nutritionGoalData.tdee_calculated)} kcal
                     </Text>
                   </View>
 
                   <View style={styles.modalSection}>
                     <Text style={styles.modalSectionTitle}>🎯 Dein Ziel</Text>
                     <Text style={styles.modalDescription}>
-                      {nutritionGoalData.training_goal === 'weight_loss' &&
-                        `Du möchtest abnehmen. Dein Kalorienziel liegt ${Math.abs(nutritionGoalData.calorie_adjustment)} kcal unter deinem Gesamtumsatz, um ein gesundes Defizit zu erreichen.`
-                      }
-                      {nutritionGoalData.training_goal === 'muscle_gain' &&
-                        `Du möchtest Muskeln aufbauen. Dein Kalorienziel liegt ${nutritionGoalData.calorie_adjustment} kcal über deinem Gesamtumsatz für optimalen Muskelaufbau.`
-                      }
-                      {nutritionGoalData.training_goal === 'strength' &&
-                        `Du trainierst für Kraft. Dein Kalorienziel ist auf deinen Gesamtumsatz abgestimmt für maximale Leistung.`
-                      }
-                      {nutritionGoalData.training_goal === 'endurance' &&
-                        `Du trainierst für Ausdauer. Dein Kalorienziel berücksichtigt den erhöhten Energiebedarf.`
-                      }
-                      {nutritionGoalData.training_goal === 'general_fitness' &&
-                        `Du trainierst für allgemeine Fitness. Dein Kalorienziel hält dein Gewicht stabil.`
-                      }
+                      {nutritionGoalData.training_goal === "weight_loss" &&
+                        `Du möchtest abnehmen. Dein Kalorienziel liegt ${Math.abs(
+                          nutritionGoalData.calorie_adjustment
+                        )} kcal unter deinem Gesamtumsatz, um ein gesundes Defizit zu erreichen.`}
+                      {nutritionGoalData.training_goal === "muscle_gain" &&
+                        `Du möchtest Muskeln aufbauen. Dein Kalorienziel liegt ${nutritionGoalData.calorie_adjustment} kcal über deinem Gesamtumsatz für optimalen Muskelaufbau.`}
+                      {nutritionGoalData.training_goal === "strength" &&
+                        `Du trainierst für Kraft. Dein Kalorienziel ist auf deinen Gesamtumsatz abgestimmt für maximale Leistung.`}
+                      {nutritionGoalData.training_goal === "endurance" &&
+                        `Du trainierst für Ausdauer. Dein Kalorienziel berücksichtigt den erhöhten Energiebedarf.`}
+                      {nutritionGoalData.training_goal === "general_fitness" &&
+                        `Du trainierst für allgemeine Fitness. Dein Kalorienziel hält dein Gewicht stabil.`}
                     </Text>
                     <View style={styles.modalHighlight}>
-                      <Text style={styles.modalHighlightLabel}>Tägliches Kalorienziel</Text>
+                      <Text style={styles.modalHighlightLabel}>
+                        Tägliches Kalorienziel
+                      </Text>
                       <Text style={styles.modalHighlightValue}>
                         {Math.round(nutritionGoalData.target_calories)} kcal
                       </Text>
@@ -1028,37 +1409,45 @@ export function NutritionDashboardScreen({
                   </View>
 
                   <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>🥗 Makronährstoffe</Text>
+                    <Text style={styles.modalSectionTitle}>
+                      🥗 Makronährstoffe
+                    </Text>
                     <View style={styles.modalInfoRow}>
                       <Text style={styles.modalLabel}>Protein:</Text>
                       <Text style={styles.modalValue}>
-                        {Math.round(nutritionGoalData.protein_g_target)}g ({nutritionGoalData.protein_per_kg}g/kg)
+                        {Math.round(nutritionGoalData.protein_g_target)}g (
+                        {nutritionGoalData.protein_per_kg}g/kg)
                       </Text>
                     </View>
                     <View style={styles.modalInfoRow}>
                       <Text style={styles.modalLabel}>Kohlenhydrate:</Text>
                       <Text style={styles.modalValue}>
-                        {Math.round(nutritionGoalData.carbs_g_target)}g ({Math.round(nutritionGoalData.carbs_percentage)}%)
+                        {Math.round(nutritionGoalData.carbs_g_target)}g (
+                        {Math.round(nutritionGoalData.carbs_percentage)}%)
                       </Text>
                     </View>
                     <View style={styles.modalInfoRow}>
                       <Text style={styles.modalLabel}>Fett:</Text>
                       <Text style={styles.modalValue}>
-                        {Math.round(nutritionGoalData.fat_g_target)}g ({Math.round(nutritionGoalData.fat_percentage)}%)
+                        {Math.round(nutritionGoalData.fat_g_target)}g (
+                        {Math.round(nutritionGoalData.fat_percentage)}%)
                       </Text>
                     </View>
                   </View>
 
                   <View style={styles.modalFooter}>
                     <Text style={styles.modalFooterText}>
-                      💡 Diese Werte basieren auf wissenschaftlichen Formeln und können nach 4 Wochen mit deinen echten Ergebnissen kalibriert werden.
+                      💡 Diese Werte basieren auf wissenschaftlichen Formeln und
+                      können nach 4 Wochen mit deinen echten Ergebnissen
+                      kalibriert werden.
                     </Text>
                   </View>
                 </>
               ) : (
                 <View style={styles.modalSection}>
                   <Text style={styles.modalDescription}>
-                    Keine Ernährungsziele gefunden. Erstelle zuerst ein Ernährungsziel in den Einstellungen.
+                    Keine Ernährungsziele gefunden. Erstelle zuerst ein
+                    Ernährungsziel in den Einstellungen.
                   </Text>
                 </View>
               )}
@@ -1484,5 +1873,93 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 16,
     fontWeight: "600",
+  },
+
+  // Tab Styles
+  calorieTabs: {
+    flexDirection: "row",
+    backgroundColor: COLORS.surfaceSecondary,
+    borderRadius: BORDER_RADIUS.md,
+    padding: 4,
+  },
+  calorieTab: {
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  calorieTabActive: {
+    backgroundColor: COLORS.white,
+    ...SHADOWS.sm,
+  },
+  calorieTabText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: COLORS.textSecondary,
+  },
+  calorieTabTextActive: {
+    color: COLORS.primary,
+    fontWeight: "600",
+  },
+
+  // Chart Styles
+  chartContainer: {
+    marginTop: SPACING.lg,
+  },
+  chartLegend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: SPACING.md,
+    marginTop: SPACING.lg,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: "500",
+  },
+
+  // Info Button Bottom
+  infoButtonBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.xs,
+    marginTop: SPACING.lg,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  infoButtonText: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: "500",
+  },
+
+  // Scroll Hint
+  scrollHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  scrollHintText: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    fontStyle: "italic",
   },
 });
