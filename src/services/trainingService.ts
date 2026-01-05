@@ -698,10 +698,10 @@ async function getActiveSession(
  */
 async function completeWorkoutSession(sessionId: string): Promise<void> {
   try {
-    // Lade Session-Details um Plan-ID zu bekommen
+    // Lade Session-Details um Plan-ID und aktuelles Datum zu bekommen
     const { data: session, error: sessionError } = await supabase
       .from("workout_sessions")
-      .select("id, plan_id, plan_workout_id, user_id")
+      .select("id, plan_id, plan_workout_id, user_id, date")
       .eq("id", sessionId)
       .single();
 
@@ -710,13 +710,28 @@ async function completeWorkoutSession(sessionId: string): Promise<void> {
       throw new Error("Session konnte nicht geladen werden");
     }
 
-    // Schließe die Session ab
+    // Aktuelles Datum (heute)
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const workoutDate = session.date;
+
+    // Prüfe ob das Workout verspätet abgeschlossen wird
+    const shouldUpdateDate = today > workoutDate;
+
+    // Schließe die Session ab und aktualisiere ggf. das Datum
+    const updateData: any = {
+      status: "completed",
+      end_time: new Date().toISOString(),
+    };
+
+    // Wenn das heutige Datum neuer ist als das Workout-Datum, aktualisiere es
+    if (shouldUpdateDate) {
+      updateData.date = today;
+      console.log(`Workout-Datum aktualisiert von ${workoutDate} auf ${today}`);
+    }
+
     const { error } = await supabase
       .from("workout_sessions")
-      .update({
-        status: "completed",
-        end_time: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", sessionId);
 
     if (error) {
