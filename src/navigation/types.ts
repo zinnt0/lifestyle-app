@@ -60,6 +60,7 @@ export type TrainingStackParamList = {
   TrainingPlanDetail: { planId: string };
   WorkoutSession: { sessionId: string };
   WorkoutSummary: { sessionId: string };
+  WorkoutHistory: undefined;
 };
 
 /**

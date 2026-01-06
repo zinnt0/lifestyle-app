@@ -19,6 +19,7 @@ import { PlanListScreen } from "@/screens/Training/PlanListScreen";
 import { TrainingPlanDetailScreen } from "@/screens/Training/TrainingPlanDetailScreen";
 import { WorkoutSessionScreen } from "@/screens/Training/WorkoutSessionScreen";
 import WorkoutSummaryScreen from "@/screens/Training/WorkoutSummaryScreen";
+import WorkoutHistoryScreen from "@/screens/Training/WorkoutHistoryScreen";
 import { OneRMInputScreen } from "@/screens/Training/OneRMInputScreen";
 
 /**
@@ -36,6 +37,7 @@ export type TrainingStackParamList = {
   TrainingPlanDetail: { planId: string };
   WorkoutSession: { sessionId: string };
   WorkoutSummary: { sessionId: string };
+  WorkoutHistory: undefined;
 };
 
 // Screen Props Types (for use in screen components)
@@ -208,6 +210,14 @@ export const TrainingStackNavigator: React.FC = () => {
           // Prevent going back to workout
           gestureEnabled: false,
           headerLeft: () => null,
+        }}
+      />
+
+      <Stack.Screen
+        name="WorkoutHistory"
+        component={WorkoutHistoryScreen}
+        options={{
+          headerShown: false,
         }}
       />
     </Stack.Navigator>

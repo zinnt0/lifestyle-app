@@ -24,6 +24,7 @@ import {
 import CalorieCard from '../../components/training/CalorieCard';
 import ExerciseCalorieBreakdown from '../../components/training/ExerciseCalorieBreakdown';
 import WorkoutPerformanceComparison from '../../components/training/WorkoutPerformanceComparison';
+import { localWorkoutHistoryCache } from '../../services/cache/LocalWorkoutHistoryCache';
 
 type WorkoutSummaryScreenNavigationProp = NativeStackNavigationProp<
   TrainingStackParamList,
@@ -65,7 +66,19 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ navigation, route }) => {
     calculateStats();
     loadCalories();
     loadPerformanceComparison();
+    cacheWorkoutData();
   }, [sessionId]);
+
+  const cacheWorkoutData = async () => {
+    try {
+      console.log('Caching workout session data...');
+      await localWorkoutHistoryCache.cacheWorkoutSession(sessionId);
+      console.log('Workout data cached successfully');
+    } catch (error) {
+      console.error('Failed to cache workout data:', error);
+      // Don't show error to user, just log it
+    }
+  };
 
   const loadCalories = async () => {
     try {

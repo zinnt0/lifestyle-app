@@ -16,16 +16,17 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
 import { trainingService } from "@/services/trainingService";
+import { localWorkoutHistoryCache } from "@/services/cache/LocalWorkoutHistoryCache";
 import { useTrainingNavigation } from "@/hooks/useTrainingNavigation";
 import { ActivePlanCard } from "@/components/training/ActivePlanCard";
 import { InactivePlanCard } from "@/components/training/InactivePlanCard";
-import { Button } from "@/components/ui/Button";
 import { AppHeader } from "@/components/ui/AppHeader";
 import type { TrainingPlan, TrainingPlanDetails } from "@/types/training.types";
 
@@ -82,6 +83,9 @@ export const TrainingDashboardScreen: React.FC = () => {
       }
 
       setInactivePlans(inactive);
+
+      // Load historical workout data if not already cached
+      loadHistoricalDataIfNeeded(user.id);
     } catch (error) {
       console.error("Fehler beim Laden der Trainingspläne:", error);
       Alert.alert(
@@ -91,6 +95,24 @@ export const TrainingDashboardScreen: React.FC = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }, []);
+
+  /**
+   * Load historical workout data in background (once per app session)
+   */
+  const loadHistoricalDataIfNeeded = useCallback(async (userId: string) => {
+    try {
+      const hasData = await localWorkoutHistoryCache.hasHistoricalData(userId);
+
+      if (!hasData) {
+        console.log('[TrainingDashboard] Loading historical workout data...');
+        const cachedCount = await localWorkoutHistoryCache.loadHistoricalData(userId, 12);
+        console.log(`[TrainingDashboard] Cached ${cachedCount} historical sessions`);
+      }
+    } catch (error) {
+      console.error('[TrainingDashboard] Failed to load historical data:', error);
+      // Don't show error to user, this is background operation
     }
   }, []);
 
@@ -160,6 +182,13 @@ export const TrainingDashboardScreen: React.FC = () => {
    */
   const handleCreateNewPlan = useCallback(() => {
     navigation.navigate("PlanConfiguration");
+  }, [navigation]);
+
+  /**
+   * Navigate to workout history
+   */
+  const handleNavigateToHistory = useCallback(() => {
+    navigation.navigate("WorkoutHistory");
   }, [navigation]);
 
   /**
@@ -238,6 +267,36 @@ export const TrainingDashboardScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
+        {/* Top Action Row: History Tile (70%) + Create Button (30%) */}
+        <View style={styles.topActionRow}>
+          {/* Workout History Tile */}
+          <TouchableOpacity
+            style={styles.historyTile}
+            onPress={handleNavigateToHistory}
+            activeOpacity={0.7}
+          >
+            <View style={styles.historyTileContent}>
+              <Text style={styles.historyTileEmoji}>📊</Text>
+              <View style={styles.historyTileTextContainer}>
+                <Text style={styles.historyTileTitle}>Workout-Historie</Text>
+                <Text style={styles.historyTileSubtitle}>
+                  Verfolge deinen Fortschritt
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Create Plan Button */}
+          <TouchableOpacity
+            style={styles.createPlanTile}
+            onPress={handleCreateNewPlan}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.createPlanIcon}>+</Text>
+            <Text style={styles.createPlanText}>Neuer{'\n'}Plan</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Active Plan Section */}
         {activePlan && (
           <View style={styles.section}>
@@ -275,13 +334,6 @@ export const TrainingDashboardScreen: React.FC = () => {
             </Text>
           </View>
         )}
-
-        {/* Create New Plan Button */}
-        <View style={styles.createButtonContainer}>
-          <Button onPress={handleCreateNewPlan} variant="primary">
-            + Neuen Plan erstellen
-          </Button>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -310,6 +362,76 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#666",
   },
+  // Top Action Row (History + Create Plan)
+  topActionRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 24,
+  },
+  // Workout History Tile (70%)
+  historyTile: {
+    flex: 7,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    minHeight: 100,
+  },
+  historyTileContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  historyTileEmoji: {
+    fontSize: 40,
+  },
+  historyTileTextContainer: {
+    flex: 1,
+  },
+  historyTileTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#333333",
+    marginBottom: 4,
+  },
+  historyTileSubtitle: {
+    fontSize: 13,
+    color: "#666666",
+    lineHeight: 18,
+  },
+  // Create Plan Tile (30%)
+  createPlanTile: {
+    flex: 3,
+    backgroundColor: "#4A90E2",
+    borderRadius: 16,
+    padding: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+    minHeight: 100,
+  },
+  createPlanIcon: {
+    fontSize: 36,
+    fontWeight: "300",
+    color: "#FFFFFF",
+    marginBottom: 4,
+  },
+  createPlanText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    textAlign: "center",
+    lineHeight: 16,
+  },
+  // Sections
   section: {
     marginBottom: 24,
   },
@@ -338,8 +460,5 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
     lineHeight: 24,
-  },
-  createButtonContainer: {
-    marginTop: 16,
   },
 });
