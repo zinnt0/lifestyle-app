@@ -12,6 +12,7 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
+import * as Linking from "expo-linking";
 import { AuthNavigator } from "./AuthNavigator";
 import { OnboardingNavigator } from "./OnboardingNavigator";
 import { TabNavigator } from "./TabNavigator";
@@ -20,6 +21,8 @@ import { isOnboardingCompleted } from "../services/profile.service";
 import { foodService } from "../services/FoodService";
 import { profileSyncService } from "../services/ProfileSyncService";
 import { nutritionSyncService } from "../services/NutritionSyncService";
+import { localWorkoutHistoryCache } from "../services/cache/LocalWorkoutHistoryCache";
+import { supabase } from "../lib/supabase";
 import type { AuthUser } from "../services/auth.service";
 
 /**
@@ -29,9 +32,10 @@ import type { AuthUser } from "../services/auth.service";
  * - Email confirmation (lifestyleapp://auth/callback)
  * - Password reset (lifestyleapp://auth/forgot-password)
  * - Auth screens (login, register)
+ * - OAuth callbacks (exp:// for Expo Go development)
  */
 const linking = {
-  prefixes: ["lifestyleapp://", "https://lifestyleapp.com"],
+  prefixes: ["lifestyleapp://", "exp://", "https://lifestyleapp.com"],
   config: {
     screens: {
       Login: "login",
@@ -70,6 +74,11 @@ export const AppNavigator: React.FC = () => {
       console.error("Failed to initialize FoodService:", error);
     });
 
+    // Initialize Workout History Cache
+    localWorkoutHistoryCache.initialize().catch((error) => {
+      console.error("Failed to initialize WorkoutHistoryCache:", error);
+    });
+
     // Initialize ProfileSyncService (event listeners for profile updates)
     profileSyncService.initialize();
     console.log("[AppNavigator] Cache services initialized");
@@ -78,6 +87,157 @@ export const AppNavigator: React.FC = () => {
   // Check initial auth and onboarding state
   useEffect(() => {
     checkAuthAndOnboarding();
+  }, []);
+
+  // Handle deep links for OAuth callback and email confirmation
+  useEffect(() => {
+    const handleDeepLink = async (url: string) => {
+      console.log('[AppNavigator] Deep link received:', url);
+
+      // Check what type of callback this is:
+      // 1. Email confirmation: ?token_hash=xxx&type=signup
+      // 2. Authorization code: ?code=xxx (PKCE flow for OAuth)
+      // 3. Direct tokens: #access_token=xxx&refresh_token=xxx (implicit flow)
+      const hasCode = url.includes('?code=') || url.includes('&code=');
+      const hasTokens = url.includes('access_token=') || url.includes('refresh_token=');
+      const hasTokenHash = url.includes('token_hash=');
+
+      if (!hasCode && !hasTokens && !hasTokenHash) {
+        return; // Not an auth callback
+      }
+
+      console.log('[AppNavigator] Auth callback detected');
+      console.log('[AppNavigator] Has code:', hasCode, 'Has tokens:', hasTokens, 'Has token_hash:', hasTokenHash);
+
+      try {
+        if (hasTokenHash) {
+          // Handle email confirmation (signup, password reset, etc.)
+          console.log('[AppNavigator] Processing email confirmation...');
+
+          const queryIndex = url.indexOf('?');
+          const hashIndex = url.indexOf('#');
+
+          let queryString = '';
+          if (hashIndex !== -1) {
+            queryString = url.substring(hashIndex + 1);
+          } else if (queryIndex !== -1) {
+            queryString = url.substring(queryIndex + 1);
+          }
+
+          const params = new URLSearchParams(queryString);
+          const tokenHash = params.get('token_hash');
+          const type = params.get('type');
+
+          console.log('[AppNavigator] Email confirmation type:', type);
+
+          if (!tokenHash) {
+            console.error('[AppNavigator] Missing token_hash in URL');
+            return;
+          }
+
+          // Verify the OTP token
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: type as any || 'email',
+          });
+
+          if (error) {
+            console.error('[AppNavigator] Error verifying email:', error);
+            return;
+          }
+
+          console.log('[AppNavigator] Email verified successfully!', data.user?.email);
+          await checkAuthAndOnboarding();
+
+        } else if (hasTokens) {
+          // Handle direct tokens (implicit flow or hash fragment)
+          console.log('[AppNavigator] Processing direct tokens...');
+
+          const hashIndex = url.indexOf('#');
+          const queryIndex = url.indexOf('?');
+
+          let fragment = '';
+          if (hashIndex !== -1) {
+            fragment = url.substring(hashIndex + 1);
+          } else if (queryIndex !== -1) {
+            fragment = url.substring(queryIndex + 1);
+          }
+
+          console.log('[AppNavigator] Fragment:', fragment.substring(0, 50) + '...');
+
+          const params = new URLSearchParams(fragment);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          if (!accessToken || !refreshToken) {
+            console.error('[AppNavigator] Missing tokens in URL');
+            return;
+          }
+
+          console.log('[AppNavigator] Setting session from tokens...');
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) {
+            console.error('[AppNavigator] Error setting session:', error);
+            return;
+          }
+
+          console.log('[AppNavigator] Session set!', data.user?.email);
+          await checkAuthAndOnboarding();
+
+        } else if (hasCode) {
+          // Handle authorization code (PKCE flow)
+          console.log('[AppNavigator] Processing authorization code...');
+
+          // Supabase client will automatically exchange the code for tokens
+          // via detectSessionInUrl, but we need to help it in React Native
+          const queryIndex = url.indexOf('?');
+          const queryString = url.substring(queryIndex + 1);
+          const params = new URLSearchParams(queryString);
+          const code = params.get('code');
+
+          if (!code) {
+            console.error('[AppNavigator] No code found in URL');
+            return;
+          }
+
+          console.log('[AppNavigator] Exchanging code for session...');
+
+          // Exchange the authorization code for a session
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+          if (error) {
+            console.error('[AppNavigator] Error exchanging code:', error);
+            return;
+          }
+
+          console.log('[AppNavigator] Session created!', data.user?.email);
+          await checkAuthAndOnboarding();
+        }
+      } catch (error) {
+        console.error('[AppNavigator] Error handling auth callback:', error);
+      }
+    };
+
+    // Handle initial URL (when app is opened via deep link)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log('[AppNavigator] Initial URL:', url);
+        handleDeepLink(url);
+      }
+    });
+
+    // Listen for deep link events while app is running
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   // Listen to auth state changes

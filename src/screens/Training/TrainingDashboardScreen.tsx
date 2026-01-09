@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { supabase } from "@/lib/supabase";
 import { trainingService } from "@/services/trainingService";
@@ -106,12 +107,20 @@ export const TrainingDashboardScreen: React.FC = () => {
       const hasData = await localWorkoutHistoryCache.hasHistoricalData(userId);
 
       if (!hasData) {
-        console.log('[TrainingDashboard] Loading historical workout data...');
-        const cachedCount = await localWorkoutHistoryCache.loadHistoricalData(userId, 12);
-        console.log(`[TrainingDashboard] Cached ${cachedCount} historical sessions`);
+        console.log("[TrainingDashboard] Loading historical workout data...");
+        const cachedCount = await localWorkoutHistoryCache.loadHistoricalData(
+          userId,
+          12
+        );
+        console.log(
+          `[TrainingDashboard] Cached ${cachedCount} historical sessions`
+        );
       }
     } catch (error) {
-      console.error('[TrainingDashboard] Failed to load historical data:', error);
+      console.error(
+        "[TrainingDashboard] Failed to load historical data:",
+        error
+      );
       // Don't show error to user, this is background operation
     }
   }, []);
@@ -276,7 +285,7 @@ export const TrainingDashboardScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <View style={styles.historyTileContent}>
-              <Text style={styles.historyTileEmoji}>📊</Text>
+              <Ionicons name="bar-chart-outline" size={40} color="#6FD89E" />
               <View style={styles.historyTileTextContainer}>
                 <Text style={styles.historyTileTitle}>Workout-Historie</Text>
                 <Text style={styles.historyTileSubtitle}>
@@ -293,7 +302,7 @@ export const TrainingDashboardScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <Text style={styles.createPlanIcon}>+</Text>
-            <Text style={styles.createPlanText}>Neuer{'\n'}Plan</Text>
+            <Text style={styles.createPlanText}>Neuer{"\n"}Plan</Text>
           </TouchableOpacity>
         </View>
 
@@ -371,23 +380,22 @@ const styles = StyleSheet.create({
   // Workout History Tile (70%)
   historyTile: {
     flex: 7,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
+    borderRadius: 20,
     padding: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
     minHeight: 100,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   historyTileContent: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-  },
-  historyTileEmoji: {
-    fontSize: 40,
   },
   historyTileTextContainer: {
     flex: 1,
@@ -406,21 +414,23 @@ const styles = StyleSheet.create({
   // Create Plan Tile (30%)
   createPlanTile: {
     flex: 3,
-    backgroundColor: "#4A90E2",
-    borderRadius: 16,
+    backgroundColor: "rgba(111, 216, 158, 0.85)",
+    borderRadius: 20,
     padding: 12,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
     minHeight: 100,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   createPlanIcon: {
-    fontSize: 36,
-    fontWeight: "300",
+    fontSize: 48,
+    fontWeight: "700",
     color: "#FFFFFF",
     marginBottom: 4,
   },

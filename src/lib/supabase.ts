@@ -18,12 +18,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * - AsyncStorage für persistente Sessions
  * - Automatische Token-Erneuerung
  * - Session-Persistierung über App-Neustarts
+ * - Deep linking detection für OAuth callbacks
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true, // Enable for OAuth
+    flowType: 'pkce', // Use PKCE flow for better security
   },
 });

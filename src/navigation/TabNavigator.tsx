@@ -16,6 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { MainNavigator } from "./MainNavigator";
 import { TrainingStackNavigator } from "./TrainingStackNavigator";
 import { NutritionStackNavigator } from "./NutritionStackNavigator";
+import { SupplementsComingSoonScreen } from "../screens/Supplements/SupplementsComingSoonScreen";
+import { GlowUpComingSoonScreen } from "../screens/GlowUp/GlowUpComingSoonScreen";
 import { supabase } from "../lib/supabase";
 
 const Tab = createBottomTabNavigator();
@@ -100,6 +102,30 @@ export const TabNavigator: React.FC = () => {
       >
         {() => <NutritionStackNavigator userId={userId} />}
       </Tab.Screen>
+
+      {/* Supplements Tab */}
+      <Tab.Screen
+        name="SupplementsTab"
+        component={SupplementsComingSoonScreen}
+        options={{
+          tabBarLabel: "Supplements",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="medkit-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* GlowUp Tab */}
+      <Tab.Screen
+        name="GlowUpTab"
+        component={GlowUpComingSoonScreen}
+        options={{
+          tabBarLabel: "GlowUp",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="sparkles-outline" size={size} color={color} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 };

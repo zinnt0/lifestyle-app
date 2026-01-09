@@ -250,7 +250,8 @@ async function findMatchingTemplates(
  */
 async function getTemplateDetails(templateId: string): Promise<TemplateDetails> {
   try {
-    const { data, error } = await supabase
+    // Try to load from plan_templates first (male plans)
+    const { data: templateData, error: templateError } = await supabase
       .from("plan_templates")
       .select(
         `
@@ -267,17 +268,55 @@ async function getTemplateDetails(templateId: string): Promise<TemplateDetails> 
       .eq("id", templateId)
       .single();
 
-    if (error) {
-      console.error("Fehler beim Laden der Template-Details:", error);
+    // If found in plan_templates, return it
+    if (templateData && !templateError) {
+      const sortedWorkouts = (templateData.workouts || [])
+        .map((workout: any) => ({
+          ...workout,
+          exercises: (workout.exercises || []).sort(
+            (a: TemplateExercise, b: TemplateExercise) => a.order_in_workout - b.order_in_workout
+          ),
+        }))
+        .sort((a: any, b: any) => a.day_number - b.day_number);
+
+      return {
+        ...templateData,
+        workouts: sortedWorkouts,
+      };
+    }
+
+    // If not found in plan_templates, try training_plans (women's plans)
+    const { data: trainingPlanData, error: trainingPlanError } = await supabase
+      .from("training_plans")
+      .select(
+        `
+        *,
+        workouts:plan_workouts(
+          *,
+          exercises:plan_exercises(
+            *,
+            exercise:exercises(*)
+          )
+        )
+      `
+      )
+      .eq("id", templateId)
+      .eq("is_template", true)
+      .single();
+
+    if (trainingPlanError || !trainingPlanData) {
+      console.error("Fehler beim Laden der Template-Details:", trainingPlanError || templateError);
       throw new Error("Template-Details konnten nicht geladen werden");
     }
 
-    if (!data) {
-      throw new Error("Template nicht gefunden");
+    // Check if template has workouts configured
+    if (!trainingPlanData.workouts || trainingPlanData.workouts.length === 0) {
+      console.warn("Template has no workouts configured:", templateId);
+      throw new Error("Dieser Trainingsplan ist noch in Entwicklung und hat noch keine konfigurierten Workouts. Bitte wähle einen anderen Plan.");
     }
 
     // Sort workouts by day_number and exercises by order_in_workout
-    const sortedWorkouts = (data.workouts || [])
+    const sortedWorkouts = (trainingPlanData.workouts || [])
       .map((workout: any) => ({
         ...workout,
         exercises: (workout.exercises || []).sort(
@@ -287,8 +326,9 @@ async function getTemplateDetails(templateId: string): Promise<TemplateDetails> 
       .sort((a: any, b: any) => a.day_number - b.day_number);
 
     return {
-      ...data,
+      ...trainingPlanData,
       workouts: sortedWorkouts,
+      isWomenTemplate: true, // Flag to indicate this is from training_plans, not plan_templates
     };
   } catch (error) {
     console.error("Fehler in getTemplateDetails:", error);
@@ -336,11 +376,16 @@ async function createPlanFromTemplate(
     }
 
     // 3. Erstelle den Plan
+    // Use template_id for women's plans (from training_plans), source_template_id for men's plans (from plan_templates)
+    const templateReference = template.isWomenTemplate
+      ? { template_id: templateId }
+      : { source_template_id: templateId };
+
     const { data: newPlan, error: planError } = await supabase
       .from("training_plans")
       .insert({
         user_id: userId,
-        source_template_id: templateId,
+        ...templateReference,
         name: planName,
         plan_type: template.plan_type,
         days_per_week: template.days_per_week,
@@ -357,17 +402,24 @@ async function createPlanFromTemplate(
 
     // 4. Kopiere Workouts
     for (const templateWorkout of template.workouts) {
+      // For women's templates, don't set source_template_workout_id (it references template_workouts which is for men's plans)
+      const workoutData: any = {
+        plan_id: newPlan.id,
+        name: templateWorkout.name_de || templateWorkout.name,
+        day_number: templateWorkout.day_number,
+        week_number: templateWorkout.week_number,
+        order_in_week: templateWorkout.order_in_week,
+        focus: templateWorkout.focus,
+      };
+
+      // Only set source_template_workout_id for men's plans (from template_workouts)
+      if (!template.isWomenTemplate) {
+        workoutData.source_template_workout_id = templateWorkout.id;
+      }
+
       const { data: newWorkout, error: workoutError } = await supabase
         .from("plan_workouts")
-        .insert({
-          plan_id: newPlan.id,
-          source_template_workout_id: templateWorkout.id,
-          name: templateWorkout.name_de || templateWorkout.name,
-          day_number: templateWorkout.day_number,
-          week_number: templateWorkout.week_number,
-          order_in_week: templateWorkout.order_in_week,
-          focus: templateWorkout.focus,
-        })
+        .insert(workoutData)
         .select()
         .single();
 
@@ -642,7 +694,13 @@ async function startWorkoutSession(
 
     return newSession.id;
   } catch (error) {
-    console.error("Fehler in startWorkoutSession:", error);
+    // Don't log expected errors (active/paused workout exists) - they are handled in UI
+    const errorMessage = error instanceof Error ? error.message : "";
+    const isExpectedError = errorMessage.includes("bereits ein Workout") ||
+                            errorMessage.includes("unterbrochenes Workout");
+    if (!isExpectedError) {
+      console.error("Fehler in startWorkoutSession:", error);
+    }
     throw error;
   }
 }
@@ -1294,10 +1352,82 @@ async function getRecommendations(
     }
     const profileDuration = Date.now() - profileStart;
 
-    // 2. Check cache first
+    // Check if user is female - if so, use women's training plan system
+    if (profile.gender === 'female') {
+      console.log('[getRecommendations] User is female, using women training plan system');
+
+      // Import and use women's training plan service
+      const { getTopWomenPlanRecommendations } = await import('./womenTrainingPlanService');
+
+      // Derive equipment from training location and home equipment
+      let equipment: string[] = [];
+      if (profile.training_location === 'gym' || profile.training_location === 'both') {
+        // User has gym access - assume full gym equipment
+        equipment = ['freie_gewichte', 'maschinen', 'langhantel', 'kurzhanteln', 'kabelzug'];
+      } else if (profile.training_location === 'home') {
+        // Use home equipment from profile
+        equipment = profile.home_equipment || [];
+      }
+
+      const womenData = {
+        training_goals: profile.training_goals || [],
+        training_experience_months: profile.training_experience_months || 0,
+        available_training_days: profile.available_training_days || 3,
+        cardio_per_week: profile.cardio_per_week || 0,
+        training_location: profile.training_location || 'gym',
+        equipment,
+        load_preference: profile.load_preference || undefined,
+        split_preference: profile.split_preference || undefined,
+        fitness_level: profile.fitness_level || 'beginner',
+      };
+
+      const womenPlans = await getTopWomenPlanRecommendations(womenData, limit);
+
+      // Plans are already limited by the function
+      const limitedWomenPlans = womenPlans;
+
+      // Convert ScoredPlan[] to PlanRecommendation[] format
+      const recommendations: PlanRecommendation[] = limitedWomenPlans.map((scoredPlan) => ({
+        template: {
+          id: scoredPlan.plan.id,
+          name: scoredPlan.plan.name,
+          name_de: scoredPlan.plan.name,
+          plan_type: scoredPlan.plan.training_split || 'custom',
+          fitness_level: scoredPlan.plan.fitness_level || 'beginner',
+          days_per_week: scoredPlan.plan.days_per_week || 3,
+          primary_goal: 'hypertrophy' as const, // Women plans focus on hypertrophy/bodyforming
+          description: scoredPlan.plan.description,
+          description_de: scoredPlan.plan.description,
+          completion_status: 'complete' as const,
+          target_gender: 'female' as const,
+        },
+        totalScore: scoredPlan.score,
+        breakdown: {
+          experienceScore: scoredPlan.matchDetails.levelMatch,
+          frequencyScore: scoredPlan.matchDetails.frequencyMatch,
+          goalScore: scoredPlan.matchDetails.goalsMatch,
+          volumeScore: scoredPlan.matchDetails.otherMatch,
+        },
+        completeness: 'complete' as const,
+        recommendation: scoredPlan.score >= 80 ? 'optimal' : scoredPlan.score >= 60 ? 'good' : 'acceptable',
+        reasoning: [
+          `Ziele: ${Math.round(scoredPlan.matchDetails.goalsMatch)}%`,
+          `Level: ${Math.round(scoredPlan.matchDetails.levelMatch)}%`,
+          `Frequenz: ${Math.round(scoredPlan.matchDetails.frequencyMatch)}%`,
+          `Equipment: ${Math.round(scoredPlan.matchDetails.equipmentMatch)}%`,
+        ],
+      }));
+
+      return recommendations;
+    }
+
+    // 2. For male/other users: Check cache first
     let templates: PlanTemplate[];
     let queryDuration = 0;
     const now = Date.now();
+
+    // Determine target gender for filtering
+    const targetGender = profile.gender === 'male' ? 'male' : 'male'; // Default to male for 'other' as well
 
     if (
       templateCache.data &&
@@ -1308,8 +1438,11 @@ async function getRecommendations(
         count: templateCache.data.length,
       });
       templates = templateCache.data;
+
+      // Filter by target gender
+      templates = templates.filter(t => t.target_gender === targetGender);
     } else {
-      // OPTIMIZED QUERY - fetch only what we need with new computed fields
+      // OPTIMIZED QUERY - fetch only what we need with new computed fields + gender filter
       const queryStart = Date.now();
       const { data: fetchedTemplates, error: templatesError } = await supabase
         .from('plan_templates')
@@ -1330,9 +1463,11 @@ async function getRecommendations(
           completion_status,
           is_dynamic,
           requires_1rm_for_exercises,
-          tm_percentage
+          tm_percentage,
+          target_gender
         `)
         .eq('is_active', true)
+        .eq('target_gender', targetGender)
         .order('completion_status', { ascending: false }) // Complete programs first
         .order('popularity_score', { ascending: false });
 
@@ -1356,6 +1491,7 @@ async function getRecommendations(
       console.log('[getRecommendations] Templates fetched and cached', {
         count: templates.length,
         duration: `${queryDuration}ms`,
+        targetGender,
       });
     }
 

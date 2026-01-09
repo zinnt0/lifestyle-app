@@ -21,6 +21,7 @@ import {
 import { localFoodCache } from '@/services/cache/LocalFoodCache';
 import { localNutritionCache } from '@/services/cache/LocalNutritionCache';
 import { localProfileCache } from '@/services/cache/LocalProfileCache';
+import { localWorkoutHistoryCache } from '@/services/cache/LocalWorkoutHistoryCache';
 import { nutritionSyncService } from '@/services/NutritionSyncService';
 import { profileSyncService } from '@/services/ProfileSyncService';
 
@@ -40,6 +41,11 @@ interface CacheStats {
     isCached: boolean;
     cached_at: string | null;
     updated_at: string | null;
+  };
+  workoutHistory: {
+    sessionCount: number;
+    exerciseCount: number;
+    exercises: any[];
   };
 }
 
@@ -70,6 +76,12 @@ export default function CacheDebugScreen({ route }: { route?: any }) {
       const profileCached = await localProfileCache.isProfileCached(userId);
       const profileMeta = await localProfileCache.getCacheMetadata(userId);
 
+      // Workout history cache stats
+      const hasWorkoutHistory = await localWorkoutHistoryCache.hasHistoricalData(userId);
+      const workoutExercises = hasWorkoutHistory
+        ? await localWorkoutHistoryCache.getExercisesWithHistory(userId)
+        : [];
+
       setStats({
         food: {
           count: foodCount,
@@ -83,6 +95,11 @@ export default function CacheDebugScreen({ route }: { route?: any }) {
           isCached: profileCached,
           cached_at: profileMeta.cached_at,
           updated_at: profileMeta.updated_at,
+        },
+        workoutHistory: {
+          sessionCount: workoutExercises.reduce((sum, ex) => sum + ex.session_count, 0),
+          exerciseCount: workoutExercises.length,
+          exercises: workoutExercises.slice(0, 10), // Top 10
         },
       });
     } catch (error) {
@@ -216,6 +233,46 @@ export default function CacheDebugScreen({ route }: { route?: any }) {
   };
 
   /**
+   * Clear workout history cache
+   */
+  const handleClearWorkoutHistoryCache = () => {
+    Alert.alert(
+      'Clear Workout History Cache',
+      `Are you sure? This will delete ${stats?.workoutHistory.sessionCount || 0} cached workout sessions.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await localWorkoutHistoryCache.clearCache();
+              Alert.alert('Success', 'Workout history cache cleared');
+              await loadStats();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear workout history cache');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  /**
+   * Load historical workout data
+   */
+  const handleLoadHistoricalWorkouts = async () => {
+    try {
+      Alert.alert('Loading...', 'Fetching historical workout data from Supabase');
+      const cachedCount = await localWorkoutHistoryCache.loadHistoricalData(userId, 12);
+      Alert.alert('Success', `Loaded ${cachedCount} workout sessions into cache`);
+      await loadStats();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load historical workout data');
+    }
+  };
+
+  /**
    * Clear all caches
    */
   const handleClearAllCaches = () => {
@@ -232,6 +289,7 @@ export default function CacheDebugScreen({ route }: { route?: any }) {
               await localFoodCache.clearCache();
               await localNutritionCache.clearCache();
               await localProfileCache.deleteProfile(userId);
+              await localWorkoutHistoryCache.clearCache();
               Alert.alert('Success', 'All caches cleared');
               await loadStats();
             } catch (error) {
@@ -487,6 +545,72 @@ export default function CacheDebugScreen({ route }: { route?: any }) {
                 onPress={handleClearProfileCache}
               >
                 <Text style={styles.buttonText}>Clear Profile Cache</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* Workout History Cache Section */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.sectionHeader}
+          onPress={() => toggleSection('workoutHistory')}
+        >
+          <Text style={styles.sectionTitle}>
+            💪 Workout History ({stats?.workoutHistory.sessionCount || 0} sessions)
+          </Text>
+          <Text style={styles.expandIcon}>
+            {expandedSection === 'workoutHistory' ? '▼' : '▶'}
+          </Text>
+        </TouchableOpacity>
+
+        {expandedSection === 'workoutHistory' && (
+          <View style={styles.sectionContent}>
+            <View style={styles.statRow}>
+              <Text style={styles.statLabel}>Total Sessions:</Text>
+              <Text style={styles.statValue}>
+                {stats?.workoutHistory.sessionCount || 0}
+              </Text>
+            </View>
+
+            <View style={styles.statRow}>
+              <Text style={styles.statLabel}>Tracked Exercises:</Text>
+              <Text style={styles.statValue}>
+                {stats?.workoutHistory.exerciseCount || 0}
+              </Text>
+            </View>
+
+            {(stats?.workoutHistory.exerciseCount || 0) > 0 && (
+              <>
+                <Text style={styles.subheading}>Top 10 Exercises:</Text>
+                {stats?.workoutHistory.exercises.map((exercise, index) => (
+                  <View key={exercise.exercise_id} style={styles.foodItem}>
+                    <Text style={styles.foodRank}>#{index + 1}</Text>
+                    <View style={styles.foodInfo}>
+                      <Text style={styles.foodName}>{exercise.exercise_name}</Text>
+                      <Text style={styles.foodMeta}>
+                        {exercise.session_count} sessions • Last: {exercise.last_performed}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleLoadHistoricalWorkouts}
+            >
+              <Text style={styles.buttonText}>Load Historical Data (12 months)</Text>
+            </TouchableOpacity>
+
+            {(stats?.workoutHistory.sessionCount || 0) > 0 && (
+              <TouchableOpacity
+                style={styles.dangerButton}
+                onPress={handleClearWorkoutHistoryCache}
+              >
+                <Text style={styles.buttonText}>Clear Workout History Cache</Text>
               </TouchableOpacity>
             )}
           </View>

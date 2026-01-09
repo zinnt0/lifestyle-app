@@ -65,6 +65,13 @@ interface ProfileFormData {
     | 'general_fitness'
     | null;
 
+  // Women-specific training fields
+  training_goals?: string[] | null;
+  cardio_per_week?: number | null;
+  training_location?: 'gym' | 'home' | 'both' | null;
+  load_preference?: 'low_impact' | 'normal' | 'high_intensity' | null;
+  split_preference?: 'full_body' | 'upper_lower' | 'push_pull' | 'no_preference' | null;
+
   // Section 4: Lifestyle
   sleep_hours_avg: number | null;
   stress_level: number | null;
@@ -115,6 +122,11 @@ export const ProfileEditScreen: React.FC = () => {
     has_gym_access: true,
     home_equipment: [],
     primary_goal: null,
+    training_goals: null,
+    cardio_per_week: null,
+    training_location: null,
+    load_preference: null,
+    split_preference: null,
     sleep_hours_avg: null,
     stress_level: null,
     pal_factor: 1.55, // Default: moderately active
@@ -169,6 +181,11 @@ export const ProfileEditScreen: React.FC = () => {
           has_gym_access: profile.has_gym_access,
           home_equipment: profile.home_equipment || [],
           primary_goal: profile.primary_goal,
+          training_goals: profile.training_goals,
+          cardio_per_week: profile.cardio_per_week,
+          training_location: profile.training_location,
+          load_preference: profile.load_preference,
+          split_preference: profile.split_preference,
           sleep_hours_avg: profile.sleep_hours_avg,
           stress_level: profile.stress_level,
           pal_factor: profile.pal_factor ?? 1.55,
@@ -718,6 +735,101 @@ export const ProfileEditScreen: React.FC = () => {
           />
         ))}
       </View>
+
+      {/* Women-specific training fields */}
+      {formData.gender === 'female' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Spezifische Trainingsziele (Frauen)</Text>
+          <Text style={styles.sectionHint}>
+            Diese Ziele helfen uns, die besten Trainingspläne für dich zu finden
+          </Text>
+
+          <Text style={styles.label}>Mehrfachauswahl möglich:</Text>
+          <MultiSelectChips
+            options={['kraft', 'hypertrophie', 'bodyforming', 'fettabbau', 'abnehmen', 'general_fitness']}
+            labels={{
+              kraft: 'Kraft',
+              hypertrophie: 'Hypertrophie',
+              bodyforming: 'Bodyforming',
+              fettabbau: 'Fettabbau',
+              abnehmen: 'Abnehmen',
+              general_fitness: 'Allgemeine Fitness',
+            }}
+            selected={formData.training_goals || []}
+            onSelectionChange={(values: string[]) => updateField('training_goals', values)}
+          />
+
+          <NumberPicker
+            label="Cardio pro Woche (Einheiten)"
+            value={formData.cardio_per_week ?? 0}
+            min={0}
+            max={7}
+            onChange={(value) => updateField('cardio_per_week', value)}
+          />
+
+          <Text style={styles.label}>Trainingsort</Text>
+          <View style={styles.buttonGroup}>
+            <OptionButton
+              label="Gym"
+              selected={formData.training_location === 'gym'}
+              onPress={() => updateField('training_location', 'gym')}
+            />
+            <OptionButton
+              label="Zuhause"
+              selected={formData.training_location === 'home'}
+              onPress={() => updateField('training_location', 'home')}
+            />
+            <OptionButton
+              label="Beides"
+              selected={formData.training_location === 'both'}
+              onPress={() => updateField('training_location', 'both')}
+            />
+          </View>
+
+          <Text style={styles.label}>Belastungspräferenz</Text>
+          <View style={styles.buttonGroup}>
+            <OptionButton
+              label="Low Impact"
+              selected={formData.load_preference === 'low_impact'}
+              onPress={() => updateField('load_preference', 'low_impact')}
+            />
+            <OptionButton
+              label="Normal"
+              selected={formData.load_preference === 'normal'}
+              onPress={() => updateField('load_preference', 'normal')}
+            />
+            <OptionButton
+              label="High Intensity"
+              selected={formData.load_preference === 'high_intensity'}
+              onPress={() => updateField('load_preference', 'high_intensity')}
+            />
+          </View>
+
+          <Text style={styles.label}>Split-Präferenz</Text>
+          <View style={styles.buttonGroup}>
+            <OptionButton
+              label="Ganzkörper"
+              selected={formData.split_preference === 'full_body'}
+              onPress={() => updateField('split_preference', 'full_body')}
+            />
+            <OptionButton
+              label="OK/UK"
+              selected={formData.split_preference === 'upper_lower'}
+              onPress={() => updateField('split_preference', 'upper_lower')}
+            />
+            <OptionButton
+              label="Push/Pull"
+              selected={formData.split_preference === 'push_pull'}
+              onPress={() => updateField('split_preference', 'push_pull')}
+            />
+            <OptionButton
+              label="Keine Präferenz"
+              selected={formData.split_preference === 'no_preference'}
+              onPress={() => updateField('split_preference', 'no_preference')}
+            />
+          </View>
+        </View>
+      )}
 
       {/* Section 4: Lifestyle */}
       <View style={styles.section}>

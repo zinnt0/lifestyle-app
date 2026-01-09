@@ -170,6 +170,7 @@ export const RegisterScreen: React.FC = () => {
     navigation.navigate("Login");
   };
 
+
   // Get password strength hint
   const passwordHint = password ? getPasswordStrengthHint(password) : null;
 
@@ -263,6 +264,7 @@ export const RegisterScreen: React.FC = () => {
               disabled={loading}
               style={styles.registerButton}
             />
+
           </View>
 
           {/* Footer */}

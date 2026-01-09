@@ -25,6 +25,14 @@ export interface Profile {
     | 'weight_loss'
     | 'general_fitness'
     | null;
+
+  // Additional fields for women's training plans
+  training_goals?: string[] | null; // Multiple training goals
+  cardio_per_week?: number | null; // Cardio sessions per week
+  training_location?: 'gym' | 'home' | 'both' | null; // Training location
+  load_preference?: 'low_impact' | 'normal' | 'high_intensity' | null; // Load preference
+  split_preference?: 'full_body' | 'upper_lower' | 'push_pull' | 'no_preference' | null; // Split preference
+
   sleep_hours_avg: number | null; // Decimal
   stress_level: number | null; // 1-10
   has_gym_access: boolean;
@@ -213,6 +221,11 @@ export const createProfile = async (
         available_training_days: data.available_training_days,
         preferred_training_days: data.preferred_training_days,
         primary_goal: data.primary_goal,
+        training_goals: data.training_goals || null,
+        cardio_per_week: data.cardio_per_week || 0,
+        training_location: data.has_gym_access ? 'gym' : 'home',
+        load_preference: data.load_preference || 'normal',
+        split_preference: data.split_preference || 'no_preference',
         sleep_hours_avg: data.sleep_hours_avg,
         stress_level: data.stress_level,
         has_gym_access: data.has_gym_access,

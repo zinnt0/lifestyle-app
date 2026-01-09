@@ -122,6 +122,7 @@ export const LoginScreen: React.FC = () => {
     );
   };
 
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -192,6 +193,7 @@ export const LoginScreen: React.FC = () => {
                 Passwort vergessen?
               </Text>
             </TouchableOpacity>
+
           </View>
 
           {/* Footer */}

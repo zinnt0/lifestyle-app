@@ -34,6 +34,13 @@ export interface OnboardingData {
     | 'general_fitness'
     | null;
 
+  // Zusätzlich für Frauen: Mehrere Trainingsziele möglich
+  training_goals?: string[]; // z.B. ['kraft', 'bodyforming', 'fettabbau']
+  cardio_per_week?: number | null; // Anzahl Cardio-Einheiten pro Woche
+  training_location?: 'gym' | 'home' | 'both' | null; // Trainingsort (wird aus has_gym_access abgeleitet)
+  load_preference?: 'low_impact' | 'normal' | 'high_intensity' | null; // Belastungspräferenz
+  split_preference?: 'full_body' | 'upper_lower' | 'push_pull' | 'no_preference' | null; // Bevorzugter Split
+
   // Screen 4: Lifestyle
   sleep_hours_avg: number | null; // 6.5, 7.0, etc.
   stress_level: number | null; // 1-10
@@ -100,6 +107,11 @@ const initialData: OnboardingData = {
 
   // Screen 3
   primary_goal: null,
+  training_goals: [],
+  cardio_per_week: 0,
+  training_location: null,
+  load_preference: 'normal',
+  split_preference: 'no_preference',
 
   // Screen 4
   sleep_hours_avg: null,
@@ -125,7 +137,7 @@ interface OnboardingProviderProps {
 
 /**
  * Onboarding Provider Component
- * Manages state and validation for the 7-step onboarding flow
+ * Manages state and validation for the 9-step onboarding flow
  */
 export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
   children,
@@ -135,7 +147,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const totalSteps = 8; // Increased from 7 to 8 (added nutrition goals screen)
+  const totalSteps = 9; // 0: Username, 1: Basics, 2: Training, 3: Goals, 4: Lifestyle, 5: Nutrition, 6: Intolerances, 7: Summary, 8: Plan Selection
 
   /**
    * Update onboarding data with partial updates

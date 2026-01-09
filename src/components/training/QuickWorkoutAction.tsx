@@ -154,11 +154,28 @@ export const QuickWorkoutAction: React.FC<QuickWorkoutActionProps> = ({
         onWorkoutStarted();
       }
     } catch (error: any) {
-      console.error("Error starting workout:", error);
-      Alert.alert(
-        "Fehler",
-        error.message || "Workout konnte nicht gestartet werden"
-      );
+      const errorMessage = error.message || "";
+
+      // Check if error is about an existing active or paused workout
+      if (errorMessage.includes("bereits ein Workout") || errorMessage.includes("aktive Session")) {
+        Alert.alert(
+          "Aktives Workout vorhanden",
+          "Bitte beende zuerst dein aktuelles Workout, bevor du ein neues startest.",
+          [{ text: "OK", style: "default" }]
+        );
+      } else if (errorMessage.includes("unterbrochenes Workout") || errorMessage.includes("fort oder breche")) {
+        Alert.alert(
+          "Unterbrochenes Workout",
+          "Du hast noch ein pausiertes Workout. Bitte setze es fort oder breche es ab.",
+          [{ text: "OK", style: "default" }]
+        );
+      } else {
+        console.error("Error starting workout:", error);
+        Alert.alert(
+          "Fehler",
+          errorMessage || "Workout konnte nicht gestartet werden"
+        );
+      }
     } finally {
       setIsStarting(false);
     }

@@ -155,6 +155,8 @@ export interface PlanTemplate {
   is_dynamic?: boolean;
   requires_1rm_for_exercises?: string[];
   tm_percentage?: number;
+  // Gender-specific filtering (added 2026-01-08)
+  target_gender?: "male" | "female" | "unisex";
 }
 
 /**
@@ -176,6 +178,7 @@ export interface ScoringMetadata {
 
 export interface TemplateDetails extends PlanTemplate {
   workouts: TemplateWorkout[];
+  isWomenTemplate?: boolean; // Flag to indicate this template is from training_plans (women's plans)
 }
 
 export interface TemplateWorkout {

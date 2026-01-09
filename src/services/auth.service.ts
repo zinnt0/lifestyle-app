@@ -380,3 +380,63 @@ export const isEmailConfirmed = async (): Promise<boolean> => {
     return false;
   }
 };
+
+/**
+ * Sign in with Google OAuth
+ *
+ * Opens Google authentication flow in browser and redirects back to app
+ * The OAuth callback is handled in AppNavigator.tsx via deep linking
+ *
+ * @returns Object with success status or error
+ *
+ * @example
+ * const { error } = await signInWithGoogle();
+ * if (error) console.error(error);
+ */
+export const signInWithGoogle = async (): Promise<{
+  error: AuthError | null;
+}> => {
+  try {
+    console.log('Starting Google OAuth...');
+
+    // Use deep link redirect to return to the app after OAuth
+    // The callback will be handled by AppNavigator's deep link listener
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: 'lifestyleapp://auth/callback',
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+        skipBrowserRedirect: false,
+      },
+    });
+
+    if (error) {
+      console.error('Supabase OAuth error:', error);
+      return {
+        error: { message: getAuthErrorMessage(error) },
+      };
+    }
+
+    console.log('Opening OAuth URL in browser...');
+
+    // Open the URL in the system browser
+    // After authentication, Google will redirect to lifestyleapp://auth/callback
+    // which will be caught by the deep link listener in AppNavigator
+    await Linking.openURL(data?.url ?? '');
+
+    console.log('OAuth browser opened - waiting for callback...');
+
+    // No polling needed - the deep link will trigger the callback
+    return {
+      error: null,
+    };
+  } catch (error) {
+    console.error('Exception during Google sign-in:', error);
+    return {
+      error: { message: 'Fehler bei Google-Anmeldung' },
+    };
+  }
+};
