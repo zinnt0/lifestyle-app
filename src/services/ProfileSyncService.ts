@@ -135,6 +135,13 @@ export class ProfileSyncService {
         target_date: data.target_date || null,
         onboarding_completed: data.onboarding_completed || false,
         enable_daily_recovery_tracking: data.enable_daily_recovery_tracking || false,
+        // Supplement Onboarding Data
+        supplement_onboarding_completed: data.supplement_onboarding_completed || false,
+        gi_issues: data.gi_issues || null,
+        heavy_sweating: data.heavy_sweating ?? null,
+        high_salt_intake: data.high_salt_intake ?? null,
+        joint_issues: data.joint_issues || null,
+        lab_values: data.lab_values || null,
         created_at: data.created_at,
         updated_at: data.updated_at,
         cached_at: new Date().toISOString(),

@@ -22,6 +22,7 @@ import {
   getIntolerancesCatalog,
   Intolerance,
 } from '../../services/profile.service';
+import { profileSyncService } from '../../services/ProfileSyncService';
 import { NutritionGoalsService } from '../../../lib/services/nutrition-goals.service';
 import type { TrainingGoal, Gender } from '../../../lib/types/nutrition.types';
 import { NumericInput } from '../../components/ui/NumericInput';
@@ -81,6 +82,22 @@ interface ProfileFormData {
   target_weight_kg: number | null;
   target_date: string | null;
   body_fat_percentage: number | null;
+
+  // Section 6: Supplement Health Data
+  gi_issues: Array<'bloating' | 'irritable_bowel' | 'diarrhea' | 'constipation'>;
+  heavy_sweating: boolean;
+  high_salt_intake: boolean;
+  joint_issues: Array<'knee' | 'tendons' | 'shoulder' | 'back'>;
+  lab_values: {
+    hemoglobin?: number | null;
+    mcv?: number | null;
+    vitamin_d?: number | null;
+    crp?: number | null;
+    alt?: number | null;
+    ggt?: number | null;
+    estradiol?: number | null;
+    testosterone?: number | null;
+  } | null;
 }
 
 /**
@@ -133,6 +150,12 @@ export const ProfileEditScreen: React.FC = () => {
     target_weight_kg: null,
     target_date: null,
     body_fat_percentage: null,
+    // Supplement Health Data
+    gi_issues: [],
+    heavy_sweating: false,
+    high_salt_intake: false,
+    joint_issues: [],
+    lab_values: null,
   });
 
 
@@ -192,6 +215,12 @@ export const ProfileEditScreen: React.FC = () => {
           target_weight_kg: profile.target_weight_kg,
           target_date: profile.target_date,
           body_fat_percentage: profile.body_fat_percentage,
+          // Supplement Health Data
+          gi_issues: profile.gi_issues || [],
+          heavy_sweating: profile.heavy_sweating ?? false,
+          high_salt_intake: profile.high_salt_intake ?? false,
+          joint_issues: profile.joint_issues || [],
+          lab_values: profile.lab_values || null,
         });
       }
 
@@ -445,6 +474,10 @@ export const ProfileEditScreen: React.FC = () => {
           // Don't fail the whole save if nutrition calculation fails
         }
       }
+
+      // Refresh the local profile cache so ProfileScreen shows updated data
+      await profileSyncService.refreshProfile(user.id);
+      console.log('✅ Profile cache refreshed');
 
       // Success
       setSuccessMessage('Profil erfolgreich gespeichert!');
@@ -944,7 +977,130 @@ export const ProfileEditScreen: React.FC = () => {
         />
       </View>
 
-      {/* Section 6: Unverträglichkeiten */}
+      {/* Section 6: Gesundheitsdaten (Supplements) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Gesundheitsdaten (Supplements)</Text>
+        <Text style={styles.sectionHint}>
+          Diese Daten helfen bei der Supplement-Empfehlung
+        </Text>
+
+        {/* GI Issues */}
+        <Text style={styles.label}>Magen-Darm-Beschwerden</Text>
+        <MultiSelectChips
+          options={['bloating', 'irritable_bowel', 'diarrhea', 'constipation']}
+          labels={{
+            bloating: 'Blähungen',
+            irritable_bowel: 'Reizdarm',
+            diarrhea: 'Durchfall',
+            constipation: 'Verstopfung',
+          }}
+          selected={formData.gi_issues}
+          onSelectionChange={(values: string[]) => updateField('gi_issues', values)}
+        />
+
+        {/* Hydration/Sweating */}
+        <View style={styles.toggleRow}>
+          <Text style={styles.label}>Starkes Schwitzen</Text>
+          <Switch
+            value={formData.heavy_sweating}
+            onValueChange={(value) => updateField('heavy_sweating', value)}
+          />
+        </View>
+
+        <View style={styles.toggleRow}>
+          <Text style={styles.label}>Hohe Salzaufnahme</Text>
+          <Switch
+            value={formData.high_salt_intake}
+            onValueChange={(value) => updateField('high_salt_intake', value)}
+          />
+        </View>
+
+        {/* Joint Issues */}
+        <Text style={styles.label}>Gelenkbeschwerden</Text>
+        <MultiSelectChips
+          options={['knee', 'tendons', 'shoulder', 'back']}
+          labels={{
+            knee: 'Knie',
+            tendons: 'Sehnen',
+            shoulder: 'Schulter',
+            back: 'Rücken',
+          }}
+          selected={formData.joint_issues}
+          onSelectionChange={(values: string[]) => updateField('joint_issues', values)}
+        />
+
+        {/* Lab Values */}
+        <Text style={styles.label}>Laborwerte (Optional)</Text>
+        <Text style={styles.sectionHint}>
+          Falls vorhanden, trage hier deine letzten Blutwerte ein
+        </Text>
+
+        <NumericInput
+          label="Hämoglobin (g/dL)"
+          value={formData.lab_values?.hemoglobin ?? null}
+          onValueChange={(value) => updateField('lab_values', { ...formData.lab_values, hemoglobin: value })}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 14.5"
+        />
+
+        <NumericInput
+          label="MCV (fL)"
+          value={formData.lab_values?.mcv ?? null}
+          onValueChange={(value) => updateField('lab_values', { ...formData.lab_values, mcv: value })}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 90"
+        />
+
+        <NumericInput
+          label="Vitamin D (ng/mL)"
+          value={formData.lab_values?.vitamin_d ?? null}
+          onValueChange={(value) => updateField('lab_values', { ...formData.lab_values, vitamin_d: value })}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 40"
+        />
+
+        <NumericInput
+          label="CRP (mg/L)"
+          value={formData.lab_values?.crp ?? null}
+          onValueChange={(value) => updateField('lab_values', { ...formData.lab_values, crp: value })}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 0.5"
+        />
+
+        <NumericInput
+          label="ALT/GPT (U/L)"
+          value={formData.lab_values?.alt ?? null}
+          onValueChange={(value) => updateField('lab_values', { ...formData.lab_values, alt: value })}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 25"
+        />
+
+        <NumericInput
+          label="GGT (U/L)"
+          value={formData.lab_values?.ggt ?? null}
+          onValueChange={(value) => updateField('lab_values', { ...formData.lab_values, ggt: value })}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 30"
+        />
+
+        <NumericInput
+          label="Estradiol (pg/mL)"
+          value={formData.lab_values?.estradiol ?? null}
+          onValueChange={(value) => updateField('lab_values', { ...formData.lab_values, estradiol: value })}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 50"
+        />
+
+        <NumericInput
+          label="Testosteron gesamt (ng/mL)"
+          value={formData.lab_values?.testosterone ?? null}
+          onValueChange={(value) => updateField('lab_values', { ...formData.lab_values, testosterone: value })}
+          keyboardType="decimal-pad"
+          placeholder="z.B. 5.0"
+        />
+      </View>
+
+      {/* Section 7: Unverträglichkeiten */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Unverträglichkeiten</Text>
 

@@ -44,6 +44,24 @@ export interface Profile {
   target_date: string | null; // Optional target date (ISO string)
   body_fat_percentage: number | null; // Optional body fat % (0-100)
 
+  // Supplement profile fields
+  gi_issues: Array<'bloating' | 'irritable_bowel' | 'diarrhea' | 'constipation'> | null;
+  heavy_sweating: boolean | null;
+  high_salt_intake: boolean | null;
+  sun_exposure_hours: number | null; // Stunden Sonnenexposition pro Woche (0-20+)
+  joint_issues: Array<'knee' | 'tendons' | 'shoulder' | 'back'> | null;
+  lab_values: {
+    hemoglobin?: number | null;
+    mcv?: number | null;
+    vitamin_d?: number | null;
+    crp?: number | null;
+    alt?: number | null;
+    ggt?: number | null;
+    estradiol?: number | null;
+    testosterone?: number | null;
+  } | null;
+  supplement_onboarding_completed: boolean | null;
+
   onboarding_completed: boolean;
   created_at: string;
   updated_at: string;

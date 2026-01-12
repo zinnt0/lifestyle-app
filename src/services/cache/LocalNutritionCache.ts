@@ -31,6 +31,10 @@ export interface DailyNutritionData {
   sodium_consumed: number;
   water_consumed_ml: number;
   water_goal_ml: number;
+  // Caffeine tracking
+  coffee_cups: number;
+  energy_drinks: number;
+  caffeine_mg: number;
   last_synced: string; // ISO timestamp
 }
 
@@ -191,8 +195,8 @@ export class LocalNutritionCache {
           date, calorie_goal, calories_consumed, calories_burned, net_calories,
           protein_consumed, protein_goal, carbs_consumed, carbs_goal,
           fat_consumed, fat_goal, fiber_consumed, sugar_consumed, sodium_consumed,
-          water_consumed_ml, water_goal_ml, last_synced
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          water_consumed_ml, water_goal_ml, coffee_cups, energy_drinks, caffeine_mg, last_synced
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           data.date,
           data.calorie_goal,
@@ -210,6 +214,9 @@ export class LocalNutritionCache {
           data.sodium_consumed,
           data.water_consumed_ml,
           data.water_goal_ml,
+          data.coffee_cups || 0,
+          data.energy_drinks || 0,
+          data.caffeine_mg || 0,
           new Date().toISOString(),
         ]
       );
@@ -360,6 +367,9 @@ export class LocalNutritionCache {
         sodium_consumed REAL NOT NULL DEFAULT 0,
         water_consumed_ml INTEGER NOT NULL DEFAULT 0,
         water_goal_ml INTEGER NOT NULL DEFAULT 2000,
+        coffee_cups INTEGER NOT NULL DEFAULT 0,
+        energy_drinks INTEGER NOT NULL DEFAULT 0,
+        caffeine_mg INTEGER NOT NULL DEFAULT 0,
         last_synced TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -368,6 +378,18 @@ export class LocalNutritionCache {
     `;
 
     await this.db!.execAsync(createTableSQL);
+
+    // Add caffeine columns if they don't exist (migration for existing DBs)
+    try {
+      await this.db!.execAsync(`ALTER TABLE daily_nutrition_cache ADD COLUMN coffee_cups INTEGER NOT NULL DEFAULT 0`);
+    } catch (e) { /* Column already exists */ }
+    try {
+      await this.db!.execAsync(`ALTER TABLE daily_nutrition_cache ADD COLUMN energy_drinks INTEGER NOT NULL DEFAULT 0`);
+    } catch (e) { /* Column already exists */ }
+    try {
+      await this.db!.execAsync(`ALTER TABLE daily_nutrition_cache ADD COLUMN caffeine_mg INTEGER NOT NULL DEFAULT 0`);
+    } catch (e) { /* Column already exists */ }
+
     console.log(`${LOG_PREFIX} Nutrition table created`);
   }
 
@@ -392,6 +414,9 @@ export class LocalNutritionCache {
       sodium_consumed: row.sodium_consumed || 0,
       water_consumed_ml: row.water_consumed_ml || 0,
       water_goal_ml: row.water_goal_ml || 2000,
+      coffee_cups: row.coffee_cups || 0,
+      energy_drinks: row.energy_drinks || 0,
+      caffeine_mg: row.caffeine_mg || 0,
       last_synced: row.last_synced,
     };
   }

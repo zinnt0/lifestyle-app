@@ -1,0 +1,1 @@
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS sun_exposure_hours INTEGER DEFAULT NULL;

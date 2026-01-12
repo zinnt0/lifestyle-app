@@ -51,6 +51,23 @@ export interface UserProfile {
   onboarding_completed: boolean;
   enable_daily_recovery_tracking: boolean;
 
+  // Supplement Onboarding Data
+  supplement_onboarding_completed: boolean;
+  gi_issues: Array<'bloating' | 'irritable_bowel' | 'diarrhea' | 'constipation'> | null;
+  heavy_sweating: boolean | null;
+  high_salt_intake: boolean | null;
+  joint_issues: Array<'knee' | 'tendons' | 'shoulder' | 'back'> | null;
+  lab_values: {
+    hemoglobin?: number | null;
+    mcv?: number | null;
+    vitamin_d?: number | null;
+    crp?: number | null;
+    alt?: number | null;
+    ggt?: number | null;
+    estradiol?: number | null;
+    testosterone?: number | null;
+  } | null;
+
   // Timestamps
   created_at: string;
   updated_at: string;
@@ -136,8 +153,9 @@ export class LocalProfileCache {
           has_gym_access, home_equipment,
           target_weight_kg, target_date,
           onboarding_completed, enable_daily_recovery_tracking,
+          supplement_onboarding_completed, gi_issues, heavy_sweating, high_salt_intake, joint_issues, lab_values,
           created_at, updated_at, cached_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           profile.id,
           profile.username,
@@ -161,6 +179,12 @@ export class LocalProfileCache {
           profile.target_date,
           profile.onboarding_completed ? 1 : 0,
           profile.enable_daily_recovery_tracking ? 1 : 0,
+          profile.supplement_onboarding_completed ? 1 : 0,
+          profile.gi_issues ? JSON.stringify(profile.gi_issues) : null,
+          profile.heavy_sweating === null ? null : profile.heavy_sweating ? 1 : 0,
+          profile.high_salt_intake === null ? null : profile.high_salt_intake ? 1 : 0,
+          profile.joint_issues ? JSON.stringify(profile.joint_issues) : null,
+          profile.lab_values ? JSON.stringify(profile.lab_values) : null,
           profile.created_at,
           profile.updated_at,
           new Date().toISOString(),
@@ -296,7 +320,7 @@ export class LocalProfileCache {
   // ========================================================================
 
   /**
-   * Create profile cache table
+   * Create profile cache table and run migrations
    */
   private async createProfileTable(): Promise<void> {
     const createTableSQL = `
@@ -338,6 +362,14 @@ export class LocalProfileCache {
         onboarding_completed INTEGER NOT NULL DEFAULT 0,
         enable_daily_recovery_tracking INTEGER NOT NULL DEFAULT 0,
 
+        -- Supplement Onboarding Data
+        supplement_onboarding_completed INTEGER NOT NULL DEFAULT 0,
+        gi_issues TEXT,
+        heavy_sweating INTEGER,
+        high_salt_intake INTEGER,
+        joint_issues TEXT,
+        lab_values TEXT,
+
         -- Timestamps
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -350,6 +382,48 @@ export class LocalProfileCache {
 
     await this.db!.execAsync(createTableSQL);
     console.log(`${LOG_PREFIX} Profile table created`);
+
+    // Run migrations for existing tables
+    await this.migrateSupplementColumns();
+  }
+
+  /**
+   * Migrate supplement columns to existing table
+   * SQLite doesn't support IF NOT EXISTS for columns, so we check first
+   */
+  private async migrateSupplementColumns(): Promise<void> {
+    try {
+      // Check if supplement_onboarding_completed column exists
+      const tableInfo = await this.db!.getAllAsync<{ name: string }>(
+        "PRAGMA table_info(user_profile_cache)"
+      );
+
+      const columnNames = tableInfo.map((col) => col.name);
+
+      // Add missing supplement columns
+      const supplementColumns = [
+        { name: 'supplement_onboarding_completed', definition: 'INTEGER DEFAULT 0' },
+        { name: 'gi_issues', definition: 'TEXT' },
+        { name: 'heavy_sweating', definition: 'INTEGER' },
+        { name: 'high_salt_intake', definition: 'INTEGER' },
+        { name: 'joint_issues', definition: 'TEXT' },
+        { name: 'lab_values', definition: 'TEXT' },
+      ];
+
+      for (const column of supplementColumns) {
+        if (!columnNames.includes(column.name)) {
+          console.log(`${LOG_PREFIX} Adding column: ${column.name}`);
+          await this.db!.execAsync(
+            `ALTER TABLE user_profile_cache ADD COLUMN ${column.name} ${column.definition}`
+          );
+        }
+      }
+
+      console.log(`${LOG_PREFIX} Supplement columns migration complete`);
+    } catch (error) {
+      console.error(`${LOG_PREFIX} Error migrating supplement columns:`, error);
+      // Don't throw - table might be freshly created with all columns
+    }
   }
 
   /**
@@ -381,6 +455,12 @@ export class LocalProfileCache {
       target_date: row.target_date || null,
       onboarding_completed: row.onboarding_completed === 1,
       enable_daily_recovery_tracking: row.enable_daily_recovery_tracking === 1,
+      supplement_onboarding_completed: row.supplement_onboarding_completed === 1,
+      gi_issues: row.gi_issues ? JSON.parse(row.gi_issues) : null,
+      heavy_sweating: row.heavy_sweating === null ? null : row.heavy_sweating === 1,
+      high_salt_intake: row.high_salt_intake === null ? null : row.high_salt_intake === 1,
+      joint_issues: row.joint_issues ? JSON.parse(row.joint_issues) : null,
+      lab_values: row.lab_values ? JSON.parse(row.lab_values) : null,
       created_at: row.created_at,
       updated_at: row.updated_at,
       cached_at: row.cached_at,

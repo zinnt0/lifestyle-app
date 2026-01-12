@@ -40,6 +40,7 @@ import { supabase } from "../../lib/supabase";
 import { nutritionSyncService } from "../../services/NutritionSyncService";
 import { DailyNutritionData } from "../../services/cache/LocalNutritionCache";
 import Svg, { Circle, Line, Polyline, Text as SvgText } from "react-native-svg";
+import { BeverageTracker, CAFFEINE_CONTENT } from "../../components/Nutrition";
 
 type NavigationProp = NativeStackNavigationProp<
   NutritionStackParamList,
@@ -397,6 +398,13 @@ export function NutritionDashboardScreen({
     goal: 2000, // ml
   });
 
+  // Caffeine tracking state
+  const [caffeineData, setCaffeineData] = useState({
+    coffeeCups: 0,
+    energyDrinks: 0,
+    totalCaffeineMg: 0,
+  });
+
   const [weightData, setWeightData] = useState({
     current: 80.0,
     goal: 75.0,
@@ -510,6 +518,9 @@ export function NutritionDashboardScreen({
 
       // Load water intake data
       await loadWaterIntake(dateStr);
+
+      // Load caffeine intake data
+      await loadCaffeineIntake(dateStr);
 
       // Load burned calories from workouts
       await loadBurnedCalories(dateStr);
@@ -656,6 +667,42 @@ export function NutritionDashboardScreen({
     }
   };
 
+  // Load caffeine intake for the day
+  const loadCaffeineIntake = async (date: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("caffeine_intake")
+        .select("intake_type, quantity, caffeine_mg")
+        .eq("user_id", userId)
+        .eq("intake_date", date);
+
+      if (error) throw error;
+
+      let coffeeCups = 0;
+      let energyDrinks = 0;
+      let totalCaffeineMg = 0;
+
+      for (const intake of data || []) {
+        totalCaffeineMg += intake.caffeine_mg || 0;
+        if (intake.intake_type === "coffee") {
+          coffeeCups += intake.quantity || 0;
+        } else if (intake.intake_type === "energy_drink") {
+          energyDrinks += intake.quantity || 0;
+        }
+      }
+
+      setCaffeineData({
+        coffeeCups,
+        energyDrinks,
+        totalCaffeineMg,
+      });
+
+      console.log("Loaded caffeine intake:", { coffeeCups, energyDrinks, totalCaffeineMg });
+    } catch (error) {
+      console.error("Error loading caffeine intake:", error);
+    }
+  };
+
   // Load diary entries for the day
   const loadDiaryEntries = async (date: string) => {
     try {
@@ -767,6 +814,78 @@ export function NutritionDashboardScreen({
     } catch (error) {
       console.error("Error adding water intake:", error);
       Alert.alert("Fehler", "Wasserzufuhr konnte nicht gespeichert werden.");
+    }
+  };
+
+  // Add coffee
+  const handleAddCoffee = async (cups: number) => {
+    try {
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0];
+      const caffeineMg = cups * CAFFEINE_CONTENT.COFFEE_CUP;
+
+      // Insert caffeine intake into database
+      const { error } = await supabase.from("caffeine_intake").insert({
+        user_id: userId,
+        intake_date: dateStr,
+        intake_type: "coffee",
+        quantity: cups,
+        caffeine_mg: caffeineMg,
+      });
+
+      if (error) throw error;
+
+      // Update local state optimistically
+      setCaffeineData((prev) => ({
+        coffeeCups: prev.coffeeCups + cups,
+        energyDrinks: prev.energyDrinks,
+        totalCaffeineMg: prev.totalCaffeineMg + caffeineMg,
+      }));
+
+      // Reload caffeine data
+      await loadCaffeineIntake(dateStr);
+
+      // Update nutrition cache
+      await nutritionSyncService.syncSingleDay(userId, dateStr);
+    } catch (error) {
+      console.error("Error adding coffee intake:", error);
+      Alert.alert("Fehler", "Kaffee konnte nicht gespeichert werden.");
+    }
+  };
+
+  // Add energy drink
+  const handleAddEnergyDrink = async (cans: number) => {
+    try {
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0];
+      const caffeineMg = cans * CAFFEINE_CONTENT.ENERGY_DRINK;
+
+      // Insert caffeine intake into database
+      const { error } = await supabase.from("caffeine_intake").insert({
+        user_id: userId,
+        intake_date: dateStr,
+        intake_type: "energy_drink",
+        quantity: cans,
+        caffeine_mg: caffeineMg,
+      });
+
+      if (error) throw error;
+
+      // Update local state optimistically
+      setCaffeineData((prev) => ({
+        coffeeCups: prev.coffeeCups,
+        energyDrinks: prev.energyDrinks + cans,
+        totalCaffeineMg: prev.totalCaffeineMg + caffeineMg,
+      }));
+
+      // Reload caffeine data
+      await loadCaffeineIntake(dateStr);
+
+      // Update nutrition cache
+      await nutritionSyncService.syncSingleDay(userId, dateStr);
+    } catch (error) {
+      console.error("Error adding energy drink intake:", error);
+      Alert.alert("Fehler", "Energy Drink konnte nicht gespeichert werden.");
     }
   };
 
@@ -1196,45 +1315,19 @@ export function NutritionDashboardScreen({
           {renderMealSection("snacks", "🍎", "Snacks")}
         </View>
 
-        {/* Water Tracker */}
-        <View style={styles.waterCard}>
-          <Text style={styles.cardTitle}>Wasserzähler</Text>
-          <View style={styles.waterContent}>
-            <Text style={styles.waterLabel}>
-              Ziel: {waterData.goal / 1000} L
-            </Text>
-            <Text style={styles.waterValue}>
-              {(waterData.consumed / 1000).toFixed(2)} l
-            </Text>
-
-            {/* Water Glasses */}
-            <View style={styles.waterGlasses}>
-              {[...Array(8)].map((_, index) => {
-                const glassAmount = waterData.goal / 8;
-                const filled = waterData.consumed >= glassAmount * (index + 1);
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.waterGlass,
-                      filled && styles.waterGlassFilled,
-                    ]}
-                    onPress={() => handleAddWater(250)}
-                  >
-                    <Ionicons
-                      name={filled ? "water" : "water-outline"}
-                      size={28}
-                      color={filled ? COLORS.primary : COLORS.textTertiary}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={styles.waterFromFood}>
-              + Wasser aus Lebensmitteln: 0 ml
-            </Text>
-          </View>
+        {/* Beverage Tracker (Water, Coffee, Energy Drinks) */}
+        <View style={styles.beverageTrackerContainer}>
+          <Text style={styles.cardTitle}>Getränke & Koffein</Text>
+          <BeverageTracker
+            waterConsumed={waterData.consumed}
+            waterGoal={waterData.goal}
+            onAddWater={handleAddWater}
+            coffeeCups={caffeineData.coffeeCups}
+            onAddCoffee={handleAddCoffee}
+            energyDrinks={caffeineData.energyDrinks}
+            onAddEnergyDrink={handleAddEnergyDrink}
+            totalCaffeineMg={caffeineData.totalCaffeineMg}
+          />
         </View>
 
         {/* Weight Tracker */}
@@ -1679,50 +1772,9 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.xs,
   },
 
-  // Water Card Styles
-  waterCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.xl,
+  // Beverage Tracker Container Styles
+  beverageTrackerContainer: {
     marginBottom: SPACING.lg,
-    ...SHADOWS.sm,
-  },
-  waterContent: {
-    alignItems: "center",
-  },
-  waterLabel: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.sm,
-  },
-  waterValue: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: COLORS.primary,
-    marginBottom: SPACING.lg,
-  },
-  waterGlasses: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  waterGlass: {
-    width: 60,
-    height: 60,
-    borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.surfaceSecondary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  waterGlassFilled: {
-    backgroundColor: "#E3F2FD",
-  },
-  waterFromFood: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.sm,
   },
 
   // Weight Card Styles

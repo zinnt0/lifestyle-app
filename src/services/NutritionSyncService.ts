@@ -262,6 +262,9 @@ export class NutritionSyncService {
 
       const summary = response.summary;
 
+      // Fetch caffeine intake for the day
+      const caffeineData = await this.fetchCaffeineIntake(userId, date);
+
       // Convert API response to DailyNutritionData format
       return {
         date,
@@ -280,11 +283,53 @@ export class NutritionSyncService {
         sodium_consumed: summary.micronutrients?.sodium || 0,
         water_consumed_ml: summary.water.consumed,
         water_goal_ml: summary.water.goal,
+        coffee_cups: caffeineData.coffee_cups,
+        energy_drinks: caffeineData.energy_drinks,
+        caffeine_mg: caffeineData.caffeine_mg,
         last_synced: new Date().toISOString(),
       };
     } catch (error) {
       console.error(`${LOG_PREFIX} Error fetching daily summary for ${date}:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Fetch caffeine intake for a specific day
+   */
+  private async fetchCaffeineIntake(
+    userId: string,
+    date: string
+  ): Promise<{ coffee_cups: number; energy_drinks: number; caffeine_mg: number }> {
+    try {
+      const { data, error } = await supabase
+        .from('caffeine_intake')
+        .select('intake_type, quantity, caffeine_mg')
+        .eq('user_id', userId)
+        .eq('intake_date', date);
+
+      if (error) {
+        console.error(`${LOG_PREFIX} Error fetching caffeine intake:`, error);
+        return { coffee_cups: 0, energy_drinks: 0, caffeine_mg: 0 };
+      }
+
+      let coffee_cups = 0;
+      let energy_drinks = 0;
+      let caffeine_mg = 0;
+
+      for (const intake of data || []) {
+        caffeine_mg += intake.caffeine_mg || 0;
+        if (intake.intake_type === 'coffee') {
+          coffee_cups += intake.quantity || 0;
+        } else if (intake.intake_type === 'energy_drink') {
+          energy_drinks += intake.quantity || 0;
+        }
+      }
+
+      return { coffee_cups, energy_drinks, caffeine_mg };
+    } catch (error) {
+      console.error(`${LOG_PREFIX} Error in fetchCaffeineIntake:`, error);
+      return { coffee_cups: 0, energy_drinks: 0, caffeine_mg: 0 };
     }
   }
 

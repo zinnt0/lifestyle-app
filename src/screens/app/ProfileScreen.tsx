@@ -5,7 +5,7 @@
  * Modernized with design system components and improved visual hierarchy.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   Alert,
   Image,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
@@ -57,6 +57,16 @@ export const ProfileScreen: React.FC = () => {
 
   // Use cache-first profile hook for instant loading
   const { profile, loading, error, refreshProfile } = useLocalProfile(userId, true);
+
+  // Refresh profile when screen comes into focus (e.g., returning from edit)
+  useFocusEffect(
+    useCallback(() => {
+      if (userId) {
+        console.log('[ProfileScreen] Screen focused, refreshing profile...');
+        refreshProfile();
+      }
+    }, [userId, refreshProfile])
+  );
 
   const handleLogout = () => {
     Alert.alert("Abmelden", "Möchtest du dich wirklich abmelden?", [
@@ -284,6 +294,99 @@ export const ProfileScreen: React.FC = () => {
         </Card>
       </View>
 
+      {/* Supplement Health Data Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="medical-outline" size={24} color={COLORS.primary} />
+          <Text style={styles.sectionTitle}>Gesundheitsdaten (Supplements)</Text>
+        </View>
+
+        <Card elevation="small" padding="medium">
+          {/* GI Issues */}
+          <ProfileField
+            label="Magen-Darm-Beschwerden"
+            value={formatGiIssues(profile.gi_issues)}
+          />
+
+          {/* Hydration/Sweating */}
+          <ProfileField
+            label="Starkes Schwitzen"
+            value={profile.heavy_sweating ? "Ja" : "Nein"}
+          />
+          <ProfileField
+            label="Hohe Salzaufnahme"
+            value={profile.high_salt_intake ? "Ja" : "Nein"}
+          />
+
+          {/* Joint Issues */}
+          <ProfileField
+            label="Gelenkbeschwerden"
+            value={formatJointIssues(profile.joint_issues)}
+          />
+
+          {/* Lab Values */}
+          {profile.lab_values && Object.keys(profile.lab_values).length > 0 ? (
+            <>
+              <Text style={styles.labValuesTitle}>Laborwerte</Text>
+              {profile.lab_values.hemoglobin && (
+                <ProfileField
+                  label="Hämoglobin"
+                  value={`${profile.lab_values.hemoglobin} g/dL`}
+                />
+              )}
+              {profile.lab_values.mcv && (
+                <ProfileField
+                  label="MCV"
+                  value={`${profile.lab_values.mcv} fL`}
+                />
+              )}
+              {profile.lab_values.vitamin_d && (
+                <ProfileField
+                  label="Vitamin D"
+                  value={`${profile.lab_values.vitamin_d} ng/mL`}
+                />
+              )}
+              {profile.lab_values.crp && (
+                <ProfileField
+                  label="CRP"
+                  value={`${profile.lab_values.crp} mg/L`}
+                />
+              )}
+              {profile.lab_values.alt && (
+                <ProfileField
+                  label="ALT (GPT)"
+                  value={`${profile.lab_values.alt} U/L`}
+                />
+              )}
+              {profile.lab_values.ggt && (
+                <ProfileField
+                  label="GGT"
+                  value={`${profile.lab_values.ggt} U/L`}
+                />
+              )}
+              {profile.lab_values.estradiol && (
+                <ProfileField
+                  label="Estradiol"
+                  value={`${profile.lab_values.estradiol} pg/mL`}
+                />
+              )}
+              {profile.lab_values.testosterone && (
+                <ProfileField
+                  label="Testosteron gesamt"
+                  value={`${profile.lab_values.testosterone} ng/mL`}
+                />
+              )}
+            </>
+          ) : (
+            <ProfileField
+              label="Laborwerte"
+              value="Keine angegeben"
+              style={styles.lastField}
+            />
+          )}
+        </Card>
+      </View>
+
       {/* Action Buttons */}
       <View style={styles.actionContainer}>
         <Button
@@ -331,6 +434,38 @@ const getPALLabel = (palFactor: number | null): string => {
   if (palFactor <= 1.55) return 'Moderat aktiv (1.55)';
   if (palFactor <= 1.725) return 'Sehr aktiv (1.725)';
   return 'Extrem aktiv (1.9)';
+};
+
+/**
+ * Format GI issues array to readable string
+ */
+const formatGiIssues = (issues: string[] | null): string => {
+  if (!issues || issues.length === 0) return 'Keine';
+
+  const labels: Record<string, string> = {
+    bloating: 'Blähungen',
+    irritable_bowel: 'Reizdarm',
+    diarrhea: 'Durchfall',
+    constipation: 'Verstopfung',
+  };
+
+  return issues.map(issue => labels[issue] || issue).join(', ');
+};
+
+/**
+ * Format joint issues array to readable string
+ */
+const formatJointIssues = (issues: string[] | null): string => {
+  if (!issues || issues.length === 0) return 'Keine';
+
+  const labels: Record<string, string> = {
+    knee: 'Knie',
+    tendons: 'Sehnen',
+    shoulder: 'Schulter',
+    back: 'Rücken',
+  };
+
+  return issues.map(issue => labels[issue] || issue).join(', ');
 };
 
 const styles = StyleSheet.create({
@@ -433,6 +568,13 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.sizes.sm,
     color: COLORS.textTertiary,
     fontStyle: "italic",
+  },
+  labValuesTitle: {
+    fontSize: TYPOGRAPHY.sizes.md,
+    fontWeight: TYPOGRAPHY.weights.semibold,
+    color: COLORS.text,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
   },
 
   // Action Buttons

@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { MainNavigator } from "./MainNavigator";
 import { TrainingStackNavigator } from "./TrainingStackNavigator";
 import { NutritionStackNavigator } from "./NutritionStackNavigator";
-import { SupplementsComingSoonScreen } from "../screens/Supplements/SupplementsComingSoonScreen";
+import { SupplementStackNavigator } from "./SupplementStackNavigator";
 import { GlowUpComingSoonScreen } from "../screens/GlowUp/GlowUpComingSoonScreen";
 import { supabase } from "../lib/supabase";
 
@@ -106,7 +106,7 @@ export const TabNavigator: React.FC = () => {
       {/* Supplements Tab */}
       <Tab.Screen
         name="SupplementsTab"
-        component={SupplementsComingSoonScreen}
+        component={SupplementStackNavigator}
         options={{
           tabBarLabel: "Supplements",
           tabBarIcon: ({ color, size }) => (
