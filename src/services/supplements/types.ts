@@ -308,3 +308,53 @@ export interface RecommendationUpdateEvent {
   field?: string;
   timestamp: string;
 }
+
+// ============================================================================
+// USER SUPPLEMENT STACK
+// ============================================================================
+
+/**
+ * A supplement in the user's personal stack
+ */
+export interface UserStackSupplement {
+  id: string;                              // Unique ID for this stack entry
+  supplementId: string;                    // Reference to SupplementDefinition
+  supplementName: string;                  // Display name
+  targetAreas: TargetArea[];               // Target areas
+  substanceClass: SubstanceClass;          // Substance class
+  addedAt: string;                         // ISO timestamp when added
+  addedFrom: 'recommendation' | 'manual';  // How it was added
+  matchScore?: number;                     // Match score if from recommendation
+}
+
+/**
+ * Daily tracking of supplement intake
+ */
+export interface DailySupplementTracking {
+  id: string;
+  userId: string;
+  date: string;                            // YYYY-MM-DD format
+  supplementId: string;                    // Reference to stack supplement
+  taken: boolean;                          // Whether it was taken
+  takenAt?: string;                        // ISO timestamp when marked as taken
+}
+
+/**
+ * Local cache structure for user's supplement stack
+ */
+export interface SupplementStackCache {
+  userId: string;
+  supplements: UserStackSupplement[];
+  lastUpdated: string;                     // ISO timestamp
+  version: number;                         // Cache version for migrations
+}
+
+/**
+ * Local cache for daily supplement tracking
+ */
+export interface SupplementTrackingCache {
+  userId: string;
+  trackingRecords: Record<string, DailySupplementTracking[]>; // Keyed by date
+  lastUpdated: string;
+  version: number;
+}

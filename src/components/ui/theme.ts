@@ -127,3 +127,13 @@ export const TRANSITIONS = {
   normal: 250,
   slow: 350,
 } as const;
+
+// Consolidated theme object for easy imports
+export const theme = {
+  colors: COLORS,
+  spacing: SPACING,
+  borderRadius: BORDER_RADIUS,
+  shadows: SHADOWS,
+  typography: TYPOGRAPHY,
+  transitions: TRANSITIONS,
+} as const;

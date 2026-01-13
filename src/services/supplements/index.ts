@@ -77,6 +77,12 @@ export type {
 
   // Events
   RecommendationUpdateEvent,
+
+  // User stack types
+  UserStackSupplement,
+  DailySupplementTracking,
+  SupplementStackCache,
+  SupplementTrackingCache,
 } from './types';
 
 import type { DataCompleteness } from './types';
@@ -121,6 +127,26 @@ export {
   getScoreColor,
   formatRecommendationExplanation,
 } from './recommendationEngine';
+
+// ============================================================================
+// STACK STORAGE
+// ============================================================================
+
+export {
+  getUserStack,
+  saveUserStack,
+  addSupplementToStack,
+  removeSupplementFromStack,
+  clearUserStack,
+  getDailyTracking,
+  getAllTracking,
+  toggleSupplementIntake,
+  wasSupplementTaken,
+  initializeDailyTracking,
+  getTodayDateString,
+  formatDateDisplay,
+  getTargetAreaDisplayName,
+} from './stackStorage';
 
 // ============================================================================
 // TARGET AREA LABELS (for UI)

@@ -18,6 +18,9 @@ import {
   SupplementOnboardingScreen4,
 } from '../screens/Supplements/onboarding';
 import { SupplementsComingSoonScreen } from '../screens/Supplements/SupplementsComingSoonScreen';
+import { SupplementCalculatingScreen } from '../screens/Supplements/SupplementCalculatingScreen';
+import { SupplementMainScreen } from '../screens/Supplements/SupplementMainScreen';
+import { AllSupplementsScreen } from '../screens/Supplements/AllSupplementsScreen';
 import { COLORS } from '../components/ui/theme';
 
 export type SupplementsStackParamList = {
@@ -25,6 +28,9 @@ export type SupplementsStackParamList = {
   SupplementsOnboarding2: undefined;
   SupplementsOnboarding3: undefined;
   SupplementsOnboarding4: undefined;
+  SupplementsCalculating: undefined;
+  SupplementsMain: undefined;
+  AllSupplements: undefined;
   SupplementsDashboard: undefined;
 };
 
@@ -58,6 +64,7 @@ const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplete }) =>
 export const SupplementsStackNavigator: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [showCalculating, setShowCalculating] = useState(false);
 
   const checkOnboardingStatus = async () => {
     try {
@@ -89,7 +96,12 @@ export const SupplementsStackNavigator: React.FC = () => {
   }, []);
 
   const handleOnboardingComplete = () => {
+    setShowCalculating(true);
+  };
+
+  const handleCalculatingComplete = () => {
     setHasCompletedOnboarding(true);
+    setShowCalculating(false);
   };
 
   if (isLoading) {
@@ -101,12 +113,26 @@ export const SupplementsStackNavigator: React.FC = () => {
   }
 
   // If onboarding not completed, show onboarding flow
-  if (!hasCompletedOnboarding) {
+  if (!hasCompletedOnboarding && !showCalculating) {
     return <OnboardingFlow onComplete={handleOnboardingComplete} />;
   }
 
-  // Otherwise show the main supplements screen (coming soon for now)
-  return <SupplementsComingSoonScreen />;
+  // Show calculating screen after onboarding
+  if (showCalculating) {
+    return <SupplementCalculatingScreen onComplete={handleCalculatingComplete} />;
+  }
+
+  // Otherwise show the main supplements screen with navigation
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="SupplementsMain" component={SupplementMainScreen} />
+      <Stack.Screen name="AllSupplements" component={AllSupplementsScreen} />
+    </Stack.Navigator>
+  );
 };
 
 const styles = StyleSheet.create({
