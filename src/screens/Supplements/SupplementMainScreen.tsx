@@ -8,7 +8,7 @@
  * 3. Blog - News and studies (coming soon)
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,10 +17,13 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  GestureResponderEvent,
+  PanResponderGestureState,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { theme } from '../../components/ui/theme';
+import { AppHeader } from '../../components/ui/AppHeader';
 import { SupplementStackScreen } from './SupplementStackScreen';
 import { SupplementRecommendationsScreen } from './SupplementRecommendationsScreen';
 import { SupplementBlogScreen } from './SupplementBlogScreen';
@@ -38,46 +41,85 @@ const TABS: Array<{ id: TabId; label: string }> = [
 
 export function SupplementMainScreen() {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<TabId>('stack');
   const [stackRefreshKey, setStackRefreshKey] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
 
-  // Pan responder for swipe gestures
+  // Use ref to track current tab index for PanResponder
+  const activeTabRef = useRef<TabId>('stack');
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  const animateToTab = useCallback((tabId: TabId) => {
+    const index = TABS.findIndex(tab => tab.id === tabId);
+    Animated.spring(translateX, {
+      toValue: -index * SCREEN_WIDTH,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 10,
+    }).start();
+  }, [translateX]);
+
+  const switchToTab = useCallback((tabId: TabId) => {
+    setActiveTab(tabId);
+    animateToTab(tabId);
+  }, [animateToTab]);
+
+  // Pan responder for swipe gestures - uses ref to get current tab
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 10;
+      onMoveShouldSetPanResponder: (_: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+        // Only respond to horizontal gestures that are significant enough
+        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
       },
-      onPanResponderMove: (_, gestureState) => {
-        const currentIndex = TABS.findIndex(tab => tab.id === activeTab);
+      onPanResponderMove: (_: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+        // Use ref to get current tab index
+        const currentIndex = TABS.findIndex(tab => tab.id === activeTabRef.current);
         const offset = -currentIndex * SCREEN_WIDTH;
-        translateX.setValue(offset + gestureState.dx);
+
+        // Add boundaries to prevent over-scrolling
+        let newTranslateX = offset + gestureState.dx;
+        const minTranslate = -(TABS.length - 1) * SCREEN_WIDTH;
+        const maxTranslate = 0;
+
+        // Apply resistance at boundaries
+        if (newTranslateX > maxTranslate) {
+          newTranslateX = maxTranslate + (newTranslateX - maxTranslate) * 0.3;
+        } else if (newTranslateX < minTranslate) {
+          newTranslateX = minTranslate + (newTranslateX - minTranslate) * 0.3;
+        }
+
+        translateX.setValue(newTranslateX);
       },
-      onPanResponderRelease: (_, gestureState) => {
-        const currentIndex = TABS.findIndex(tab => tab.id === activeTab);
+      onPanResponderRelease: (_: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+        // Use ref to get current tab index
+        const currentIndex = TABS.findIndex(tab => tab.id === activeTabRef.current);
 
         if (gestureState.dx > SWIPE_THRESHOLD && currentIndex > 0) {
           // Swipe right - go to previous tab
-          switchToTab(TABS[currentIndex - 1].id);
+          const newTab = TABS[currentIndex - 1].id;
+          activeTabRef.current = newTab; // Update ref immediately
+          setActiveTab(newTab);
+          animateToIndex(currentIndex - 1);
         } else if (gestureState.dx < -SWIPE_THRESHOLD && currentIndex < TABS.length - 1) {
           // Swipe left - go to next tab
-          switchToTab(TABS[currentIndex + 1].id);
+          const newTab = TABS[currentIndex + 1].id;
+          activeTabRef.current = newTab; // Update ref immediately
+          setActiveTab(newTab);
+          animateToIndex(currentIndex + 1);
         } else {
           // Snap back to current tab
-          animateToTab(activeTab);
+          animateToIndex(currentIndex);
         }
       },
     })
   ).current;
 
-  const switchToTab = (tabId: TabId) => {
-    setActiveTab(tabId);
-    animateToTab(tabId);
-  };
-
-  const animateToTab = (tabId: TabId) => {
-    const index = TABS.findIndex(tab => tab.id === tabId);
+  // Helper function for animation by index (used by PanResponder)
+  const animateToIndex = (index: number) => {
     Animated.spring(translateX, {
       toValue: -index * SCREEN_WIDTH,
       useNativeDriver: true,
@@ -99,9 +141,12 @@ export function SupplementMainScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header - Logo left, Profile right */}
+      <AppHeader />
+
       {/* Tab Bar */}
-      <View style={[styles.tabBar, { paddingTop: insets.top + theme.spacing.md }]}>
+      <View style={styles.tabBar}>
         {TABS.map((tab) => (
           <TouchableOpacity
             key={tab.id}
@@ -153,7 +198,7 @@ export function SupplementMainScreen() {
           </View>
         </Animated.View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -167,7 +212,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
-    paddingTop: theme.spacing.md,
   },
   tab: {
     flex: 1,

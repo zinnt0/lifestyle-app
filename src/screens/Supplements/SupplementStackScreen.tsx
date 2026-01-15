@@ -19,6 +19,7 @@ import {
   Pressable,
   Alert,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { supabase } from "../../lib/supabase";
 import { theme } from "../../components/ui/theme";
 import {
@@ -35,6 +36,9 @@ import {
   formatDateDisplay,
   getTargetAreaDisplayName,
   initializeDailyTracking,
+  getCurrentWeekDates,
+  getWeeklyCompletionStatus,
+  WeekDay,
 } from "../../services/supplements/stackStorage";
 import { SUPPLEMENT_DEFINITIONS } from "../../services/supplements/supplementDefinitions";
 import { SupplementDetailModal } from "./SupplementDetailModal";
@@ -74,6 +78,10 @@ export function SupplementStackScreen({
     useState<SupplementDefinition | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [internalRefreshKey, setInternalRefreshKey] = useState(0);
+  const [weekDates, setWeekDates] = useState<WeekDay[]>([]);
+  const [weeklyCompletion, setWeeklyCompletion] = useState<
+    Record<string, boolean>
+  >({});
 
   const todayDate = getTodayDateString();
 
@@ -111,8 +119,23 @@ export function SupplementStackScreen({
       statusMap[supplement.supplementId] = taken;
     }
     setTakenStatus(statusMap);
+
+    // Load weekly dates and completion status
+    const currentWeekDates = getCurrentWeekDates();
+    setWeekDates(currentWeekDates);
+
+    const completionStatus = await getWeeklyCompletionStatus(userId);
+    setWeeklyCompletion(completionStatus);
   }, [userId, todayDate]);
 
+  // Refresh data when screen is focused (e.g., returning from AllSupplements)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  // Also refresh when refreshKey changes
   useEffect(() => {
     loadData();
   }, [loadData, internalRefreshKey, externalRefreshKey]);
@@ -131,10 +154,17 @@ export function SupplementStackScreen({
     const newStatus = !currentStatus;
 
     // Update local state immediately for responsiveness
-    setTakenStatus((prev) => ({ ...prev, [supplementId]: newStatus }));
+    const newTakenStatus = { ...takenStatus, [supplementId]: newStatus };
+    setTakenStatus(newTakenStatus);
 
     // Save to storage
     await toggleSupplementIntake(userId, todayDate, supplementId, newStatus);
+
+    // Check if all supplements are now taken and update weekly completion immediately
+    const allTaken = supplements.every(
+      (s) => newTakenStatus[s.supplementId] === true
+    );
+    setWeeklyCompletion((prev) => ({ ...prev, [todayDate]: allTaken }));
   };
 
   // Handle supplement removal
@@ -175,75 +205,101 @@ export function SupplementStackScreen({
         <Text style={styles.dateText}>{formatDateDisplay(todayDate)}</Text>
       </View>
 
-      {/* Filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScrollView}
-        contentContainerStyle={styles.filterContainer}
-      >
-        {FILTER_OPTIONS.map((option) => (
-          <TouchableOpacity
-            key={option.value}
-            style={[
-              styles.filterButton,
-              selectedFilter === option.value && styles.filterButtonActive,
-            ]}
-            onPress={() => setSelectedFilter(option.value)}
-          >
-            <Text
+      {/* Main Stack Card */}
+      <View style={styles.stackCard}>
+        {/* Filter */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScrollView}
+          contentContainerStyle={styles.filterContainer}
+        >
+          {FILTER_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option.value}
               style={[
-                styles.filterButtonText,
-                selectedFilter === option.value &&
-                  styles.filterButtonTextActive,
+                styles.filterButton,
+                selectedFilter === option.value && styles.filterButtonActive,
+              ]}
+              onPress={() => setSelectedFilter(option.value)}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  selectedFilter === option.value &&
+                    styles.filterButtonTextActive,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Supplement List in Scrollable Container */}
+        <View style={styles.supplementScrollContainer}>
+          <ScrollView
+            style={styles.supplementScrollView}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled={true}
+          >
+            {filteredSupplements.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateIcon}>📦</Text>
+                <Text style={styles.emptyStateTitle}>Keine Supplements</Text>
+                <Text style={styles.emptyStateText}>
+                  {selectedFilter === "all"
+                    ? "Füge Supplements aus deinen Empfehlungen hinzu"
+                    : "Keine Supplements in dieser Kategorie"}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.supplementList}>
+                {filteredSupplements.map((supplement) => (
+                  <SupplementCard
+                    key={supplement.id}
+                    supplement={supplement}
+                    taken={takenStatus[supplement.supplementId] || false}
+                    onToggleTaken={() =>
+                      handleToggleTaken(supplement.supplementId)
+                    }
+                    onRemove={() => handleRemoveSupplement(supplement)}
+                    onShowDetails={() =>
+                      handleShowDetails(supplement.supplementId)
+                    }
+                  />
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </View>
+
+        {/* Weekday Tracker */}
+        <View style={styles.weekdayTracker}>
+          {weekDates.map((day) => (
+            <View
+              key={day.date}
+              style={[
+                styles.weekdayItem,
+                day.isToday && styles.weekdayItemToday,
+                weeklyCompletion[day.date] && styles.weekdayItemCompleted,
               ]}
             >
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Supplement List */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {filteredSupplements.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📦</Text>
-            <Text style={styles.emptyStateTitle}>Keine Supplements</Text>
-            <Text style={styles.emptyStateText}>
-              {selectedFilter === "all"
-                ? "Füge Supplements aus deinen Empfehlungen hinzu"
-                : "Keine Supplements in dieser Kategorie"}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.supplementList}>
-            {filteredSupplements.map((supplement) => (
-              <SupplementCard
-                key={supplement.id}
-                supplement={supplement}
-                taken={takenStatus[supplement.supplementId] || false}
-                onToggleTaken={() => handleToggleTaken(supplement.supplementId)}
-                onRemove={() => handleRemoveSupplement(supplement)}
-                onShowDetails={() => handleShowDetails(supplement.supplementId)}
-              />
-            ))}
-          </View>
-        )}
-
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-
-      {/* Navigate to Recommendations Button */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.recommendationsButton}
-          onPress={onNavigateToRecommendations}
-        >
-          <Text style={styles.recommendationsButtonText}>
-            Meine Empfehlungen
-          </Text>
-        </TouchableOpacity>
+              <Text
+                style={[
+                  styles.weekdayLabel,
+                  day.isToday && styles.weekdayLabelToday,
+                  weeklyCompletion[day.date] && styles.weekdayLabelCompleted,
+                ]}
+              >
+                {day.label}
+              </Text>
+              {weeklyCompletion[day.date] && (
+                <Text style={styles.weekdayCheckmark}>✓</Text>
+              )}
+            </View>
+          ))}
+        </View>
       </View>
 
       {/* Detail Modal */}
@@ -345,13 +401,23 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     fontWeight: theme.typography.weights.medium,
   },
+  stackCard: {
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+    marginHorizontal: theme.spacing.xl,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    borderRadius: theme.borderRadius.xl,
+    ...theme.shadows.md,
+    overflow: "hidden",
+  },
   filterScrollView: {
     flexGrow: 0,
     flexShrink: 0,
   },
   filterContainer: {
-    paddingHorizontal: theme.spacing.xl,
-    paddingTop: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.sm,
     gap: theme.spacing.sm,
   },
@@ -373,12 +439,16 @@ const styles = StyleSheet.create({
   filterButtonTextActive: {
     color: "#FFFFFF",
   },
-  content: {
+  supplementScrollContainer: {
+    flex: 1,
+    minHeight: 150,
+  },
+  supplementScrollView: {
     flex: 1,
   },
   supplementList: {
-    paddingHorizontal: theme.spacing.xl,
-    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
   },
   card: {
     backgroundColor: theme.colors.surface,
@@ -486,14 +556,58 @@ const styles = StyleSheet.create({
     lineHeight:
       theme.typography.lineHeights.relaxed * theme.typography.sizes.md,
   },
-  bottomSpacer: {
-    height: theme.spacing.xxxl,
-  },
-  footer: {
-    padding: theme.spacing.xl,
-    backgroundColor: theme.colors.surface,
+  weekdayTracker: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  weekdayItem: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.surfaceSecondary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  weekdayItemToday: {
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+  },
+  weekdayItemCompleted: {
+    backgroundColor: theme.colors.primary,
+  },
+  weekdayLabel: {
+    fontSize: theme.typography.sizes.sm,
+    fontWeight: theme.typography.weights.semibold,
+    color: theme.colors.textSecondary,
+  },
+  weekdayLabelToday: {
+    color: theme.colors.primary,
+  },
+  weekdayLabelCompleted: {
+    color: "#FFFFFF",
+  },
+  weekdayCheckmark: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    fontSize: 12,
+    color: "#FFFFFF",
+    backgroundColor: theme.colors.secondary,
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    textAlign: "center",
+    lineHeight: 16,
+    overflow: "hidden",
+  },
+  footer: {
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.lg,
   },
   recommendationsButton: {
     backgroundColor: theme.colors.primary,
