@@ -50,6 +50,9 @@ export class FoodSearchRanker {
 
   /**
    * Rank and filter search results based on relevance
+   * IMPORTANT: Only includes items where the query appears in the product NAME
+   * (not just brand). This ensures search results are truly relevant.
+   *
    * @param items Food items to rank
    * @param query Original search query
    * @returns Ranked and filtered items, sorted by relevance (highest first)
@@ -65,10 +68,45 @@ export class FoodSearchRanker {
     }
 
     const normalizedQuery = this.normalizeString(query.trim());
-    console.log(`${LOG_PREFIX} Ranking ${items.length} items for query: "${query}"`);
+    console.log(`${LOG_PREFIX} Ranking ${items.length} items for query: "${normalizedQuery}"`);
+
+    // First, filter to only items where query appears in NAME (not just brand)
+    // Also check search_names array for additional matches (e.g., generic_name, generic_name_de)
+    const nameMatchedItems = items.filter((item) => {
+      const normalizedName = this.normalizeString(item.name);
+      const normalizedNameDe = item.name_de ? this.normalizeString(item.name_de) : '';
+
+      const matchesName = normalizedName.includes(normalizedQuery);
+      const matchesNameDe = normalizedNameDe.includes(normalizedQuery);
+
+      // Check additional search names (generic_name, etc.)
+      const matchesSearchNames = item.search_names?.some((searchName) => {
+        const normalizedSearchName = this.normalizeString(searchName);
+        return normalizedSearchName.includes(normalizedQuery);
+      }) || false;
+
+      // Debug: Log items that DON'T match (to see what's being filtered out)
+      if (!matchesName && !matchesNameDe && !matchesSearchNames) {
+        console.log(`${LOG_PREFIX} FILTERED OUT: "${item.name}" (name_de: "${item.name_de || 'none'}", search_names: ${item.search_names?.length || 0})`);
+      }
+
+      // Check if query appears in name, name_de, or any search_names
+      return matchesName || matchesNameDe || matchesSearchNames;
+    });
+
+    console.log(
+      `${LOG_PREFIX} Filtered by name match: ${items.length} → ${nameMatchedItems.length} items`
+    );
+
+    // Debug: Log items that PASSED the filter
+    if (nameMatchedItems.length > 0 && nameMatchedItems.length <= 10) {
+      nameMatchedItems.forEach((item) => {
+        console.log(`${LOG_PREFIX} PASSED: "${item.name}" (name_de: "${item.name_de || 'none'}")`);
+      });
+    }
 
     // Calculate relevance score for each item
-    const rankedItems = items
+    const rankedItems = nameMatchedItems
       .map((item) => this.scoreItem(item, normalizedQuery))
       .filter((item) => item.relevance_score >= this.config.minRelevanceScore)
       .sort((a, b) => {
@@ -94,7 +132,7 @@ export class FoodSearchRanker {
 
   /**
    * Calculate relevance score for a single item
-   * Score range: 0-100
+   * Score range: 0-100 (curated items get 500+ base to always rank first)
    */
   private scoreItem(item: FoodItem, normalizedQuery: string): RankedFoodItem {
     const normalizedName = this.normalizeString(item.name);
@@ -105,12 +143,37 @@ export class FoodSearchRanker {
     let matchType: 'exact' | 'starts_with' | 'word_match' | 'contains' | 'brand_match' = 'contains';
     let matchPosition: number | undefined;
 
-    // Search in name, name_de, and brand
-    const searchTexts = [
+    // CURATED ITEMS: Use pre-calculated relevance_score from database if available
+    // This ensures curated items always rank above API results
+    if (item.source === 'curated' && item.relevance_score) {
+      return {
+        ...item,
+        relevance_score: item.relevance_score, // Use DB score (500+ for curated)
+        match_type: 'exact', // Curated items are pre-matched
+        match_position: 0,
+      };
+    }
+
+    // Search in name, name_de, brand, and search_names
+    const searchTexts: Array<{ text: string; isGerman: boolean; isPrimary: boolean }> = [
       { text: normalizedName, isGerman: false, isPrimary: true },
       { text: normalizedNameDe, isGerman: true, isPrimary: true },
       { text: normalizedBrand, isGerman: false, isPrimary: false },
     ];
+
+    // Add search_names (generic_name, etc.) as secondary search targets
+    if (item.search_names) {
+      for (const searchName of item.search_names) {
+        const normalizedSearchName = this.normalizeString(searchName);
+        // Check if it's German by looking for common German patterns
+        const isGerman = searchName.toLowerCase().includes('ä') ||
+                         searchName.toLowerCase().includes('ö') ||
+                         searchName.toLowerCase().includes('ü') ||
+                         searchName.toLowerCase().includes('ß') ||
+                         searchName.endsWith('_de');
+        searchTexts.push({ text: normalizedSearchName, isGerman, isPrimary: true });
+      }
+    }
 
     let bestScore = 0;
     let bestMatchType: 'exact' | 'starts_with' | 'word_match' | 'contains' | 'brand_match' = matchType;
@@ -143,7 +206,7 @@ export class FoodSearchRanker {
       score += Math.min(item.usage_count * 2, 20); // Max +20 points
     }
 
-    // Cap score at 100
+    // Cap score at 100 for non-curated items
     score = Math.min(score, 100);
 
     return {

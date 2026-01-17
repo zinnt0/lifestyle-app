@@ -14,12 +14,20 @@
 export interface FoodItem {
   // Core identification
   barcode: string;
-  source: 'openfoodfacts';
+  source: 'openfoodfacts' | 'curated';
+
+  // Cache layer source (for search result prioritization)
+  // local = SQLite, cloud = Supabase, external = API
+  cache_source?: 'local' | 'cloud' | 'external';
 
   // Naming (multi-language support)
   name: string;
   name_de?: string;
   brand?: string;
+
+  // Additional searchable names (from OpenFoodFacts generic_name, etc.)
+  // Used for better search matching
+  search_names?: string[];
 
   // Macronutrients (per 100g)
   calories?: number;
@@ -47,6 +55,10 @@ export interface FoodItem {
   usage_count?: number;
   last_used?: string; // ISO timestamp
   cached_at?: string; // ISO timestamp
+
+  // Curated item metadata
+  is_verified?: boolean;
+  relevance_score?: number; // From search ranking function
 }
 
 /**
@@ -162,6 +174,10 @@ export interface OFFProduct {
   code: string; // barcode
   product_name?: string;
   product_name_de?: string;
+  generic_name?: string; // Additional name field from OFF API
+  generic_name_de?: string; // German generic name
+  abbreviated_product_name?: string;
+  abbreviated_product_name_de?: string;
   brands?: string;
 
   // Nutriments (per 100g)

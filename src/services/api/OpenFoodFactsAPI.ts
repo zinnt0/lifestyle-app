@@ -20,7 +20,11 @@ import { openFoodFactsRateLimiter } from './RateLimiter';
 const LOG_PREFIX = '[OpenFoodFactsAPI]';
 
 // Open Food Facts API Configuration
-const OFF_BASE_URL = 'https://world.openfoodfacts.org/api/v2';
+// NOTE: v2 API does NOT support full-text search! Only v1 supports search_terms parameter
+// For barcode lookups: use v2 (/api/v2/product/{barcode}.json)
+// For text search: use cgi search endpoint (/cgi/search.pl)
+const OFF_BASE_URL = 'https://world.openfoodfacts.org';
+const OFF_SEARCH_URL = 'https://world.openfoodfacts.org/cgi/search.pl';
 const USER_AGENT = 'FitnessApp/1.0 (contact@fitnessapp.com)';
 const REQUEST_TIMEOUT = 10000; // 10 seconds
 
@@ -55,8 +59,8 @@ export class OpenFoodFactsAPI {
       // Wait for rate limiter
       await openFoodFactsRateLimiter.waitIfNeeded();
 
-      // Fetch product data
-      const url = `${this.baseUrl}/product/${barcode}.json`;
+      // Fetch product data (using v2 API for barcode lookups)
+      const url = `${this.baseUrl}/api/v2/product/${barcode}.json`;
       const response = await this.fetchWithTimeout(url);
 
       if (!response.ok) {
@@ -113,15 +117,19 @@ export class OpenFoodFactsAPI {
       // Wait for rate limiter
       await openFoodFactsRateLimiter.waitIfNeeded();
 
-      // Build search URL
+      // Build search URL using CGI endpoint (v1 API style - v2 does NOT support text search!)
+      // Reference: https://wiki.openfoodfacts.org/API
       const params = new URLSearchParams({
         search_terms: query.trim(),
+        search_simple: '1', // Simple search
+        action: 'process',
         page_size: limit.toString(),
         page: '1',
         json: '1',
       });
 
-      const url = `${this.baseUrl}/search?${params.toString()}`;
+      const url = `${OFF_SEARCH_URL}?${params.toString()}`;
+      console.log(`${LOG_PREFIX} Search URL: ${url}`);
       const response = await this.fetchWithTimeout(url);
 
       if (!response.ok) {
@@ -174,6 +182,18 @@ export class OpenFoodFactsAPI {
       // Extract brand
       const brand = product.brands?.split(',')[0]?.trim();
 
+      // Collect all searchable names for better matching
+      // This helps when searching in German but the product only has English names
+      const searchNames: string[] = [];
+      if (product.product_name) searchNames.push(product.product_name);
+      if (product.product_name_de) searchNames.push(product.product_name_de);
+      if (product.generic_name) searchNames.push(product.generic_name);
+      if (product.generic_name_de) searchNames.push(product.generic_name_de);
+      if (product.abbreviated_product_name) searchNames.push(product.abbreviated_product_name);
+      if (product.abbreviated_product_name_de) searchNames.push(product.abbreviated_product_name_de);
+      // Filter out duplicates and empty strings
+      const uniqueSearchNames = Array.from(new Set(searchNames.filter(n => n && n.trim())));
+
       // Get nutriments (per 100g)
       const nutriments = product.nutriments || {};
 
@@ -188,6 +208,7 @@ export class OpenFoodFactsAPI {
         name,
         name_de,
         brand,
+        search_names: uniqueSearchNames.length > 0 ? uniqueSearchNames : undefined,
 
         // Macronutrients (per 100g)
         calories: nutriments['energy-kcal_100g'],
