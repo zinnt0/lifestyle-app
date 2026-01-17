@@ -20,7 +20,7 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { NutritionStackParamList } from '../../navigation/NutritionStackNavigator';
@@ -28,7 +28,8 @@ import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../../components/ui/the
 import { Ionicons } from '@expo/vector-icons';
 import { foodService } from '../../services/FoodService';
 import { localFoodCache } from '../../services/cache/LocalFoodCache';
-import type { FoodItem } from '../../types/nutrition';
+import { customFoodCache, CustomFoodCache } from '../../services/cache/CustomFoodCache';
+import type { FoodItem, CustomFoodItem } from '../../types/nutrition';
 
 type NavigationProp = NativeStackNavigationProp<
   NutritionStackParamList,
@@ -46,6 +47,30 @@ export function FoodSearchScreen() {
   const [searchResults, setSearchResults] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Custom foods state
+  const [customFoods, setCustomFoods] = useState<CustomFoodItem[]>([]);
+  const [loadingCustomFoods, setLoadingCustomFoods] = useState(false);
+
+  // Load custom foods when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadCustomFoods();
+    }, [])
+  );
+
+  const loadCustomFoods = async () => {
+    try {
+      setLoadingCustomFoods(true);
+      await customFoodCache.initialize();
+      const foods = await customFoodCache.getAllCustomFoods(10);
+      setCustomFoods(foods);
+    } catch (err) {
+      console.error('[FoodSearchScreen] Error loading custom foods:', err);
+    } finally {
+      setLoadingCustomFoods(false);
+    }
+  };
 
   // Mock recent searches - replace with actual storage
   const [recentSearches] = useState([
@@ -112,6 +137,17 @@ export function FoodSearchScreen() {
   // Navigate to barcode scanner
   const handleOpenScanner = useCallback(() => {
     navigation.navigate('BarcodeScanner', { mealType });
+  }, [navigation, mealType]);
+
+  // Navigate to create custom food
+  const handleCreateFood = useCallback(() => {
+    navigation.navigate('CreateFood', { mealType });
+  }, [navigation, mealType]);
+
+  // Handle selecting a custom food
+  const handleSelectCustomFood = useCallback((customFood: CustomFoodItem) => {
+    const foodItem = CustomFoodCache.toFoodItem(customFood);
+    navigation.navigate('FoodDetail', { food: foodItem, mealType });
   }, [navigation, mealType]);
 
   // Navigate to food detail
@@ -266,6 +302,60 @@ export function FoodSearchScreen() {
           </View>
         ) : (
           <>
+            {/* My Custom Foods Section */}
+            <View style={styles.section}>
+              <View style={styles.myFoodsHeader}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="restaurant-outline" size={20} color={COLORS.primary} />
+                  <Text style={styles.sectionTitle}>Meine Lebensmittel</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.createFoodButton}
+                  onPress={handleCreateFood}
+                >
+                  <Ionicons name="add" size={18} color={COLORS.white} />
+                  <Text style={styles.createFoodButtonText}>Erstellen</Text>
+                </TouchableOpacity>
+              </View>
+
+              {loadingCustomFoods ? (
+                <ActivityIndicator size="small" color={COLORS.primary} style={styles.customFoodsLoader} />
+              ) : customFoods.length > 0 ? (
+                <View style={styles.customFoodsList}>
+                  {customFoods.slice(0, 5).map((food) => (
+                    <TouchableOpacity
+                      key={food.id}
+                      style={styles.customFoodItem}
+                      onPress={() => handleSelectCustomFood(food)}
+                    >
+                      <View style={styles.customFoodInfo}>
+                        <Text style={styles.customFoodName} numberOfLines={1}>
+                          {food.name}
+                        </Text>
+                        {food.brand && (
+                          <Text style={styles.customFoodBrand} numberOfLines={1}>
+                            {food.brand}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.customFoodCalories}>
+                        <Text style={styles.customFoodCaloriesText}>
+                          {food.calories || 0} kcal
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={COLORS.textTertiary} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyCustomFoods}>
+                  <Text style={styles.emptyCustomFoodsText}>
+                    Noch keine eigenen Lebensmittel erstellt
+                  </Text>
+                </View>
+              )}
+            </View>
+
             {/* Recent Searches */}
             {recentSearches.length > 0 && (
               <View style={styles.section}>
@@ -549,5 +639,77 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text,
     lineHeight: 20,
+  },
+
+  // My Foods Section
+  myFoodsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  createFoodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    gap: SPACING.xs,
+  },
+  createFoodButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  customFoodsLoader: {
+    paddingVertical: SPACING.lg,
+  },
+  customFoodsList: {
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.md,
+    overflow: 'hidden',
+    ...SHADOWS.sm,
+  },
+  customFoodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  customFoodInfo: {
+    flex: 1,
+    marginRight: SPACING.md,
+  },
+  customFoodName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  customFoodBrand: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  customFoodCalories: {
+    marginRight: SPACING.sm,
+  },
+  customFoodCaloriesText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.success,
+  },
+  emptyCustomFoods: {
+    backgroundColor: COLORS.surfaceSecondary,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.lg,
+    alignItems: 'center',
+  },
+  emptyCustomFoodsText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
 });

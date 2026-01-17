@@ -7,3 +7,4 @@ export { NutritionDashboardScreen } from './NutritionDashboardScreen';
 export { FoodSearchScreen } from './FoodSearchScreen';
 export { BarcodeScannerScreen } from './BarcodeScannerScreen';
 export { FoodDetailScreen } from './FoodDetailScreen';
+export { CreateFoodScreen } from './CreateFoodScreen';

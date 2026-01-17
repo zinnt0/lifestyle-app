@@ -71,6 +71,17 @@ export interface CachedFoodItem extends FoodItem {
   cached_at: string;
 }
 
+/**
+ * Custom Food Item - user-created foods stored only locally
+ * These are never synced to Supabase
+ */
+export interface CustomFoodItem extends FoodItem {
+  id: string; // UUID for the custom food
+  isCustom: true; // Flag to identify custom foods
+  created_at: string; // ISO timestamp
+  updated_at: string; // ISO timestamp
+}
+
 // ============================================================================
 // DIARY ENTRY INTERFACES
 // ============================================================================

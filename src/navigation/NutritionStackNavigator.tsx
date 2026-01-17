@@ -9,6 +9,7 @@ import { NutritionDashboardScreen } from "../screens/Nutrition/NutritionDashboar
 import { FoodSearchScreen } from "../screens/Nutrition/FoodSearchScreen";
 import { BarcodeScannerScreen } from "../screens/Nutrition/BarcodeScannerScreen";
 import { FoodDetailScreen } from "../screens/Nutrition/FoodDetailScreen";
+import { CreateFoodScreen } from "../screens/Nutrition/CreateFoodScreen";
 import type { FoodItem } from "../services/nutritionApi";
 
 export type NutritionStackParamList = {
@@ -19,6 +20,7 @@ export type NutritionStackParamList = {
     food: FoodItem;
     mealType?: "breakfast" | "lunch" | "dinner" | "snacks";
   };
+  CreateFood: { mealType?: "breakfast" | "lunch" | "dinner" | "snacks" };
 };
 
 const Stack = createNativeStackNavigator<NutritionStackParamList>();
@@ -68,6 +70,15 @@ export function NutritionStackNavigator({
       >
         {(props) => <FoodDetailScreen {...props} userId={userId} />}
       </Stack.Screen>
+
+      <Stack.Screen
+        name="CreateFood"
+        component={CreateFoodScreen}
+        options={{
+          title: "Lebensmittel erstellen",
+          presentation: "modal",
+        }}
+      />
     </Stack.Navigator>
   );
 }
