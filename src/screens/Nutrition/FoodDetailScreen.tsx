@@ -142,14 +142,37 @@ export function FoodDetailScreen({ userId }: { userId: string }) {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Portionsgröße</Text>
           <View style={styles.servingSizeContainer}>
-            <TextInput
-              style={styles.servingSizeInput}
-              value={servingSize}
-              onChangeText={setServingSize}
-              keyboardType="numeric"
-              placeholder="100"
-            />
-            <Text style={styles.servingUnit}>g</Text>
+            <TouchableOpacity
+              style={styles.portionButton}
+              onPress={() => {
+                const current = parseFloat(servingSize) || 100;
+                const baseAmount = food.serving_size || 100;
+                const newValue = Math.max(baseAmount, current - baseAmount);
+                setServingSize(newValue.toString());
+              }}
+            >
+              <Ionicons name="remove" size={28} color={COLORS.primary} />
+            </TouchableOpacity>
+            <View style={styles.servingSizeInputWrapper}>
+              <TextInput
+                style={styles.servingSizeInput}
+                value={servingSize}
+                onChangeText={setServingSize}
+                keyboardType="numeric"
+                placeholder="100"
+              />
+              <Text style={styles.servingUnit}>g</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.portionButton}
+              onPress={() => {
+                const current = parseFloat(servingSize) || 100;
+                const baseAmount = food.serving_size || 100;
+                setServingSize((current + baseAmount).toString());
+              }}
+            >
+              <Ionicons name="add" size={28} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
           <Text style={styles.servingHint}>
             Nährwerte werden pro 100g berechnet
@@ -255,12 +278,29 @@ const styles = StyleSheet.create({
   servingSizeContainer: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: SPACING.md,
+  },
+  portionButton: {
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: COLORS.surfaceSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  servingSizeInputWrapper: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surfaceSecondary,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
   },
   servingSizeInput: {
     flex: 1,
-    backgroundColor: COLORS.surfaceSecondary,
-    borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     fontSize: 24,
     fontWeight: "700",

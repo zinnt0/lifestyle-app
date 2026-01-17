@@ -26,7 +26,7 @@ const LOG_PREFIX = '[OpenFoodFactsAPI]';
 const OFF_BASE_URL = 'https://world.openfoodfacts.org';
 const OFF_SEARCH_URL = 'https://world.openfoodfacts.org/cgi/search.pl';
 const USER_AGENT = 'FitnessApp/1.0 (contact@fitnessapp.com)';
-const REQUEST_TIMEOUT = 10000; // 10 seconds
+const REQUEST_TIMEOUT = 20000; // 20 seconds
 
 export class OpenFoodFactsAPI {
   private baseUrl: string;
