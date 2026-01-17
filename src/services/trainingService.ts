@@ -147,6 +147,20 @@ async function setActivePlan(userId: string, planId: string): Promise<void> {
       throw new Error("Trainingsplan nicht gefunden oder keine Berechtigung");
     }
 
+    // Lösche unterbrochene/aktive Workouts aus anderen Plänen
+    // Dies verhindert den Fehler "Du hast ein unterbrochenes Workout" beim Planwechsel
+    const { error: deleteSessionsError } = await supabase
+      .from("workout_sessions")
+      .delete()
+      .eq("user_id", userId)
+      .neq("plan_id", planId)
+      .in("status", ["paused", "in_progress"]);
+
+    if (deleteSessionsError) {
+      console.error("Fehler beim Löschen unterbrochener Workouts:", deleteSessionsError);
+      // Kein throw - wir versuchen trotzdem fortzufahren
+    }
+
     // Deaktiviere alle anderen Pläne des Users
     const { error: deactivateError } = await supabase
       .from("training_plans")
@@ -644,11 +658,21 @@ async function startWorkoutSession(
   workoutId: string
 ): Promise<string> {
   try {
-    // Prüfe beide Stati in einer Query (effizienter)
+    // Lösche unterbrochene/aktive Workouts aus ANDEREN Plänen
+    // Dies stellt sicher, dass beim Planwechsel keine alten Sessions blockieren
+    await supabase
+      .from("workout_sessions")
+      .delete()
+      .eq("user_id", userId)
+      .neq("plan_id", planId)
+      .in("status", ["paused", "in_progress"]);
+
+    // Prüfe beide Stati in einer Query (effizienter) - nur für aktuellen Plan
     const { data: existingSessions, error: checkError } = await supabase
       .from("workout_sessions")
       .select("id, status")
       .eq("user_id", userId)
+      .eq("plan_id", planId)
       .in("status", ["in_progress", "paused"])
       .order("start_time", { ascending: false })
       .limit(1);
