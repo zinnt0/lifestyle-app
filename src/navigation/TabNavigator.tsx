@@ -99,6 +99,14 @@ export const TabNavigator: React.FC = () => {
             <Ionicons name="nutrition-outline" size={size} color={color} />
           ),
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "NutritionTab" }],
+            });
+          },
+        })}
       >
         {() => <NutritionStackNavigator userId={userId} />}
       </Tab.Screen>

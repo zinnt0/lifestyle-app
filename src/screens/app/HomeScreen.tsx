@@ -1,8 +1,10 @@
 /**
- * Home Screen
+ * Home Screen - Redesigned Dashboard
  *
- * Main landing screen after onboarding completion.
- * Displays daily check-in status and recovery score.
+ * Main landing screen with modern layout:
+ * - Workout & Recovery section (70/30 split)
+ * - Nutrition overview with quick add
+ * - Daily supplement tracker
  */
 
 import React, { useState, useCallback } from "react";
@@ -12,6 +14,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -24,14 +27,20 @@ import {
   getRecoveryScoreInterpretation,
 } from "../../services/recovery.service";
 import { trainingService } from "../../services/trainingService";
-import { QuickWorkoutAction } from "../../components/training/QuickWorkoutAction";
-import { PausedSessionCard } from "../../components/training/PausedSessionCard";
-import { RecoveryCard } from "../../components/app/RecoveryCard";
 import { AppHeader } from "../../components/ui/AppHeader";
 import type { NextWorkout, WorkoutSession } from "../../types/training.types";
 import { useLocalNutrition } from "../../hooks/useLocalNutrition";
-import Svg, { Circle } from "react-native-svg";
+import { theme } from "../../components/ui/theme";
+import Svg, { Circle, Path, G } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  getUserStack,
+  toggleSupplementIntake,
+  wasSupplementTaken,
+  getTodayDateString,
+  initializeDailyTracking,
+} from "../../services/supplements/stackStorage";
+import type { UserStackSupplement } from "../../services/supplements/types";
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<
   MainStackParamList,
@@ -86,6 +95,123 @@ const CalorieRing = ({
   );
 };
 
+// Recovery Gauge Component (Tacho-Style - Semicircle, opening at top)
+const RecoveryGauge = ({
+  score,
+  size = 70,
+}: {
+  score: number;
+  size?: number;
+}) => {
+  // Clamp score between 0-100
+  const clampedScore = Math.max(0, Math.min(100, score));
+
+  // Calculate angle for needle (0° to 180° = 180° semicircle arc, opening at top)
+  // Score 0 = 180° (left), Score 100 = 0° (right)
+  // But arc opens upward, so we map: Score 0 = -180° (left), Score 100 = 0° (right)
+  const needleAngle = -180 + (clampedScore / 100) * 180;
+
+  // Get color based on score - matching app color scheme
+  const getScoreColor = (s: number): string => {
+    if (s >= 66) return "#4ECDC4"; // Teal/green - Good to Excellent (from Carbs macro)
+    if (s >= 33) return "#FFE66D"; // Yellow - Moderate (from Fats macro)
+    return "#FF6B6B"; // Red - Low (from Protein macro)
+  };
+
+  const scoreColor = getScoreColor(clampedScore);
+  const centerX = size / 2;
+  const centerY = size * 0.52;
+  const radius = size * 0.4;
+  const strokeWidth = size * 0.11;
+
+  // Arc path for semicircle opening upward (-180° to 0°)
+  const createArc = (startAngle: number, endAngle: number): string => {
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+    const x1 = centerX + radius * Math.cos(startRad);
+    const y1 = centerY + radius * Math.sin(startRad);
+    const x2 = centerX + radius * Math.cos(endRad);
+    const y2 = centerY + radius * Math.sin(endRad);
+    const largeArc = Math.abs(endAngle - startAngle) > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
+  };
+
+  // Needle calculations
+  const needleLength = radius * 0.85;
+  const needleRad = (needleAngle * Math.PI) / 180;
+  const needleX = centerX + needleLength * Math.cos(needleRad);
+  const needleY = centerY + needleLength * Math.sin(needleRad);
+
+  return (
+    <View style={{ width: size, height: size * 0.55, alignItems: "center" }}>
+      <Svg width={size} height={size * 0.55} viewBox={`0 0 ${size} ${size * 0.55}`}>
+        {/* Background arc (subtle) */}
+        <Path
+          d={createArc(-180, 0)}
+          stroke="rgba(0, 0, 0, 0.15)"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeLinecap="round"
+        />
+
+        {/* Colored progress arc */}
+        {clampedScore > 0 && (
+          <Path
+            d={createArc(-180, -180 + (clampedScore / 100) * 180)}
+            stroke={scoreColor}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeLinecap="round"
+          />
+        )}
+
+        {/* Needle */}
+        <Path
+          d={`M ${centerX} ${centerY} L ${needleX} ${needleY}`}
+          stroke="#0E7490"
+          strokeWidth={2}
+          strokeLinecap="round"
+        />
+
+        {/* Center dot */}
+        <Circle cx={centerX} cy={centerY} r={3} fill="#0E7490" />
+      </Svg>
+    </View>
+  );
+};
+
+// Macro Row Component
+const MacroRow = ({
+  label,
+  consumed,
+  goal,
+  color,
+}: {
+  label: string;
+  consumed: number;
+  goal: number;
+  color: string;
+}) => {
+  const percentage = Math.min((consumed / goal) * 100, 100);
+
+  return (
+    <View style={styles.macroRow}>
+      <Text style={styles.macroLabel}>{label}</Text>
+      <View style={styles.macroBar}>
+        <View
+          style={[
+            styles.macroBarFill,
+            { width: `${percentage}%`, backgroundColor: color },
+          ]}
+        />
+        <Text style={styles.macroValueInBar}>
+          {Math.round(consumed)}g / {goal}g
+        </Text>
+      </View>
+    </View>
+  );
+};
+
 /**
  * HomeScreen Component
  *
@@ -101,25 +227,38 @@ export const HomeScreen: React.FC = () => {
   const [pausedSession, setPausedSession] = useState<WorkoutSession | null>(
     null
   );
+  const [supplements, setSupplements] = useState<UserStackSupplement[]>([]);
+  const [supplementsTaken, setSupplementsTaken] = useState<
+    Record<string, boolean>
+  >({});
+  const [showMealSelectModal, setShowMealSelectModal] = useState(false);
 
-  // Get today's date for nutrition data
   const today = new Date().toISOString().split("T")[0];
+  const todayDate = getTodayDateString();
 
   // Use cache-first nutrition hook for instant calorie display
   const { data: nutritionData } = useLocalNutrition(today, {
     autoSync: true,
-    syncInterval: 5, // Sync every 5 minutes
+    syncInterval: 5,
   });
 
-  // Derive calorie data from nutrition cache
+  // Derive calorie data
   const calorieData = {
     consumed: nutritionData?.calories_consumed || 0,
     burned: nutritionData?.calories_burned || 0,
     goal: nutritionData?.calorie_goal || 2500,
-    remaining:
-      (nutritionData?.calorie_goal || 2500) -
-      (nutritionData?.calories_consumed || 0) +
-      (nutritionData?.calories_burned || 0),
+    protein: {
+      consumed: nutritionData?.protein_consumed || 0,
+      goal: nutritionData?.protein_goal || 150,
+    },
+    carbs: {
+      consumed: nutritionData?.carbs_consumed || 0,
+      goal: nutritionData?.carbs_goal || 200,
+    },
+    fat: {
+      consumed: nutritionData?.fat_consumed || 0,
+      goal: nutritionData?.fat_goal || 70,
+    },
   };
 
   /**
@@ -154,33 +293,75 @@ export const HomeScreen: React.FC = () => {
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Check for paused session first
-      const paused = await trainingService.getPausedSession(user.id);
-      setPausedSession(paused);
+      // Load both in parallel for better performance
+      const [paused, workout] = await Promise.all([
+        trainingService.getPausedSession(user.id),
+        trainingService.getNextWorkout(user.id),
+      ]);
 
-      // Load next workout
-      const workout = await trainingService.getNextWorkout(user.id);
+      // Only show paused session if it belongs to the active plan
+      // This ensures consistency with TrainingPlanDetailScreen behavior
+      if (paused && workout && paused.plan_id === workout.plan.id) {
+        setPausedSession(paused);
+      } else {
+        setPausedSession(null);
+      }
+
+      // Set next workout (can be null)
       setNextWorkout(workout);
     } catch (error) {
       console.error("Error loading next workout:", error);
-      // Fail silently - user can still access training via tab
+      // Reset states on error to avoid showing stale data
+      setPausedSession(null);
+      setNextWorkout(null);
     }
   }, []);
 
-  // Nutrition data is now loaded automatically via useLocalNutrition hook
-  // No manual loading needed - it's cache-first and auto-syncs!
+  /**
+   * Load supplements for today
+   */
+  const loadSupplements = useCallback(async () => {
+    if (!userId) return;
+
+    const stackSupplements = await getUserStack(userId);
+    setSupplements(stackSupplements);
+
+    await initializeDailyTracking(userId, todayDate);
+
+    const statusMap: Record<string, boolean> = {};
+    for (const supplement of stackSupplements) {
+      const taken = await wasSupplementTaken(
+        userId,
+        todayDate,
+        supplement.supplementId
+      );
+      statusMap[supplement.supplementId] = taken;
+    }
+    setSupplementsTaken(statusMap);
+  }, [userId, todayDate]);
+
+  /**
+   * Toggle supplement taken status
+   */
+  const handleToggleSupplement = async (supplementId: string) => {
+    if (!userId) return;
+
+    const currentStatus = supplementsTaken[supplementId] || false;
+    const newStatus = !currentStatus;
+
+    setSupplementsTaken((prev) => ({ ...prev, [supplementId]: newStatus }));
+    await toggleSupplementIntake(userId, todayDate, supplementId, newStatus);
+  };
 
   /**
    * Refresh data when screen comes into focus
-   * This ensures the home screen updates after completing daily check-in
-   * or starting a workout
-   * Note: Nutrition data auto-syncs via useLocalNutrition hook
    */
   useFocusEffect(
     useCallback(() => {
       checkTodayLog();
       loadNextWorkout();
-    }, [checkTodayLog, loadNextWorkout])
+      loadSupplements();
+    }, [checkTodayLog, loadNextWorkout, loadSupplements])
   );
 
   /**
@@ -191,7 +372,7 @@ export const HomeScreen: React.FC = () => {
 
     try {
       await trainingService.resumeWorkoutSession(pausedSession.id);
-      // @ts-ignore - Navigation to nested navigator
+      // @ts-ignore
       navigation.navigate("TrainingTab", {
         screen: "WorkoutSession",
         params: { sessionId: pausedSession.id },
@@ -202,22 +383,29 @@ export const HomeScreen: React.FC = () => {
   }, [pausedSession, navigation]);
 
   /**
-   * Handle canceling a paused workout session
+   * Handle starting next workout
    */
-  const handleCancelSession = useCallback(async () => {
-    if (!pausedSession) return;
+  const handleStartWorkout = useCallback(async () => {
+    if (!nextWorkout?.workout || !nextWorkout?.plan || !userId) return;
 
     try {
-      await trainingService.cancelWorkoutSession(pausedSession.id);
-      await loadNextWorkout();
+      const sessionId = await trainingService.startWorkoutSession(
+        userId,
+        nextWorkout.plan.id,
+        nextWorkout.workout.id
+      );
+      // @ts-ignore
+      navigation.navigate("TrainingTab", {
+        screen: "WorkoutSession",
+        params: { sessionId },
+      });
     } catch (error) {
-      console.error("Error canceling session:", error);
+      console.error("Error starting workout:", error);
     }
-  }, [pausedSession, loadNextWorkout]);
+  }, [nextWorkout, userId, navigation]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      {/* Header - Logo left, Profile right */}
       <AppHeader />
 
       <ScrollView
@@ -225,102 +413,267 @@ export const HomeScreen: React.FC = () => {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Fitness Section - Shows paused workout or next workout */}
-        <View style={styles.fitnessSection}>
-          <Text style={styles.sectionHeader}>Fitness</Text>
+        {/* Top Section: Workout (70%) + Recovery/Check-in (30%) */}
+        <View style={styles.topSection}>
+          {/* Workout Card - 70% */}
+          <TouchableOpacity
+            style={styles.workoutCard}
+            onPress={pausedSession ? handleResumeSession : handleStartWorkout}
+            activeOpacity={0.8}
+          >
+            <View style={styles.workoutCardInner}>
+              <View style={styles.workoutMiddle}>
+                <Text style={styles.workoutTitle} numberOfLines={2}>
+                  {pausedSession
+                    ? pausedSession.workout?.name || "Workout"
+                    : nextWorkout?.workout?.name || "Kein Workout geplant"}
+                </Text>
+                <Text style={styles.workoutMeta}>
+                  {pausedSession
+                    ? nextWorkout?.plan?.name || ""
+                    : nextWorkout?.plan?.name || ""}
+                </Text>
+              </View>
 
-          {pausedSession ? (
-            <PausedSessionCard
-              session={pausedSession}
-              onResume={handleResumeSession}
-              onCancel={handleCancelSession}
-            />
-          ) : (
-            <QuickWorkoutAction workout={nextWorkout || undefined} />
-          )}
+              <TouchableOpacity
+                style={[
+                  styles.workoutButton,
+                  pausedSession && styles.workoutButtonPaused,
+                ]}
+                onPress={
+                  pausedSession ? handleResumeSession : handleStartWorkout
+                }
+              >
+                <Text style={styles.workoutButtonText}>
+                  {pausedSession ? "▶ Fortsetzen" : "Workout starten"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+
+          {/* Recovery/Check-in Card - 30% */}
+          <TouchableOpacity
+            style={styles.recoveryCard}
+            onPress={() => navigation.navigate("DailyCheckin")}
+            activeOpacity={0.8}
+          >
+            {hasLogged ? (
+              <View style={styles.recoveryContent}>
+                <Text style={styles.recoveryLabel}>Recovery</Text>
+                <RecoveryGauge score={recoveryScore || 0} size={75} />
+                <Text style={styles.recoveryScore}>{recoveryScore || 0}</Text>
+              </View>
+            ) : (
+              <View style={styles.checkinContent}>
+                <View style={styles.checkinIconContainer}>
+                  <Ionicons
+                    name="clipboard-outline"
+                    size={24}
+                    color="#FFFFFF"
+                  />
+                </View>
+                <Text style={styles.checkinLabel}>Check-in</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Calorie Overview Card */}
+        {/* Nutrition Section */}
         <TouchableOpacity
-          style={styles.calorieCard}
+          style={styles.nutritionCard}
           onPress={() => navigation.navigate("NutritionTab" as any)}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
-          <Text style={styles.sectionHeader}>Kalorien</Text>
+          <View style={styles.nutritionHeader}>
+            <Text style={styles.sectionTitle}>Nutrition</Text>
+            {/* Quick Add Button */}
+            <TouchableOpacity
+              style={styles.quickAddButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                setShowMealSelectModal(true);
+              }}
+            >
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
 
-          <View style={styles.calorieContent}>
-            {/* Ring on the left */}
-            <View style={styles.calorieRingContainer}>
+          <View style={styles.nutritionContent}>
+            {/* Calorie Ring */}
+            <View style={styles.calorieRingSection}>
               <CalorieRing
                 consumed={calorieData.consumed}
                 goal={calorieData.goal}
                 size={100}
                 strokeWidth={8}
               />
-              <View style={styles.calorieRingInner}>
-                <Text style={styles.calorieRingNumber}>
-                  {calorieData.remaining.toLocaleString()}
+              <View style={styles.calorieRingCenter}>
+                <Text style={styles.calorieNumber}>
+                  {Math.max(
+                    0,
+                    calorieData.goal - calorieData.consumed + calorieData.burned
+                  )}
                 </Text>
-                <Text style={styles.calorieRingLabel}>Übrig</Text>
+                <Text style={styles.calorieLabel}>übrig</Text>
               </View>
             </View>
 
-            {/* Values on the right */}
-            <View style={styles.calorieStats}>
-              <View style={styles.calorieStatRow}>
-                <Ionicons name="restaurant" size={18} color="#6FD89E" />
-                <Text style={styles.calorieStatLabel}>Gegessen</Text>
-                <Text style={styles.calorieStatValue}>
-                  {calorieData.consumed}
-                </Text>
-              </View>
-
-              <View style={styles.calorieStatRow}>
-                <Ionicons name="flame" size={18} color="#FF9500" />
-                <Text style={styles.calorieStatLabel}>Verbrannt</Text>
-                <Text style={styles.calorieStatValue}>
-                  {calorieData.burned}
-                </Text>
-              </View>
-
-              <View style={styles.calorieStatRow}>
-                <Ionicons name="trophy" size={18} color="#007AFF" />
-                <Text style={styles.calorieStatLabel}>Ziel</Text>
-                <Text style={styles.calorieStatValue}>{calorieData.goal}</Text>
-              </View>
+            {/* Macros */}
+            <View style={styles.macrosSection}>
+              <MacroRow
+                label="Protein"
+                consumed={calorieData.protein.consumed}
+                goal={calorieData.protein.goal}
+                color="#FF6B6B"
+              />
+              <MacroRow
+                label="Carbs"
+                consumed={calorieData.carbs.consumed}
+                goal={calorieData.carbs.goal}
+                color="#4ECDC4"
+              />
+              <MacroRow
+                label="Fats"
+                consumed={calorieData.fat.consumed}
+                goal={calorieData.fat.goal}
+                color="#FFE66D"
+              />
             </View>
           </View>
         </TouchableOpacity>
 
-        {/* Recovery Section */}
-        {hasLogged ? (
-          <RecoveryCard
-            score={recoveryScore || 0}
-            interpretation={
-              getRecoveryScoreInterpretation(recoveryScore || 0).label
-            }
-            emoji={getRecoveryScoreInterpretation(recoveryScore || 0).emoji}
-          />
-        ) : (
-          <TouchableOpacity
-            style={styles.checkinButton}
-            onPress={() => navigation.navigate("DailyCheckin")}
-          >
-            <Text style={styles.checkinText}>📋 Tägliches Check-in</Text>
-          </TouchableOpacity>
-        )}
+        {/* Supplements Section */}
+        <View style={styles.supplementsSection}>
+          <View style={styles.supplementsHeader}>
+            <Text style={styles.sectionTitle}>Supplement Today</Text>
+          </View>
 
-        {/* Cache Debug Button (Development) */}
-        {__DEV__ && (
-          <TouchableOpacity
-            style={styles.debugButton}
-            onPress={() => navigation.navigate("CacheDebug" as any, { userId })}
-          >
-            <Ionicons name="construct-outline" size={20} color="#666" />
-            <Text style={styles.debugButtonText}>Cache Debug</Text>
-          </TouchableOpacity>
-        )}
+          {supplements.length === 0 ? (
+            <View style={styles.emptySupplements}>
+              <Text style={styles.emptySupplementsText}>
+                Keine Supplements für heute
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.supplementsScrollView}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.supplementsList}>
+                {supplements.map((supplement) => (
+                  <TouchableOpacity
+                    key={supplement.id}
+                    style={styles.supplementItem}
+                    onPress={() =>
+                      handleToggleSupplement(supplement.supplementId)
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.supplementCheckbox,
+                        supplementsTaken[supplement.supplementId] &&
+                          styles.supplementCheckboxChecked,
+                      ]}
+                    >
+                      {supplementsTaken[supplement.supplementId] && (
+                        <Text style={styles.supplementCheckmark}>✓</Text>
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.supplementName,
+                        supplementsTaken[supplement.supplementId] &&
+                          styles.supplementNameTaken,
+                      ]}
+                    >
+                      {supplement.supplementName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+        </View>
       </ScrollView>
+
+      {/* Meal Selection Modal */}
+      <Modal
+        visible={showMealSelectModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowMealSelectModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMealSelectModal(false)}
+        >
+          <View style={styles.mealModalContent}>
+            <Text style={styles.mealModalTitle}>Mahlzeit wählen</Text>
+
+            <TouchableOpacity
+              style={styles.mealOption}
+              onPress={() => {
+                setShowMealSelectModal(false);
+                navigation.navigate("NutritionTab" as any, {
+                  screen: "FoodSearch",
+                  params: { mealType: "breakfast" },
+                });
+              }}
+            >
+              <Text style={styles.mealEmoji}>☕</Text>
+              <Text style={styles.mealOptionText}>Frühstück</Text>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.mealOption}
+              onPress={() => {
+                setShowMealSelectModal(false);
+                navigation.navigate("NutritionTab" as any, {
+                  screen: "FoodSearch",
+                  params: { mealType: "lunch" },
+                });
+              }}
+            >
+              <Text style={styles.mealEmoji}>🍱</Text>
+              <Text style={styles.mealOptionText}>Mittagessen</Text>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.mealOption}
+              onPress={() => {
+                setShowMealSelectModal(false);
+                navigation.navigate("NutritionTab" as any, {
+                  screen: "FoodSearch",
+                  params: { mealType: "dinner" },
+                });
+              }}
+            >
+              <Text style={styles.mealEmoji}>🍲</Text>
+              <Text style={styles.mealOptionText}>Abendessen</Text>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.mealOption, styles.mealOptionLast]}
+              onPress={() => {
+                setShowMealSelectModal(false);
+                navigation.navigate("NutritionTab" as any, {
+                  screen: "FoodSearch",
+                  params: { mealType: "snacks" },
+                });
+              }}
+            >
+              <Text style={styles.mealEmoji}>🍎</Text>
+              <Text style={styles.mealOptionText}>Snacks</Text>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -332,144 +685,316 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: theme.colors.background,
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: 0,
+    paddingBottom: 120,
   },
-  // Fitness Section Styles
-  fitnessSection: {
-    width: "100%",
-    marginBottom: 24,
-    marginTop: 16,
+
+  // Top Section - Workout & Recovery (70/30 split)
+  topSection: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
+    height: 120,
   },
-  sectionHeader: {
+  workoutCard: {
+    flex: 7,
+    backgroundColor: "#5B9EFF",
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.md,
+    paddingTop: theme.spacing.lg,
+    ...theme.shadows.lg,
+  },
+  workoutCardInner: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  workoutMiddle: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  workoutTitle: {
     fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
-    marginLeft: 4,
+    fontWeight: theme.typography.weights.bold,
+    color: "#FFFFFF",
   },
-  // Recovery Section Styles
-  recoveryCard: {
-    backgroundColor: "#F2F2F7",
-    borderRadius: 16,
-    padding: 24,
+  workoutMeta: {
+    fontSize: theme.typography.sizes.sm,
+    color: "rgba(255, 255, 255, 0.8)",
+    marginBottom: 4,
+  },
+  workoutButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: theme.borderRadius.md,
     alignItems: "center",
-    marginBottom: 24,
+  },
+  workoutButtonPaused: {
+    backgroundColor: "#FF9500",
+  },
+  workoutButtonText: {
+    fontSize: theme.typography.sizes.sm,
+    fontWeight: theme.typography.weights.semibold,
+    color: "#FFFFFF",
+  },
+  recoveryCard: {
+    flex: 3,
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.sm,
+    paddingTop: theme.spacing.md,
+    justifyContent: "space-between",
+    alignItems: "center",
+    ...theme.shadows.lg,
+  },
+  recoveryContent: {
+    alignItems: "center",
+    justifyContent: "flex-start",
+    flex: 1,
     width: "100%",
-    maxWidth: 300,
+    paddingTop: 2,
   },
   recoveryLabel: {
-    fontSize: 16,
-    color: "#8E8E93",
-    marginBottom: 12,
-    textAlign: "center",
+    fontSize: 15,
+    color: "#FFFFFF",
+    fontWeight: theme.typography.weights.bold,
+    marginBottom: 6,
   },
   recoveryScore: {
-    fontSize: 48,
-    fontWeight: "bold",
-    color: "#007AFF",
+    fontSize: 22,
+    fontWeight: theme.typography.weights.bold,
+    color: "#FFFFFF",
+    marginTop: 4,
     marginBottom: 8,
   },
-  recoveryEmoji: {
-    fontSize: 32,
-    textAlign: "center",
-  },
-  checkinButton: {
-    backgroundColor: "#007AFF",
-    borderRadius: 12,
-    padding: 16,
+  checkinContent: {
     alignItems: "center",
-    marginBottom: 24,
-    width: "100%",
-    maxWidth: 300,
-  },
-  checkinText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  debugButton: {
-    backgroundColor: "#F0F0F0",
-    borderRadius: 12,
-    padding: 14,
-    alignItems: "center",
-    marginTop: 12,
-    marginBottom: 24,
-    flexDirection: "row",
     justifyContent: "center",
-    gap: 8,
+    flex: 1,
   },
-  debugButtonText: {
-    color: "#666",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  // Calorie Card Styles
-  calorieCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    width: "100%",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  calorieContent: {
-    flexDirection: "row",
+  checkinIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    justifyContent: "center",
     alignItems: "center",
-    gap: 20,
-    marginTop: 8,
+    marginBottom: 6,
   },
-  calorieRingContainer: {
+  checkinLabel: {
+    fontSize: theme.typography.sizes.sm,
+    color: "#FFFFFF",
+    textAlign: "center",
+    fontWeight: theme.typography.weights.semibold,
+  },
+
+  // Nutrition Section
+  nutritionCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.lg,
+    paddingBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.lg,
+    ...theme.shadows.md,
+    position: "relative",
+  },
+  nutritionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: theme.spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: theme.typography.sizes.lg,
+    fontWeight: theme.typography.weights.bold,
+    color: theme.colors.text,
+  },
+  nutritionContent: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    alignItems: "center",
+  },
+  calorieRingSection: {
     position: "relative",
     width: 100,
     height: 100,
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "center",
   },
-  calorieRingInner: {
+  calorieRingCenter: {
     position: "absolute",
-    width: 84,
-    height: 84,
     alignItems: "center",
-    justifyContent: "center",
   },
-  calorieRingNumber: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#333",
+  calorieNumber: {
+    fontSize: 20,
+    fontWeight: theme.typography.weights.bold,
+    color: theme.colors.text,
   },
-  calorieRingLabel: {
-    fontSize: 11,
-    color: "#8E8E93",
-    marginTop: 2,
+  calorieLabel: {
+    fontSize: theme.typography.sizes.xs,
+    color: theme.colors.textSecondary,
   },
-  calorieStats: {
+  macrosSection: {
     flex: 1,
-    gap: 12,
+    gap: theme.spacing.xs,
   },
-  calorieStatRow: {
+  macroRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: theme.spacing.sm,
   },
-  calorieStatLabel: {
+  macroLabel: {
+    fontSize: theme.typography.sizes.sm,
+    color: theme.colors.textSecondary,
+    fontWeight: theme.typography.weights.medium,
+    width: 50,
+  },
+  macroBar: {
+    flex: 1,
+    height: 20,
+    backgroundColor: theme.colors.surfaceSecondary,
+    borderRadius: 10,
+    overflow: "hidden",
+    position: "relative",
+    justifyContent: "center",
+  },
+  macroBarFill: {
+    height: "100%",
+    borderRadius: 10,
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  macroValueInBar: {
+    position: "absolute",
+    right: 8,
+    fontSize: 11,
+    color: "#666666",
+    fontWeight: theme.typography.weights.semibold,
+  },
+  quickAddButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.secondary,
+    justifyContent: "center",
+    alignItems: "center",
+    ...theme.shadows.md,
+  },
+
+  // Supplements Section
+  supplementsSection: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.lg,
+    ...theme.shadows.md,
+  },
+  supplementsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  emptySupplements: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptySupplementsText: {
+    fontSize: theme.typography.sizes.md,
+    color: theme.colors.textSecondary,
+  },
+  supplementsScrollView: {
+    maxHeight: 200,
+  },
+  supplementsList: {
+    gap: theme.spacing.xs,
+  },
+  supplementItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
+    backgroundColor: "#FF9500" + "10",
+    borderRadius: theme.borderRadius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: "#FF9500",
+  },
+  supplementCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#FF9500",
+    backgroundColor: theme.colors.surface,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  supplementCheckboxChecked: {
+    backgroundColor: "#FF9500",
+    borderColor: "#FF9500",
+  },
+  supplementCheckmark: {
+    color: "#FFFFFF",
     fontSize: 14,
-    color: "#8E8E93",
-    minWidth: 80,
+    fontWeight: theme.typography.weights.bold,
   },
-  calorieStatValue: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
+  supplementName: {
+    fontSize: theme.typography.sizes.md,
+    color: theme.colors.text,
+    fontWeight: theme.typography.weights.medium,
+    flex: 1,
+  },
+  supplementNameTaken: {
+    textDecorationLine: "line-through",
+    opacity: 0.5,
+  },
+
+  // Meal Selection Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: theme.spacing.lg,
+  },
+  mealModalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.lg,
+    width: "100%",
+    maxWidth: 320,
+    ...theme.shadows.lg,
+  },
+  mealModalTitle: {
+    fontSize: theme.typography.sizes.lg,
+    fontWeight: theme.typography.weights.bold,
+    color: theme.colors.text,
+    textAlign: "center",
+    marginBottom: theme.spacing.lg,
+  },
+  mealOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  mealOptionLast: {
+    borderBottomWidth: 0,
+  },
+  mealEmoji: {
+    fontSize: 24,
+    marginRight: theme.spacing.md,
+  },
+  mealOptionText: {
+    flex: 1,
+    fontSize: theme.typography.sizes.md,
+    fontWeight: theme.typography.weights.medium,
+    color: theme.colors.text,
   },
 });

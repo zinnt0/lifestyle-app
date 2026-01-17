@@ -26,8 +26,9 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NutritionStackParamList } from '../../navigation/NutritionStackNavigator';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '../../components/ui/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { searchFood, type FoodItem } from '../../services/nutritionApi';
+import { foodService } from '../../services/FoodService';
 import { localFoodCache } from '../../services/cache/LocalFoodCache';
+import type { FoodItem } from '../../types/nutrition';
 
 type NavigationProp = NativeStackNavigationProp<
   NutritionStackParamList,
@@ -64,7 +65,7 @@ export function FoodSearchScreen() {
     'Reis',
   ]);
 
-  // Perform search
+  // Perform search using FoodService (Local > Supabase > API hierarchy)
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
       setSearchResults([]);
@@ -75,28 +76,27 @@ export function FoodSearchScreen() {
     setError(null);
 
     try {
-      const response = await searchFood(query, 20);
-      console.log('Search response:', JSON.stringify(response, null, 2));
+      // Use the FoodService which implements proper hierarchy:
+      // 1. Local SQLite cache (highest priority)
+      // 2. Supabase cloud cache (second priority)
+      // 3. OpenFoodFacts API (lowest priority, filtered by name match)
+      const response = await foodService.searchFoods(query);
+      console.log(`[FoodSearchScreen] Search complete: ${response.items.length} results (source: ${response.source})`);
 
-      // Combine local and external results if response has that structure
-      if (response.results) {
-        const allResults = [
-          ...(response.results.local || []),
-          ...(response.results.external || [])
-        ];
-        console.log(`Found ${allResults.length} total results`);
-        setSearchResults(allResults);
-      } else if (response.foods) {
-        // Fallback for alternative response structure
-        console.log(`Found ${response.foods.length} foods`);
-        setSearchResults(response.foods);
-      } else {
-        console.log('No results in response');
-        setSearchResults([]);
-      }
+      // Map FoodItem to the format expected by the UI
+      const mappedResults = response.items.map((item) => ({
+        ...item,
+        // Ensure calories field is set for UI display
+        calories: item.calories || 0,
+        protein: item.protein || 0,
+        carbs: item.carbs || 0,
+        fat: item.fat || 0,
+      }));
+
+      setSearchResults(mappedResults);
     } catch (err) {
       setError('Fehler beim Suchen. Bitte versuche es erneut.');
-      console.error('Search error:', err);
+      console.error('[FoodSearchScreen] Search error:', err);
       setSearchResults([]);
     } finally {
       setLoading(false);
@@ -189,7 +189,7 @@ export function FoodSearchScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Search Input */}
       <View style={styles.searchHeader}>
         <View style={styles.searchInputContainer}>
