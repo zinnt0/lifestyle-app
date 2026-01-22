@@ -14,9 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.lifestyleapp",
+      "bundleIdentifier": "com.trizin.lifestyleapp",
       "infoPlist": {
-        "NSCameraUsageDescription": "Diese App benötigt Zugriff auf die Kamera, um Barcodes von Lebensmitteln zu scannen."
+        "NSCameraUsageDescription": "Diese App benötigt Zugriff auf die Kamera, um Barcodes von Lebensmitteln zu scannen.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -24,13 +25,26 @@
         "foregroundImage": "./assets/app-icon/MODO_App_ICON.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.lifestyleapp",
+      "package": "com.trizin.lifestyleapp",
       "permissions": [
+        "CAMERA",
         "CAMERA"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "143aa238-6b0f-4938-a144-85b866414ed3"
+      }
+    },
+    "owner": "trizin",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/143aa238-6b0f-4938-a144-85b866414ed3"
     }
   }
 }
