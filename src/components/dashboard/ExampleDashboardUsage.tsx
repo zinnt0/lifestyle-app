@@ -12,6 +12,7 @@ import {
   StyleSheet,
   RefreshControl,
 } from 'react-native';
+// @ts-ignore - Type definitions issue with react-native-safe-area-context
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NutritionOverviewWidget } from './NutritionOverviewWidget';
@@ -22,7 +23,7 @@ interface DashboardScreenProps {
 }
 
 export function DashboardScreen({ userId }: DashboardScreenProps) {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = React.useCallback(() => {
@@ -94,14 +95,22 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: SPACING.lg,
   },
+  gridContainer: {
+    padding: SPACING.lg,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    gap: SPACING.lg,
+  },
+  gridColumn: {
+    flex: 1,
+  },
 });
 
 /**
  * Alternative: Widget in Grid-Layout (Desktop/Tablet)
  */
 export function DashboardGridLayout({ userId }: DashboardScreenProps) {
-  const navigation = useNavigation();
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -128,16 +137,3 @@ export function DashboardGridLayout({ userId }: DashboardScreenProps) {
     </SafeAreaView>
   );
 }
-
-const gridStyles = StyleSheet.create({
-  gridContainer: {
-    padding: SPACING.lg,
-  },
-  gridRow: {
-    flexDirection: 'row',
-    gap: SPACING.lg,
-  },
-  gridColumn: {
-    flex: 1,
-  },
-});

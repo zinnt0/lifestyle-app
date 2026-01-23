@@ -164,6 +164,7 @@ export class LocalFoodCache {
 
   /**
    * Search foods by name (case-insensitive text search)
+   * Only matches if query appears in the product name (not brand)
    */
   async searchFoodsByName(query: string, limit: number = 20): Promise<FoodItem[]> {
     this.ensureInitialized();
@@ -178,12 +179,13 @@ export class LocalFoodCache {
 
       const searchPattern = `%${query.trim().toLowerCase()}%`;
 
+      // Only search in product name (not brand) to ensure relevance
       const rows = await this.db!.getAllAsync<CachedFoodItem>(
         `SELECT * FROM user_foods
-         WHERE LOWER(name) LIKE ? OR LOWER(brand) LIKE ?
+         WHERE LOWER(name) LIKE ?
          ORDER BY usage_count DESC
          LIMIT ?`,
-        [searchPattern, searchPattern, limit]
+        [searchPattern, limit]
       );
 
       const foods = rows.map((row) => this.rowToFoodItem(row));

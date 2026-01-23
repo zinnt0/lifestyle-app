@@ -348,10 +348,31 @@ export const generateRecommendations = async (
     calculateSupplementScore(supplement, userData, finalConfig)
   );
 
-  // Filter and sort recommendations
+  // Check for contraindicated supplements (have a -10 contribution from contraindication)
+  const contraindicatedIds = new Set(
+    allRecommendations
+      .filter((r) => r.negativeFactors.some((f) => f.contribution === -10))
+      .map((r) => r.supplement.id)
+  );
+
+  // Filter recommendations:
+  // 1. Essential supplements are ALWAYS included (unless contraindicated)
+  // 2. Non-essential supplements need to meet the score threshold
   const filteredRecommendations = allRecommendations
-    .filter((r) => r.matchScore >= finalConfig.minScoreThreshold)
-    .sort((a, b) => b.matchScore - a.matchScore)
+    .filter((r) => {
+      // Always include essential supplements (unless hard-blocked by contraindication)
+      if (r.supplement.isEssential) {
+        return !contraindicatedIds.has(r.supplement.id);
+      }
+      // For non-essential: apply normal threshold
+      return r.matchScore >= finalConfig.minScoreThreshold;
+    })
+    .sort((a, b) => {
+      // Sort essential supplements first, then by score
+      if (a.supplement.isEssential && !b.supplement.isEssential) return -1;
+      if (!a.supplement.isEssential && b.supplement.isEssential) return 1;
+      return b.matchScore - a.matchScore;
+    })
     .slice(0, finalConfig.maxRecommendations);
 
   // Generate warnings
@@ -450,10 +471,31 @@ export const generateRecommendationsFromData = (
     calculateSupplementScore(supplement, userData, finalConfig)
   );
 
-  // Filter and sort
+  // Check for contraindicated supplements (have a -10 contribution from contraindication)
+  const contraindicatedIds = new Set(
+    allRecommendations
+      .filter((r) => r.negativeFactors.some((f) => f.contribution === -10))
+      .map((r) => r.supplement.id)
+  );
+
+  // Filter recommendations:
+  // 1. Essential supplements are ALWAYS included (unless contraindicated)
+  // 2. Non-essential supplements need to meet the score threshold
   const filteredRecommendations = allRecommendations
-    .filter((r) => r.matchScore >= finalConfig.minScoreThreshold)
-    .sort((a, b) => b.matchScore - a.matchScore)
+    .filter((r) => {
+      // Always include essential supplements (unless hard-blocked by contraindication)
+      if (r.supplement.isEssential) {
+        return !contraindicatedIds.has(r.supplement.id);
+      }
+      // For non-essential: apply normal threshold
+      return r.matchScore >= finalConfig.minScoreThreshold;
+    })
+    .sort((a, b) => {
+      // Sort essential supplements first, then by score
+      if (a.supplement.isEssential && !b.supplement.isEssential) return -1;
+      if (!a.supplement.isEssential && b.supplement.isEssential) return 1;
+      return b.matchScore - a.matchScore;
+    })
     .slice(0, finalConfig.maxRecommendations);
 
   // Generate warnings and suggestions (same as above)

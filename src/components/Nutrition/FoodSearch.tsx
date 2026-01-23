@@ -192,7 +192,7 @@ function FoodSearchItem({ food, onPress }: FoodSearchItemProps) {
 
 // Source Badge Component
 interface SourceBadgeProps {
-  source: 'openfoodfacts';
+  source: 'openfoodfacts' | 'curated';
   cached: boolean;
 }
 

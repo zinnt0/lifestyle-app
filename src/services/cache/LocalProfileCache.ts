@@ -56,6 +56,7 @@ export interface UserProfile {
   gi_issues: Array<'bloating' | 'irritable_bowel' | 'diarrhea' | 'constipation'> | null;
   heavy_sweating: boolean | null;
   high_salt_intake: boolean | null;
+  sun_exposure_hours: number | null; // Stunden Sonnenexposition pro Woche (0-20+)
   joint_issues: Array<'knee' | 'tendons' | 'shoulder' | 'back'> | null;
   lab_values: {
     hemoglobin?: number | null;
@@ -153,9 +154,9 @@ export class LocalProfileCache {
           has_gym_access, home_equipment,
           target_weight_kg, target_date,
           onboarding_completed, enable_daily_recovery_tracking,
-          supplement_onboarding_completed, gi_issues, heavy_sweating, high_salt_intake, joint_issues, lab_values,
+          supplement_onboarding_completed, gi_issues, heavy_sweating, high_salt_intake, sun_exposure_hours, joint_issues, lab_values,
           created_at, updated_at, cached_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           profile.id,
           profile.username,
@@ -183,6 +184,7 @@ export class LocalProfileCache {
           profile.gi_issues ? JSON.stringify(profile.gi_issues) : null,
           profile.heavy_sweating === null ? null : profile.heavy_sweating ? 1 : 0,
           profile.high_salt_intake === null ? null : profile.high_salt_intake ? 1 : 0,
+          profile.sun_exposure_hours,
           profile.joint_issues ? JSON.stringify(profile.joint_issues) : null,
           profile.lab_values ? JSON.stringify(profile.lab_values) : null,
           profile.created_at,
@@ -367,6 +369,7 @@ export class LocalProfileCache {
         gi_issues TEXT,
         heavy_sweating INTEGER,
         high_salt_intake INTEGER,
+        sun_exposure_hours REAL,
         joint_issues TEXT,
         lab_values TEXT,
 
@@ -406,6 +409,7 @@ export class LocalProfileCache {
         { name: 'gi_issues', definition: 'TEXT' },
         { name: 'heavy_sweating', definition: 'INTEGER' },
         { name: 'high_salt_intake', definition: 'INTEGER' },
+        { name: 'sun_exposure_hours', definition: 'REAL' },
         { name: 'joint_issues', definition: 'TEXT' },
         { name: 'lab_values', definition: 'TEXT' },
       ];
@@ -459,6 +463,7 @@ export class LocalProfileCache {
       gi_issues: row.gi_issues ? JSON.parse(row.gi_issues) : null,
       heavy_sweating: row.heavy_sweating === null ? null : row.heavy_sweating === 1,
       high_salt_intake: row.high_salt_intake === null ? null : row.high_salt_intake === 1,
+      sun_exposure_hours: row.sun_exposure_hours ?? null,
       joint_issues: row.joint_issues ? JSON.parse(row.joint_issues) : null,
       lab_values: row.lab_values ? JSON.parse(row.lab_values) : null,
       created_at: row.created_at,

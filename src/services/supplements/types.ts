@@ -204,6 +204,9 @@ export interface SupplementDefinition {
   substanceClass: SubstanceClass;         // Type of substance
   indicationBasis: IndicationBasis;       // How recommendation is determined
 
+  // Essential supplements are always shown in recommendations (e.g., Vitamin D, Magnesium)
+  isEssential?: boolean;
+
   // Conditions that make this supplement recommendable
   positiveConditions: RecommendationCondition[];
 

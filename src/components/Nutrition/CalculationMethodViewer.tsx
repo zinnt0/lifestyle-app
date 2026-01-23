@@ -325,7 +325,7 @@ export function CalculationMethodViewer({
         {/* Section 3: Goal Adjustment */}
         <AccordionSection
           title="Ziel-Anpassung"
-          icon="target"
+          icon="flag"
           iconColor={COLORS.success}
           defaultExpanded
         >

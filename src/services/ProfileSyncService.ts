@@ -140,6 +140,7 @@ export class ProfileSyncService {
         gi_issues: data.gi_issues || null,
         heavy_sweating: data.heavy_sweating ?? null,
         high_salt_intake: data.high_salt_intake ?? null,
+        sun_exposure_hours: data.sun_exposure_hours ?? null,
         joint_issues: data.joint_issues || null,
         lab_values: data.lab_values || null,
         created_at: data.created_at,
@@ -259,10 +260,18 @@ export class ProfileSyncService {
 
   /**
    * Force refresh profile from Supabase
+   * Also emits an 'updated' event to trigger dependent systems (e.g., supplement recommendations)
    */
   async refreshProfile(userId: string): Promise<UserProfile | null> {
     console.log(`${LOG_PREFIX} Force refreshing profile for user ${userId}`);
-    return await this.syncProfile(userId);
+    const profile = await this.syncProfile(userId);
+
+    // Emit event to trigger recommendation recalculation and other dependent systems
+    if (profile) {
+      profileEvents.emitProfileUpdated(userId, profile);
+    }
+
+    return profile;
   }
 }
 

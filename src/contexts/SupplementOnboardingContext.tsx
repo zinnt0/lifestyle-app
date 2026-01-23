@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
+import { profileEvents } from '../services/ProfileEventEmitter';
 
 /**
  * Supplement Onboarding Data Interface
@@ -188,6 +189,17 @@ export const SupplementOnboardingProvider: React.FC<SupplementOnboardingProvider
       if (updateError) {
         throw new Error(updateError.message);
       }
+
+      // Emit profile updated event to trigger recommendation recalculation
+      profileEvents.emitProfileUpdated(user.id, {
+        gi_issues: data.gi_issues,
+        heavy_sweating: data.heavy_sweating,
+        high_salt_intake: data.high_salt_intake,
+        sun_exposure_hours: data.sun_exposure_hours,
+        joint_issues: data.joint_issues,
+        lab_values: data.lab_values,
+        supplement_onboarding_completed: true,
+      });
 
       // Success - call onComplete callback
       onComplete?.();

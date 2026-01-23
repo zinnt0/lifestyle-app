@@ -166,12 +166,14 @@ export class FoodService {
    * Search foods across all layers with intelligent merging and relevance ranking
    *
    * Flow:
-   * 1. Search LOCAL cache
-   * 2. If <5 results: Search CLOUD cache
-   * 3. If <5 results: Search EXTERNAL API
-   * 4. Merge & deduplicate results
-   * 5. RANK by relevance (new!)
-   * 6. Cache new results
+   * 1. Search LOCAL cache (SQLite) - Highest priority, always shown first
+   * 2. Search CLOUD cache (Supabase) - Second priority, always shown after local
+   * 3. Search EXTERNAL API (OpenFoodFacts) - Always searched, shown last
+   * 4. Rank each layer separately, then combine in strict hierarchy
+   * 5. Return: Local > Cloud > External (filtered by name match)
+   * 6. Cache new results for future searches
+   *
+   * NOTE: No minimum result threshold - DB results always come first regardless of count
    */
   async searchFoods(query: string): Promise<SearchResult> {
     this.ensureInitialized();
@@ -189,67 +191,127 @@ export class FoodService {
     }
 
     try {
-      let allResults: FoodItem[] = [];
+      let localResults: FoodItem[] = [];
+      let cloudResults: FoodItem[] = [];
+      let externalResults: FoodItem[] = [];
       let primarySource: 'local' | 'cloud' | 'external' = 'local';
 
-      // LAYER 1: Local search
-      const localResults = await localFoodCache.searchFoodsByName(query, 50);
-      allResults = [...localResults];
+      // LAYER 1: Local search (SQLite) - Highest priority
+      const rawLocalResults = await localFoodCache.searchFoodsByName(query, 50);
+      // Mark results as from local cache
+      localResults = rawLocalResults.map((item) => ({
+        ...item,
+        cache_source: 'local' as const,
+      }));
       console.log(`${LOG_PREFIX} Local results: ${localResults.length}`);
 
-      // LAYER 2: Cloud search (if local results insufficient)
-      if (allResults.length < this.config.minSearchResults) {
+      // LAYER 2: Cloud search (Supabase) - Second priority
+      const rawCloudResults = await cloudFoodCache.searchFoods(query, 50);
+      // Mark results as from cloud, filter out duplicates from local
+      const localBarcodes = new Set(localResults.map((item) => item.barcode));
+      cloudResults = rawCloudResults
+        .filter((item) => !localBarcodes.has(item.barcode))
+        .map((item) => ({
+          ...item,
+          cache_source: 'cloud' as const,
+        }));
+      console.log(`${LOG_PREFIX} Cloud results (unique): ${cloudResults.length}`);
+
+      if (cloudResults.length > 0) {
         primarySource = 'cloud';
-        const cloudResults = await cloudFoodCache.searchFoods(query, 50);
-        console.log(`${LOG_PREFIX} Cloud results: ${cloudResults.length}`);
-
-        // Merge with local results (deduplicate by barcode)
-        allResults = this.mergeResults(allResults, cloudResults);
-
-        // Cache cloud results locally (fire and forget)
-        cloudResults.forEach((food) => {
-          localFoodCache.cacheFood(food).catch((error) => {
-            console.warn(`${LOG_PREFIX} Failed to cache locally:`, error);
-          });
-        });
       }
 
-      // LAYER 3: External API search (if still insufficient)
-      if (allResults.length < this.config.minSearchResults) {
+      // Cache cloud results locally (fire and forget)
+      rawCloudResults.forEach((food) => {
+        localFoodCache.cacheFood(food).catch((error) => {
+          console.warn(`${LOG_PREFIX} Failed to cache locally:`, error);
+        });
+      });
+
+      // Combined database results (local + cloud)
+      const databaseResults = [...localResults, ...cloudResults];
+
+      // LAYER 3: External API search - ALWAYS search to supplement DB results
+      // API results are shown AFTER all DB results, filtered by name match
+      // Wrapped in try-catch to prevent API failures from breaking the entire search
+      let apiResults: FoodItem[] = [];
+      try {
+        apiResults = await openFoodFactsAPI.searchProducts(query, 50);
+        console.log(`${LOG_PREFIX} External API results: ${apiResults.length}`);
+      } catch (apiError) {
+        console.warn(`${LOG_PREFIX} API search failed (non-critical):`, apiError);
+        // Continue with DB results only - don't fail the entire search
+      }
+
+      if (apiResults.length > 0 && databaseResults.length === 0) {
         primarySource = 'external';
-        const externalResults = await openFoodFactsAPI.searchProducts(query, 50);
-        console.log(`${LOG_PREFIX} External results: ${externalResults.length}`);
-
-        // Merge with existing results
-        allResults = this.mergeResults(allResults, externalResults);
-
-        // Cache external results in both layers (fire and forget)
-        externalResults.forEach((food) => {
-          Promise.all([
-            cloudFoodCache.cacheFood(food),
-            localFoodCache.cacheFood(food),
-          ]).catch((error) => {
-            console.warn(`${LOG_PREFIX} Failed to cache:`, error);
-          });
-        });
       }
 
-      // RANK RESULTS BY RELEVANCE
-      const rankedResults = foodSearchRanker.rankResults(allResults, query);
+      // Filter out API results that already exist in database results
+      const dbBarcodes = new Set(databaseResults.map((item) => item.barcode));
+      externalResults = apiResults
+        .filter((item) => !dbBarcodes.has(item.barcode))
+        .map((item) => ({
+          ...item,
+          cache_source: 'external' as const,
+        }));
+
+      // Cache external results in both layers (fire and forget)
+      // Only cache items that pass the name filter to avoid polluting cache
+      const filteredExternalForCache = externalResults.filter((item) => {
+        const normalizedQuery = query.trim().toLowerCase();
+        const normalizedName = item.name.toLowerCase();
+        const normalizedNameDe = item.name_de?.toLowerCase() || '';
+        return normalizedName.includes(normalizedQuery) || normalizedNameDe.includes(normalizedQuery);
+      });
+
+      filteredExternalForCache.forEach((food) => {
+        Promise.all([
+          cloudFoodCache.cacheFood(food),
+          localFoodCache.cacheFood(food),
+        ]).catch((error) => {
+          console.warn(`${LOG_PREFIX} Failed to cache:`, error);
+        });
+      });
+
+      // RANK each layer separately to maintain hierarchy
+      // Local results first (already highest priority)
+      const rankedLocalResults = foodSearchRanker.rankResults(localResults, query);
       console.log(
-        `${LOG_PREFIX} Ranked ${allResults.length} → ${rankedResults.length} relevant results`
+        `${LOG_PREFIX} Ranked Local: ${localResults.length} → ${rankedLocalResults.length} relevant`
       );
+
+      // Cloud results second
+      const rankedCloudResults = foodSearchRanker.rankResults(cloudResults, query);
+      console.log(
+        `${LOG_PREFIX} Ranked Cloud: ${cloudResults.length} → ${rankedCloudResults.length} relevant`
+      );
+
+      // External results last - filtered strictly by name match
+      const rankedExternalResults = foodSearchRanker.rankResults(externalResults, query);
+      console.log(
+        `${LOG_PREFIX} Ranked External: ${externalResults.length} → ${rankedExternalResults.length} relevant`
+      );
+
+      // COMBINE: Maintain strict hierarchy - Local > Cloud > External
+      // Within each layer, items are sorted by relevance score
+      const MAX_SEARCH_RESULTS = 50;
+      const combinedResults = [
+        ...rankedLocalResults,
+        ...rankedCloudResults,
+        ...rankedExternalResults,
+      ].slice(0, MAX_SEARCH_RESULTS);
 
       const elapsed = Date.now() - startTime;
       console.log(
-        `${LOG_PREFIX} Search complete: ${rankedResults.length} results (${elapsed}ms)`
+        `${LOG_PREFIX} Search complete: ${combinedResults.length} results (${rankedLocalResults.length} local + ${rankedCloudResults.length} cloud + ${rankedExternalResults.length} API) (${elapsed}ms)`
       );
 
       return {
-        items: rankedResults,
+        items: combinedResults,
         source: primarySource,
         query_time_ms: elapsed,
-        total_count: rankedResults.length,
+        total_count: combinedResults.length,
       };
     } catch (error) {
       const elapsed = Date.now() - startTime;
@@ -356,24 +418,6 @@ export class FoodService {
   // ========================================================================
   // PRIVATE METHODS
   // ========================================================================
-
-  /**
-   * Merge two arrays of FoodItems, deduplicating by barcode
-   * Keeps the first occurrence of each barcode
-   */
-  private mergeResults(existing: FoodItem[], newItems: FoodItem[]): FoodItem[] {
-    const barcodeSet = new Set(existing.map((item) => item.barcode));
-
-    const uniqueNewItems = newItems.filter((item) => {
-      if (barcodeSet.has(item.barcode)) {
-        return false;
-      }
-      barcodeSet.add(item.barcode);
-      return true;
-    });
-
-    return [...existing, ...uniqueNewItems];
-  }
 
   /**
    * Ensure service is initialized before operations

@@ -14,6 +14,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  FlatList,
+  TouchableOpacity,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -24,6 +27,9 @@ import type { MainStackParamList } from "../../navigation/types";
 import { Button } from "../../components/ui/Button";
 import { ProfileField } from "../../components/ui/ProfileField";
 import { Card } from "../../components/ui/Card";
+import { foodService } from "../../services/FoodService";
+import { localFoodCache } from "../../services/cache/LocalFoodCache";
+import type { FoodItem } from "../../types/nutrition";
 import {
   COLORS,
   SPACING,
@@ -48,6 +54,12 @@ export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
   const [userId, setUserId] = useState<string | null>(null);
 
+  // Debug: Food Cache Modal State
+  const [showCacheModal, setShowCacheModal] = useState(false);
+  const [cachedFoods, setCachedFoods] = useState<FoodItem[]>([]);
+  const [cacheLoading, setCacheLoading] = useState(false);
+  const [cacheSize, setCacheSize] = useState(0);
+
   // Get user ID from Supabase auth
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -67,6 +79,23 @@ export const ProfileScreen: React.FC = () => {
       }
     }, [userId, refreshProfile])
   );
+
+  // Debug: Load cached foods
+  const loadCachedFoods = async () => {
+    setCacheLoading(true);
+    try {
+      const foods = await localFoodCache.getTopFoods(50);
+      const size = await localFoodCache.getCacheSize();
+      setCachedFoods(foods);
+      setCacheSize(size);
+      setShowCacheModal(true);
+    } catch (error) {
+      console.error("Failed to load cached foods:", error);
+      Alert.alert("Fehler", "Cache konnte nicht geladen werden.");
+    } finally {
+      setCacheLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert("Abmelden", "Möchtest du dich wirklich abmelden?", [
@@ -407,6 +436,98 @@ export const ProfileScreen: React.FC = () => {
           Ausloggen
         </Button>
       </View>
+
+      {/* Debug: Food Cache Section */}
+      <View style={styles.debugContainer}>
+        <Text style={styles.debugTitle}>Debug</Text>
+        <View style={styles.debugButtonRow}>
+          <Button
+            variant="secondary"
+            size="small"
+            onPress={loadCachedFoods}
+            style={styles.debugButton}
+          >
+            {cacheLoading ? "Laden..." : "Cache anzeigen"}
+          </Button>
+          <Button
+            variant="secondary"
+            size="small"
+            onPress={async () => {
+              try {
+                await foodService.clearLocalCache();
+                setCachedFoods([]);
+                setCacheSize(0);
+                Alert.alert("Cache geleert", "Der lokale Food-Cache wurde erfolgreich geleert.");
+              } catch (error) {
+                Alert.alert("Fehler", "Cache konnte nicht geleert werden.");
+                console.error("Clear cache error:", error);
+              }
+            }}
+            style={styles.debugButton}
+          >
+            Cache leeren
+          </Button>
+        </View>
+      </View>
+
+      {/* Food Cache Debug Modal */}
+      <Modal
+        visible={showCacheModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCacheModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Lokaler Food-Cache</Text>
+            <Text style={styles.modalSubtitle}>{cacheSize} Einträge</Text>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowCacheModal(false)}
+            >
+              <Ionicons name="close" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={cachedFoods}
+            keyExtractor={(item) => item.barcode}
+            contentContainerStyle={styles.modalList}
+            renderItem={({ item, index }) => (
+              <View style={styles.cacheItem}>
+                <View style={styles.cacheItemHeader}>
+                  <Text style={styles.cacheItemRank}>#{index + 1}</Text>
+                  <Text style={styles.cacheItemName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                </View>
+                <View style={styles.cacheItemDetails}>
+                  {item.brand && (
+                    <Text style={styles.cacheItemBrand}>{item.brand}</Text>
+                  )}
+                  <Text style={styles.cacheItemBarcode}>{item.barcode}</Text>
+                </View>
+                <View style={styles.cacheItemStats}>
+                  <Text style={styles.cacheItemStat}>
+                    <Ionicons name="flame-outline" size={12} color={COLORS.textSecondary} />
+                    {" "}{item.calories ?? "?"} kcal
+                  </Text>
+                  <Text style={styles.cacheItemStat}>
+                    <Ionicons name="repeat-outline" size={12} color={COLORS.textSecondary} />
+                    {" "}{item.usage_count ?? 0}x verwendet
+                  </Text>
+                </View>
+              </View>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyCache}>
+                <Ionicons name="file-tray-outline" size={48} color={COLORS.textTertiary} />
+                <Text style={styles.emptyCacheText}>Cache ist leer</Text>
+              </View>
+            }
+          />
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -592,5 +713,125 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  debugContainer: {
+    marginBottom: SPACING.xxxl,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    opacity: 0.7,
+  },
+  debugTitle: {
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: TYPOGRAPHY.weights.medium,
+    color: COLORS.textTertiary,
+    marginBottom: SPACING.sm,
+    textAlign: "center",
+  },
+  debugButtonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: SPACING.sm,
+  },
+  debugButton: {
+    flex: 1,
+  },
+
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  modalHeader: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  modalTitle: {
+    fontSize: TYPOGRAPHY.sizes.xl,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    color: COLORS.text,
+  },
+  modalSubtitle: {
+    fontSize: TYPOGRAPHY.sizes.sm,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+  },
+  modalCloseButton: {
+    position: "absolute",
+    top: SPACING.xl,
+    right: SPACING.xl,
+    padding: SPACING.xs,
+  },
+  modalList: {
+    padding: SPACING.md,
+  },
+
+  // Cache Item Styles
+  cacheItem: {
+    backgroundColor: COLORS.surface,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    ...SHADOWS.sm,
+  },
+  cacheItemHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SPACING.xs,
+  },
+  cacheItemRank: {
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    color: COLORS.primary,
+    marginRight: SPACING.sm,
+    minWidth: 30,
+  },
+  cacheItemName: {
+    fontSize: TYPOGRAPHY.sizes.md,
+    fontWeight: TYPOGRAPHY.weights.semibold,
+    color: COLORS.text,
+    flex: 1,
+  },
+  cacheItemDetails: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SPACING.xs,
+    paddingLeft: 30 + SPACING.sm,
+  },
+  cacheItemBrand: {
+    fontSize: TYPOGRAPHY.sizes.sm,
+    color: COLORS.textSecondary,
+    marginRight: SPACING.md,
+  },
+  cacheItemBarcode: {
+    fontSize: TYPOGRAPHY.sizes.xs,
+    color: COLORS.textTertiary,
+    fontFamily: "monospace",
+  },
+  cacheItemStats: {
+    flexDirection: "row",
+    paddingLeft: 30 + SPACING.sm,
+    gap: SPACING.md,
+  },
+  cacheItemStat: {
+    fontSize: TYPOGRAPHY.sizes.xs,
+    color: COLORS.textSecondary,
+  },
+
+  // Empty State
+  emptyCache: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: SPACING.xxxl,
+  },
+  emptyCacheText: {
+    fontSize: TYPOGRAPHY.sizes.md,
+    color: COLORS.textTertiary,
+    marginTop: SPACING.md,
   },
 });

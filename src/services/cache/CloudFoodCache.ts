@@ -98,8 +98,10 @@ export class CloudFoodCache {
   }
 
   /**
-   * Search foods using full-text search (search_vector column)
-   * Falls back to ILIKE if full-text search not available
+   * Search foods using smart ranking function
+   * Only matches if query appears in product name (not brand)
+   * Prioritizes curated/verified items and exact name matches
+   * Falls back to ILIKE if function not available
    */
   async searchFoods(query: string, limit: number = 20): Promise<FoodItem[]> {
     if (!query || query.trim().length < 2) {
@@ -110,26 +112,23 @@ export class CloudFoodCache {
     try {
       console.log(`${LOG_PREFIX} Searching cloud: "${query}" (limit: ${limit})`);
 
-      // Try full-text search first
-      let { data, error } = await supabase
-        .from(TABLE_NAME)
-        .select('*')
-        .textSearch('search_vector', query.trim(), {
-          type: 'websearch',
-          config: 'german',
-        })
-        .order('usage_count', { ascending: false })
-        .limit(limit);
+      // Use smart ranking function that prioritizes curated items
+      let { data, error } = await supabase.rpc('search_foods_ranked', {
+        search_query: query.trim(),
+        max_results: limit,
+      });
 
-      // Fallback to ILIKE if full-text search fails or returns no results
+      // Fallback to ILIKE if function fails or returns no results
       if (error || !data || data.length === 0) {
         console.log(`${LOG_PREFIX} Falling back to ILIKE search`);
 
+        // Only search in product name fields (name, name_de) - NOT brand
+        // This ensures the search term appears in the actual food name
         const searchPattern = `%${query.trim()}%`;
         const result = await supabase
           .from(TABLE_NAME)
           .select('*')
-          .or(`name.ilike.${searchPattern},brand.ilike.${searchPattern}`)
+          .or(`name.ilike.${searchPattern},name_de.ilike.${searchPattern}`)
           .order('usage_count', { ascending: false })
           .limit(limit);
 
@@ -243,14 +242,10 @@ export class CloudFoodCache {
       });
 
       if (error) {
-        // Fallback to manual increment if RPC not available
-        await supabase
-          .from(TABLE_NAME)
-          .update({
-            usage_count: supabase.raw('usage_count + 1'),
-            last_used: new Date().toISOString(),
-          })
-          .eq('barcode', barcode);
+        // Fallback to manual SQL increment if RPC not available
+        await supabase.rpc('increment_food_usage_fallback', {
+          food_barcode: barcode,
+        });
       }
     } catch (error) {
       console.warn(`${LOG_PREFIX} Failed to increment usage count:`, error);
@@ -295,7 +290,7 @@ export class CloudFoodCache {
   private dbRowToFoodItem(row: any): FoodItem {
     return {
       barcode: row.barcode,
-      source: 'openfoodfacts',
+      source: row.source || 'openfoodfacts',
       name: row.name,
       name_de: row.name_de || undefined,
       brand: row.brand || undefined,
@@ -316,6 +311,8 @@ export class CloudFoodCache {
       usage_count: row.usage_count,
       last_used: row.last_used,
       cached_at: row.cached_at,
+      is_verified: row.is_verified || false,
+      relevance_score: row.relevance_score || undefined,
     };
   }
 }

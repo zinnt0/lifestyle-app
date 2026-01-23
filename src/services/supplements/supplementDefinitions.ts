@@ -28,6 +28,7 @@ const createSupplement = (
   targetAreas,
   substanceClass,
   indicationBasis,
+  isEssential: false,
   positiveConditions: [],
   negativeConditions: [],
   additionalQueries: [],
@@ -1219,6 +1220,7 @@ export const SUPPLEMENT_DEFINITIONS: SupplementDefinition[] = [
     'Mineral_Spurenelement',
     'Ernaehrung_Labor',
     {
+      isEssential: true, // Essentielles Basis-Supplement - Grossteil der Bevoelkerung unterversorgt
       positiveConditions: [
         {
           field: 'dailyAverages.sleep_hours',
@@ -1526,6 +1528,7 @@ export const SUPPLEMENT_DEFINITIONS: SupplementDefinition[] = [
     'Fettsaeuren_Oel',
     'Ernaehrung_Labor',
     {
+      isEssential: true, // Essentielles Basis-Supplement - die meisten essen zu wenig Fisch
       positiveConditions: [
         {
           field: 'profile.available_training_days',
@@ -1888,6 +1891,7 @@ export const SUPPLEMENT_DEFINITIONS: SupplementDefinition[] = [
     'Vitamin',
     'Ernaehrung_Labor',
     {
+      isEssential: true, // Essentielles Basis-Supplement - in Deutschland haeufig Mangel
       positiveConditions: [
         {
           field: 'profile.age',
@@ -1984,6 +1988,7 @@ export const SUPPLEMENT_DEFINITIONS: SupplementDefinition[] = [
     'Vitamin',
     'Ernaehrung_Labor',
     {
+      isEssential: true, // Essentielles Basis-Supplement - Immunsystem, Antioxidans
       positiveConditions: [
         {
           field: 'profile.available_training_days',
@@ -2080,6 +2085,7 @@ export const SUPPLEMENT_DEFINITIONS: SupplementDefinition[] = [
     'Mineral_Spurenelement',
     'Ernaehrung_Labor',
     {
+      isEssential: true, // Essentielles Basis-Supplement - Immunsystem, Regeneration
       positiveConditions: [
         {
           field: 'supplementProfile.heavy_sweating',

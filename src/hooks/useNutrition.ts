@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { FoodService } from '../services/FoodService';
+import { foodService } from '../services/FoodService';
 import type {
   FoodItem,
   DiaryEntry,
@@ -432,7 +432,7 @@ export function useFoodSearch(): FoodSearchResult {
     // Debounce search by 300ms
     debounceTimer.current = setTimeout(async () => {
       try {
-        const searchResults = await FoodService.searchFoods(query);
+        const searchResults = await foodService.searchFoods(query);
         setResults(searchResults.items);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Search failed'));
@@ -496,7 +496,7 @@ export function useBarcodeScanner(): BarcodeScannerResult {
       setError(null);
       setFood(null);
 
-      const foodItem = await FoodService.getFoodByBarcode(barcode);
+      const foodItem = await foodService.getFoodByBarcode(barcode);
       setFood(foodItem);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Barcode scan failed'));

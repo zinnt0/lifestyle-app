@@ -316,3 +316,86 @@ export function getTargetAreaDisplayName(targetArea: TargetArea): string {
 
   return displayNames[targetArea] || targetArea;
 }
+
+// ============================================================================
+// WEEKLY TRACKING OPERATIONS
+// ============================================================================
+
+export interface WeekDay {
+  date: string;
+  label: string;
+  isToday: boolean;
+}
+
+/**
+ * Get the current week's dates (Monday to Sunday)
+ */
+export function getCurrentWeekDates(): WeekDay[] {
+  const today = new Date();
+  const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+  // Calculate Monday of current week
+  const monday = new Date(today);
+  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+  monday.setDate(today.getDate() - daysFromMonday);
+
+  const weekDayLabels = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const todayString = getTodayDateString();
+
+  const weekDates: WeekDay[] = [];
+
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + i);
+    const dateString = date.toISOString().split('T')[0];
+
+    weekDates.push({
+      date: dateString,
+      label: weekDayLabels[i],
+      isToday: dateString === todayString,
+    });
+  }
+
+  return weekDates;
+}
+
+/**
+ * Check if all supplements were taken on a specific date
+ */
+export async function wasAllSupplementsTakenOnDate(
+  userId: string,
+  date: string
+): Promise<boolean> {
+  const supplements = await getUserStack(userId);
+
+  // If no supplements in stack, return false
+  if (supplements.length === 0) return false;
+
+  const dateRecords = await getDailyTracking(userId, date);
+
+  // Check if all supplements in the current stack were taken on that date
+  for (const supplement of supplements) {
+    const record = dateRecords.find(r => r.supplementId === supplement.supplementId);
+    if (!record || !record.taken) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Get weekly completion status for all days
+ */
+export async function getWeeklyCompletionStatus(
+  userId: string
+): Promise<Record<string, boolean>> {
+  const weekDates = getCurrentWeekDates();
+  const completionStatus: Record<string, boolean> = {};
+
+  for (const day of weekDates) {
+    completionStatus[day.date] = await wasAllSupplementsTakenOnDate(userId, day.date);
+  }
+
+  return completionStatus;
+}

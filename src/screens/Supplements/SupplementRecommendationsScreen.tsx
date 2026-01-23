@@ -106,24 +106,33 @@ export function SupplementRecommendationsScreen({
     loadUserStack();
   }, [loadUserStack, refreshKey]);
 
-  // Filter recommendations by score threshold (keep already added ones visible)
-  const filteredRecommendations = recommendations
-    .filter((rec) => rec.matchScore >= MIN_SCORE_THRESHOLD)
-    .filter((rec) => {
-      if (selectedFilter === "all") return true;
-      return rec.supplement.targetAreas.includes(selectedFilter);
-    });
+  // Filter recommendations by target area
+  // Note: Score filtering is already done in the recommendation engine
+  // Essential supplements are always included regardless of score
+  const filteredRecommendations = recommendations.filter((rec) => {
+    if (selectedFilter === "all") return true;
+    return rec.supplement.targetAreas.includes(selectedFilter);
+  });
 
-  // Group by score range
+  // Separate essential supplements from regular ones
+  const essentialSupplements = filteredRecommendations.filter(
+    (r) => r.supplement.isEssential
+  );
+  const regularSupplements = filteredRecommendations.filter(
+    (r) => !r.supplement.isEssential
+  );
+
+  // Group regular supplements by score range
   const groupedRecommendations = {
-    excellent: filteredRecommendations.filter((r) => r.matchScore >= 90),
-    good: filteredRecommendations.filter(
+    essential: essentialSupplements, // Always show essential supplements first
+    excellent: regularSupplements.filter((r) => r.matchScore >= 90),
+    good: regularSupplements.filter(
       (r) => r.matchScore >= 80 && r.matchScore < 90
     ),
-    moderate: filteredRecommendations.filter(
+    moderate: regularSupplements.filter(
       (r) => r.matchScore >= 70 && r.matchScore < 80
     ),
-    fair: filteredRecommendations.filter(
+    fair: regularSupplements.filter(
       (r) => r.matchScore >= 60 && r.matchScore < 70
     ),
   };
@@ -235,6 +244,17 @@ export function SupplementRecommendationsScreen({
           </View>
         ) : (
           <>
+            {groupedRecommendations.essential.length > 0 && (
+              <RecommendationGroup
+                title="Basis-Supplements"
+                color={theme.colors.primary}
+                recommendations={groupedRecommendations.essential}
+                addedIds={userStackIds}
+                onAdd={handleAddToStack}
+                onShowDetails={handleShowDetails}
+              />
+            )}
+
             {groupedRecommendations.excellent.length > 0 && (
               <RecommendationGroup
                 title="Sehr empfohlen (90-100%)"
@@ -363,6 +383,11 @@ function RecommendationCard({
   onAdd,
   onShowDetails,
 }: RecommendationCardProps) {
+  // Hide percentage for Basis-Supplements (Basis_Mikros or essential supplements like Omega-3)
+  const isBasisSupplement =
+    recommendation.supplement.targetAreas.includes("Basis_Mikros") ||
+    recommendation.supplement.id === "omega-3";
+
   return (
     <Pressable
       style={[styles.card, isAdded && styles.cardAdded]}
@@ -371,11 +396,13 @@ function RecommendationCard({
       <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>{recommendation.supplement.name}</Text>
-          <View style={[styles.scoreBadge, { backgroundColor: color }]}>
-            <Text style={styles.scoreText}>
-              {Math.round(recommendation.matchScore)}%
-            </Text>
-          </View>
+          {!isBasisSupplement && (
+            <View style={[styles.scoreBadge, { backgroundColor: color }]}>
+              <Text style={styles.scoreText}>
+                {Math.round(recommendation.matchScore)}%
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Target Areas */}
