@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback, forwardRef, useImperativeHandle, memo } from "react";
 import {
   StyleSheet,
   TextInput,
@@ -53,7 +53,7 @@ interface InputProps extends Omit<TextInputProps, "style"> {
  * />
  * ```
  */
-export const Input: React.FC<InputProps> = ({
+const InputComponent = forwardRef<TextInput, InputProps>(({
   value,
   onChangeText,
   placeholder,
@@ -69,12 +69,26 @@ export const Input: React.FC<InputProps> = ({
   multiline = false,
   style,
   ...rest
-}) => {
+}, ref) => {
   const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<TextInput>(null);
 
-  const handleClear = () => {
+  // Expose the input ref to parent components
+  useImperativeHandle(ref, () => inputRef.current as TextInput);
+
+  const handleClear = useCallback(() => {
     onChangeText("");
-  };
+    // Refocus the input after clearing
+    inputRef.current?.focus();
+  }, [onChangeText]);
+
+  const handleFocus = useCallback(() => {
+    setIsFocused(true);
+  }, []);
+
+  const handleBlur = useCallback(() => {
+    setIsFocused(false);
+  }, []);
 
   const showClear = showClearButton && value && value.length > 0 && !disabled;
 
@@ -93,6 +107,7 @@ export const Input: React.FC<InputProps> = ({
         {leftIcon && <View style={styles.leftIconContainer}>{leftIcon}</View>}
 
         <TextInput
+          ref={inputRef}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -102,8 +117,9 @@ export const Input: React.FC<InputProps> = ({
           autoCapitalize={autoCapitalize}
           editable={!disabled}
           multiline={multiline}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          blurOnSubmit={false}
           style={[
             styles.input,
             leftIcon ? styles.inputWithLeftIcon : undefined,
@@ -136,7 +152,10 @@ export const Input: React.FC<InputProps> = ({
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
-};
+});
+
+// Wrap with memo to prevent unnecessary re-renders from parent components
+export const Input = memo(InputComponent);
 
 const styles = StyleSheet.create({
   container: {
@@ -152,13 +171,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: COLORS.borderLight,
     borderRadius: BORDER_RADIUS.lg,
   },
   inputContainerFocused: {
     borderColor: COLORS.primary,
-    borderWidth: 2,
     ...SHADOWS.sm,
   },
   inputContainerError: {

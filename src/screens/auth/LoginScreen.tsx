@@ -15,9 +15,9 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  TextInput,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { signIn } from "../../services/auth.service";
 import { validateEmail, validatePassword } from "../../utils/validation";
@@ -126,11 +126,12 @@ export const LoginScreen: React.FC = () => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.content}>
@@ -142,30 +143,35 @@ export const LoginScreen: React.FC = () => {
 
           {/* Form */}
           <View style={styles.form}>
-            <Input
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="deine@email.de"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              textContentType="emailAddress"
-              editable={!loading}
-            />
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="deine@email.de"
+                placeholderTextColor="#8E8E93"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+                style={styles.textInput}
+              />
+            </View>
 
-            <Input
-              label="Passwort"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="password"
-              textContentType="password"
-              editable={!loading}
-              style={styles.passwordInput}
-            />
+            <View style={[styles.inputWrapper, styles.passwordInput]}>
+              <Text style={styles.inputLabel}>Passwort</Text>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor="#8E8E93"
+                secureTextEntry={true}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+                style={styles.textInput}
+              />
+            </View>
 
             {/* Error Message */}
             {error && (
@@ -242,8 +248,27 @@ const styles = StyleSheet.create({
   form: {
     marginBottom: 32,
   },
+  inputWrapper: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#000000",
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: "#F5F5F5",
+    borderWidth: 2,
+    borderColor: "#E0E0E0",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: "#000000",
+  },
   passwordInput: {
-    marginTop: 16,
+    marginTop: 0,
   },
   errorContainer: {
     backgroundColor: "#FFEBEE",

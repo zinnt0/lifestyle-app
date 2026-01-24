@@ -243,9 +243,27 @@ export const AppNavigator: React.FC = () => {
   // Listen to auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChange(async (authUser) => {
-      setUser(authUser);
-      // Re-check onboarding when auth state changes
-      await checkAuthAndOnboarding();
+      // Only update state if user actually changed (login/logout)
+      setUser((prevUser) => {
+        const prevId = prevUser?.id ?? null;
+        const newId = authUser?.id ?? null;
+
+        // If user ID hasn't changed, keep the old reference to prevent re-render
+        if (prevId === newId) {
+          return prevUser;
+        }
+
+        // User actually logged in or out - check onboarding status
+        if (authUser) {
+          isOnboardingCompleted(authUser.id).then((completed) => {
+            setHasCompletedOnboarding(completed);
+          });
+        } else {
+          setHasCompletedOnboarding(false);
+        }
+
+        return authUser;
+      });
     });
 
     return () => {
