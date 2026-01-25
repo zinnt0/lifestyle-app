@@ -142,6 +142,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
   const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
   const [loadingExercises, setLoadingExercises] = useState(false);
   const [equipmentFilter, setEquipmentFilter] = useState<string>('all');
+  const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
 
   // Calculate progress
   const calculateProgress = (): number => {
@@ -551,10 +552,15 @@ export const CustomPlanFlowScreen: React.FC = () => {
     const isSelected = exercises.some((e) => e.exercise.id === exercise.id);
 
     if (isSelected) {
+      // Deselect: remove exercise and collapse
       dayConfig.selectedExercisesByGroup[currentMuscleGroupTab] = exercises.filter(
         (e) => e.exercise.id !== exercise.id
       );
+      if (expandedExerciseId === exercise.id) {
+        setExpandedExerciseId(null);
+      }
     } else {
+      // Select: add exercise and expand it
       dayConfig.selectedExercisesByGroup[currentMuscleGroupTab] = [
         ...exercises,
         {
@@ -564,9 +570,15 @@ export const CustomPlanFlowScreen: React.FC = () => {
           repsMax: DEFAULT_REPS_MAX,
         },
       ];
+      setExpandedExerciseId(exercise.id);
     }
 
     setPlanState({ ...planState, dayConfigurations: updatedDayConfigs });
+  };
+
+  const handleToggleAccordion = (exerciseId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExpandedExerciseId(expandedExerciseId === exerciseId ? null : exerciseId);
   };
 
   const updateExerciseConfig = (
@@ -759,158 +771,175 @@ export const CustomPlanFlowScreen: React.FC = () => {
               {loadingExercises ? (
                 <ActivityIndicator size="large" color={COLORS.primary} />
               ) : (
-                <>
-                  <View style={styles.exercisesList}>
-                    {getFilteredExercises().map((exercise) => {
-                      const isSelected = currentGroupExercises.some(
-                        (e) => e.exercise.id === exercise.id
-                      );
+                <View style={styles.exercisesList}>
+                  {getFilteredExercises().map((exercise) => {
+                    const selectedExercise = currentGroupExercises.find(
+                      (e) => e.exercise.id === exercise.id
+                    );
+                    const isSelected = !!selectedExercise;
+                    const isExpanded = expandedExerciseId === exercise.id && isSelected;
 
-                      return (
-                        <Card
-                          key={exercise.id}
-                          onPress={() => handleToggleExercise(exercise)}
-                          padding="medium"
-                          elevation={isSelected ? "large" : "small"}
-                          style={[
-                            styles.exerciseCard,
-                            isSelected && styles.exerciseCardSelected,
-                          ]}
+                    return (
+                      <Card
+                        key={exercise.id}
+                        padding="medium"
+                        elevation={isSelected ? "large" : "small"}
+                        style={[
+                          styles.exerciseCard,
+                          isSelected && styles.exerciseCardSelected,
+                        ]}
+                      >
+                        {/* Exercise Header - always visible */}
+                        <TouchableOpacity
+                          onPress={() => {
+                            if (isSelected) {
+                              handleToggleAccordion(exercise.id);
+                            } else {
+                              handleToggleExercise(exercise);
+                            }
+                          }}
+                          style={styles.exerciseCardContent}
+                          activeOpacity={0.7}
                         >
-                          <View style={styles.exerciseCardContent}>
-                            <View style={styles.exerciseInfo}>
-                              <Text style={styles.exerciseName}>{exercise.name_de}</Text>
-                              <Text style={styles.exerciseEquipment}>
-                                {(exercise.equipment_required || []).join(", ")}
+                          <View style={styles.exerciseInfo}>
+                            <Text style={styles.exerciseName}>{exercise.name_de}</Text>
+                            <Text style={styles.exerciseEquipment}>
+                              {(exercise.equipment_required || []).join(", ")}
+                            </Text>
+                            {isSelected && selectedExercise && (
+                              <Text style={styles.exerciseConfigSummary}>
+                                {selectedExercise.sets} Sätze × {selectedExercise.repsMin}-{selectedExercise.repsMax} Wdh
                               </Text>
-                            </View>
+                            )}
+                          </View>
+                          <View style={styles.exerciseActions}>
                             {isSelected && (
-                              <View style={styles.smallCheckmark}>
-                                <Text style={styles.checkmarkText}>✓</Text>
+                              <TouchableOpacity
+                                onPress={() => handleToggleExercise(exercise)}
+                                style={styles.removeButton}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              >
+                                <Text style={styles.removeButtonText}>×</Text>
+                              </TouchableOpacity>
+                            )}
+                            {isSelected ? (
+                              <Text style={styles.accordionArrow}>
+                                {isExpanded ? "▲" : "▼"}
+                              </Text>
+                            ) : (
+                              <View style={styles.addButton}>
+                                <Text style={styles.addButtonText}>+</Text>
                               </View>
                             )}
                           </View>
-                        </Card>
-                      );
-                    })}
-                  </View>
+                        </TouchableOpacity>
 
-                  {/* Configure Sets & Reps */}
-                  {currentGroupExercises.length > 0 && (
-                    <View style={styles.sectionContainer}>
-                      <Text style={styles.sectionTitle}>Sets & Wiederholungen</Text>
-                      {currentGroupExercises.map((selectedEx) => (
-                        <Card
-                          key={selectedEx.exercise.id}
-                          padding="medium"
-                          style={styles.configCard}
-                        >
-                          <Text style={styles.configExerciseName}>
-                            {selectedEx.exercise.name_de}
-                          </Text>
-
-                          <View style={styles.configInputs}>
-                            {/* Sets */}
-                            <View style={styles.configInputGroup}>
-                              <Text style={styles.configLabel}>Sätze</Text>
-                              <View style={styles.numberInput}>
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    updateExerciseConfig(
-                                      selectedEx.exercise.id,
-                                      "sets",
-                                      Math.max(1, selectedEx.sets - 1)
-                                    )
-                                  }
-                                  style={styles.numberButton}
-                                >
-                                  <Text style={styles.numberButtonText}>-</Text>
-                                </TouchableOpacity>
-                                <Text style={styles.numberValue}>{selectedEx.sets}</Text>
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    updateExerciseConfig(
-                                      selectedEx.exercise.id,
-                                      "sets",
-                                      Math.min(10, selectedEx.sets + 1)
-                                    )
-                                  }
-                                  style={styles.numberButton}
-                                >
-                                  <Text style={styles.numberButtonText}>+</Text>
-                                </TouchableOpacity>
+                        {/* Accordion Content - Sets & Reps Configuration */}
+                        {isExpanded && selectedExercise && (
+                          <View style={styles.accordionContent}>
+                            <View style={styles.configInputs}>
+                              {/* Sets */}
+                              <View style={styles.configInputGroup}>
+                                <Text style={styles.configLabel}>Sätze</Text>
+                                <View style={styles.numberInput}>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      updateExerciseConfig(
+                                        selectedExercise.exercise.id,
+                                        "sets",
+                                        Math.max(1, selectedExercise.sets - 1)
+                                      )
+                                    }
+                                    style={styles.numberButton}
+                                  >
+                                    <Text style={styles.numberButtonText}>-</Text>
+                                  </TouchableOpacity>
+                                  <Text style={styles.numberValue}>{selectedExercise.sets}</Text>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      updateExerciseConfig(
+                                        selectedExercise.exercise.id,
+                                        "sets",
+                                        Math.min(10, selectedExercise.sets + 1)
+                                      )
+                                    }
+                                    style={styles.numberButton}
+                                  >
+                                    <Text style={styles.numberButtonText}>+</Text>
+                                  </TouchableOpacity>
+                                </View>
                               </View>
-                            </View>
 
-                            {/* Reps Min */}
-                            <View style={styles.configInputGroup}>
-                              <Text style={styles.configLabel}>Wdh Min</Text>
-                              <View style={styles.numberInput}>
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    updateExerciseConfig(
-                                      selectedEx.exercise.id,
-                                      "repsMin",
-                                      Math.max(1, selectedEx.repsMin - 1)
-                                    )
-                                  }
-                                  style={styles.numberButton}
-                                >
-                                  <Text style={styles.numberButtonText}>-</Text>
-                                </TouchableOpacity>
-                                <Text style={styles.numberValue}>{selectedEx.repsMin}</Text>
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    updateExerciseConfig(
-                                      selectedEx.exercise.id,
-                                      "repsMin",
-                                      Math.min(selectedEx.repsMax, selectedEx.repsMin + 1)
-                                    )
-                                  }
-                                  style={styles.numberButton}
-                                >
-                                  <Text style={styles.numberButtonText}>+</Text>
-                                </TouchableOpacity>
+                              {/* Reps Min */}
+                              <View style={styles.configInputGroup}>
+                                <Text style={styles.configLabel}>Wdh Min</Text>
+                                <View style={styles.numberInput}>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      updateExerciseConfig(
+                                        selectedExercise.exercise.id,
+                                        "repsMin",
+                                        Math.max(1, selectedExercise.repsMin - 1)
+                                      )
+                                    }
+                                    style={styles.numberButton}
+                                  >
+                                    <Text style={styles.numberButtonText}>-</Text>
+                                  </TouchableOpacity>
+                                  <Text style={styles.numberValue}>{selectedExercise.repsMin}</Text>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      updateExerciseConfig(
+                                        selectedExercise.exercise.id,
+                                        "repsMin",
+                                        Math.min(selectedExercise.repsMax, selectedExercise.repsMin + 1)
+                                      )
+                                    }
+                                    style={styles.numberButton}
+                                  >
+                                    <Text style={styles.numberButtonText}>+</Text>
+                                  </TouchableOpacity>
+                                </View>
                               </View>
-                            </View>
 
-                            {/* Reps Max */}
-                            <View style={styles.configInputGroup}>
-                              <Text style={styles.configLabel}>Wdh Max</Text>
-                              <View style={styles.numberInput}>
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    updateExerciseConfig(
-                                      selectedEx.exercise.id,
-                                      "repsMax",
-                                      Math.max(selectedEx.repsMin, selectedEx.repsMax - 1)
-                                    )
-                                  }
-                                  style={styles.numberButton}
-                                >
-                                  <Text style={styles.numberButtonText}>-</Text>
-                                </TouchableOpacity>
-                                <Text style={styles.numberValue}>{selectedEx.repsMax}</Text>
-                                <TouchableOpacity
-                                  onPress={() =>
-                                    updateExerciseConfig(
-                                      selectedEx.exercise.id,
-                                      "repsMax",
-                                      Math.min(50, selectedEx.repsMax + 1)
-                                    )
-                                  }
-                                  style={styles.numberButton}
-                                >
-                                  <Text style={styles.numberButtonText}>+</Text>
-                                </TouchableOpacity>
+                              {/* Reps Max */}
+                              <View style={styles.configInputGroup}>
+                                <Text style={styles.configLabel}>Wdh Max</Text>
+                                <View style={styles.numberInput}>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      updateExerciseConfig(
+                                        selectedExercise.exercise.id,
+                                        "repsMax",
+                                        Math.max(selectedExercise.repsMin, selectedExercise.repsMax - 1)
+                                      )
+                                    }
+                                    style={styles.numberButton}
+                                  >
+                                    <Text style={styles.numberButtonText}>-</Text>
+                                  </TouchableOpacity>
+                                  <Text style={styles.numberValue}>{selectedExercise.repsMax}</Text>
+                                  <TouchableOpacity
+                                    onPress={() =>
+                                      updateExerciseConfig(
+                                        selectedExercise.exercise.id,
+                                        "repsMax",
+                                        Math.min(50, selectedExercise.repsMax + 1)
+                                      )
+                                    }
+                                    style={styles.numberButton}
+                                  >
+                                    <Text style={styles.numberButtonText}>+</Text>
+                                  </TouchableOpacity>
+                                </View>
                               </View>
                             </View>
                           </View>
-                        </Card>
-                      ))}
-                    </View>
-                  )}
-                </>
+                        )}
+                      </Card>
+                    );
+                  })}
+                </View>
               )}
             </View>
           )}
@@ -1568,6 +1597,56 @@ const styles = StyleSheet.create({
   exerciseEquipment: {
     fontSize: 12,
     color: COLORS.textSecondary,
+  },
+  exerciseConfigSummary: {
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  exerciseActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  removeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FF6B6B",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  removeButtonText: {
+    color: COLORS.white,
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 22,
+  },
+  addButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addButtonText: {
+    color: COLORS.white,
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 22,
+  },
+  accordionArrow: {
+    fontSize: 12,
+    color: COLORS.primary,
+    marginLeft: 4,
+  },
+  accordionContent: {
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
   smallCheckmark: {
     width: 24,
