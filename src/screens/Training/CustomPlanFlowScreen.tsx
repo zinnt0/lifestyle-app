@@ -21,6 +21,7 @@ import {
   TextInput,
   Dimensions,
   FlatList,
+  Image,
 } from "react-native";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -789,7 +790,31 @@ export const CustomPlanFlowScreen: React.FC = () => {
                           isSelected && styles.exerciseCardSelected,
                         ]}
                       >
-                        {/* Exercise Header - always visible */}
+                        {/* Expanded: Large image on top */}
+                        {isExpanded && exercise.image_start_url && (
+                          <TouchableOpacity
+                            onPress={() => handleToggleAccordion(exercise.id)}
+                            activeOpacity={0.9}
+                          >
+                            <Image
+                              source={{ uri: exercise.image_start_url }}
+                              style={styles.exerciseImageExpanded}
+                              resizeMode="cover"
+                            />
+                          </TouchableOpacity>
+                        )}
+                        {isExpanded && !exercise.image_start_url && (
+                          <TouchableOpacity
+                            onPress={() => handleToggleAccordion(exercise.id)}
+                            activeOpacity={0.9}
+                          >
+                            <View style={styles.exerciseImageExpandedPlaceholder}>
+                              <Text style={styles.exerciseImageExpandedPlaceholderText}>🏋️</Text>
+                            </View>
+                          </TouchableOpacity>
+                        )}
+
+                        {/* Exercise Header */}
                         <TouchableOpacity
                           onPress={() => {
                             if (isSelected) {
@@ -801,12 +826,28 @@ export const CustomPlanFlowScreen: React.FC = () => {
                           style={styles.exerciseCardContent}
                           activeOpacity={0.7}
                         >
+                          {/* Small image only when collapsed */}
+                          {!isExpanded && (
+                            exercise.image_start_url ? (
+                              <Image
+                                source={{ uri: exercise.image_start_url }}
+                                style={styles.exerciseImage}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View style={styles.exerciseImagePlaceholder}>
+                                <Text style={styles.exerciseImagePlaceholderText}>🏋️</Text>
+                              </View>
+                            )
+                          )}
                           <View style={styles.exerciseInfo}>
-                            <Text style={styles.exerciseName}>{exercise.name_de}</Text>
+                            <Text style={[styles.exerciseName, isExpanded && styles.exerciseNameExpanded]}>
+                              {exercise.name_de}
+                            </Text>
                             <Text style={styles.exerciseEquipment}>
                               {(exercise.equipment_required || []).join(", ")}
                             </Text>
-                            {isSelected && selectedExercise && (
+                            {isSelected && selectedExercise && !isExpanded && (
                               <Text style={styles.exerciseConfigSummary}>
                                 {selectedExercise.sets} Sätze × {selectedExercise.repsMin}-{selectedExercise.repsMax} Wdh
                               </Text>
@@ -1585,6 +1626,44 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  exerciseImage: {
+    width: 80,
+    height: 60,
+    borderRadius: 8,
+    marginRight: SPACING.md,
+    backgroundColor: "#F0F0F0",
+  },
+  exerciseImagePlaceholder: {
+    width: 80,
+    height: 60,
+    borderRadius: 8,
+    marginRight: SPACING.md,
+    backgroundColor: "#F0F0F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  exerciseImagePlaceholderText: {
+    fontSize: 24,
+  },
+  exerciseImageExpanded: {
+    width: "100%",
+    height: 160,
+    borderRadius: 10,
+    marginBottom: SPACING.md,
+    backgroundColor: "#F0F0F0",
+  },
+  exerciseImageExpandedPlaceholder: {
+    width: "100%",
+    height: 160,
+    borderRadius: 10,
+    marginBottom: SPACING.md,
+    backgroundColor: "#F0F0F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  exerciseImageExpandedPlaceholderText: {
+    fontSize: 48,
+  },
   exerciseInfo: {
     flex: 1,
   },
@@ -1593,6 +1672,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: COLORS.text,
     marginBottom: 4,
+  },
+  exerciseNameExpanded: {
+    fontSize: 18,
+    fontWeight: "700",
   },
   exerciseEquipment: {
     fontSize: 12,

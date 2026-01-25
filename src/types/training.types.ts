@@ -88,6 +88,7 @@ export interface Exercise {
   instruction?: string;
   instruction_de?: string;
   is_active?: boolean;
+  image_start_url?: string;
 }
 
 // ============================================================================
