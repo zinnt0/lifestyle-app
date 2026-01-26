@@ -21,8 +21,8 @@ import {
   TextInput,
   Dimensions,
   FlatList,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useTrainingNavigation } from "@/hooks/useTrainingNavigation";
@@ -144,6 +144,7 @@ export const CustomPlanFlowScreen: React.FC = () => {
   const [loadingExercises, setLoadingExercises] = useState(false);
   const [equipmentFilter, setEquipmentFilter] = useState<string>('all');
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState<boolean>(false);
 
   // Calculate progress
   const calculateProgress = (): number => {
@@ -795,11 +796,22 @@ export const CustomPlanFlowScreen: React.FC = () => {
                           <TouchableOpacity
                             onPress={() => handleToggleAccordion(exercise.id)}
                             activeOpacity={0.9}
+                            style={styles.exerciseImageExpandedContainer}
                           >
+                            {imageLoading && (
+                              <View style={styles.exerciseImageLoadingOverlay}>
+                                <ActivityIndicator size="large" color={COLORS.primary} />
+                              </View>
+                            )}
                             <Image
                               source={{ uri: exercise.image_start_url }}
                               style={styles.exerciseImageExpanded}
-                              resizeMode="cover"
+                              contentFit="cover"
+                              cachePolicy="memory-disk"
+                              transition={200}
+                              onLoadStart={() => setImageLoading(true)}
+                              onLoad={() => setImageLoading(false)}
+                              onError={() => setImageLoading(false)}
                             />
                           </TouchableOpacity>
                         )}
@@ -832,7 +844,9 @@ export const CustomPlanFlowScreen: React.FC = () => {
                               <Image
                                 source={{ uri: exercise.image_start_url }}
                                 style={styles.exerciseImage}
-                                resizeMode="cover"
+                                contentFit="cover"
+                                cachePolicy="memory-disk"
+                                transition={150}
                               />
                             ) : (
                               <View style={styles.exerciseImagePlaceholder}>
@@ -1645,16 +1659,30 @@ const styles = StyleSheet.create({
   exerciseImagePlaceholderText: {
     fontSize: 24,
   },
-  exerciseImageExpanded: {
+  exerciseImageExpandedContainer: {
     width: "100%",
-    height: 160,
+    aspectRatio: 4 / 3,
     borderRadius: 10,
     marginBottom: SPACING.md,
     backgroundColor: "#F0F0F0",
+    overflow: "hidden",
+  },
+  exerciseImageExpanded: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 10,
+  },
+  exerciseImageLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#F0F0F0",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+    borderRadius: 10,
   },
   exerciseImageExpandedPlaceholder: {
     width: "100%",
-    height: 160,
+    aspectRatio: 4 / 3,
     borderRadius: 10,
     marginBottom: SPACING.md,
     backgroundColor: "#F0F0F0",
