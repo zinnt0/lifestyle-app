@@ -35,9 +35,9 @@ export function FoodDetailScreen({ userId }: { userId: string }) {
   const route = useRoute<FoodDetailRouteProp>();
   const { food, mealType } = route.params;
 
-  const [servingSize, setServingSize] = useState(
-    food.serving_size?.toString() || "100"
-  );
+  const initialServing = Number(food.serving_size) || 100;
+  const [servingSize, setServingSize] = useState(initialServing.toString());
+  const [baseServing, setBaseServing] = useState<number>(initialServing);
   const [saving, setSaving] = useState(false);
 
   // Calculate nutrition based on serving size
@@ -145,9 +145,9 @@ export function FoodDetailScreen({ userId }: { userId: string }) {
             <TouchableOpacity
               style={styles.portionButton}
               onPress={() => {
-                const current = parseFloat(servingSize) || 100;
-                const baseAmount = food.serving_size || 100;
-                const newValue = Math.max(baseAmount, current - baseAmount);
+                const current = parseFloat(servingSize) || baseServing;
+                // Subtrahiere den Basiswert, aber mindestens den Basiswert behalten
+                const newValue = Math.max(baseServing, current - baseServing);
                 setServingSize(newValue.toString());
               }}
             >
@@ -157,7 +157,13 @@ export function FoodDetailScreen({ userId }: { userId: string }) {
               <TextInput
                 style={styles.servingSizeInput}
                 value={servingSize}
-                onChangeText={setServingSize}
+                onChangeText={(text) => {
+                  setServingSize(text);
+                  const newBase = parseFloat(text);
+                  if (newBase > 0) {
+                    setBaseServing(newBase);
+                  }
+                }}
                 keyboardType="numeric"
                 placeholder="100"
               />
@@ -166,9 +172,9 @@ export function FoodDetailScreen({ userId }: { userId: string }) {
             <TouchableOpacity
               style={styles.portionButton}
               onPress={() => {
-                const current = parseFloat(servingSize) || 100;
-                const baseAmount = food.serving_size || 100;
-                setServingSize((current + baseAmount).toString());
+                const current = parseFloat(servingSize) || baseServing;
+                // Addiere den Basiswert
+                setServingSize((current + baseServing).toString());
               }}
             >
               <Ionicons name="add" size={28} color={COLORS.primary} />
