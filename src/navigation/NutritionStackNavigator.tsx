@@ -8,19 +8,27 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { NutritionDashboardScreen } from "../screens/Nutrition/NutritionDashboardScreen";
 import { FoodSearchScreen } from "../screens/Nutrition/FoodSearchScreen";
 import { BarcodeScannerScreen } from "../screens/Nutrition/BarcodeScannerScreen";
+import { NutritionLabelScannerScreen } from "../screens/Nutrition/NutritionLabelScannerScreen";
 import { FoodDetailScreen } from "../screens/Nutrition/FoodDetailScreen";
 import { CreateFoodScreen } from "../screens/Nutrition/CreateFoodScreen";
 import type { FoodItem } from "../services/nutritionApi";
+import type { ExtractedNutritionValues } from "../services/NutritionOCRService";
 
 export type NutritionStackParamList = {
   NutritionDashboard: undefined;
   FoodSearch: { mealType?: "breakfast" | "lunch" | "dinner" | "snacks" };
   BarcodeScanner: { mealType?: "breakfast" | "lunch" | "dinner" | "snacks" };
+  NutritionLabelScanner: {
+    mealType?: "breakfast" | "lunch" | "dinner" | "snacks";
+  };
   FoodDetail: {
     food: FoodItem;
     mealType?: "breakfast" | "lunch" | "dinner" | "snacks";
   };
-  CreateFood: { mealType?: "breakfast" | "lunch" | "dinner" | "snacks" };
+  CreateFood: {
+    mealType?: "breakfast" | "lunch" | "dinner" | "snacks";
+    scannedValues?: ExtractedNutritionValues;
+  };
 };
 
 const Stack = createNativeStackNavigator<NutritionStackParamList>();
@@ -56,6 +64,16 @@ export function NutritionStackNavigator({
         component={BarcodeScannerScreen}
         options={{
           title: "Scan Barcode",
+          presentation: "fullScreenModal",
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="NutritionLabelScanner"
+        component={NutritionLabelScannerScreen}
+        options={{
+          title: "Nährwert-Scanner",
           presentation: "fullScreenModal",
           headerShown: false,
         }}

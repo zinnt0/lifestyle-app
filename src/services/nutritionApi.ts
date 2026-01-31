@@ -276,7 +276,7 @@ export interface FoodItem {
   sodium?: number;
 
   allergens?: string[];
-  source?: 'openfoodfacts' | 'manual' | 'usda';
+  source?: 'openfoodfacts' | 'curated' | 'manual' | 'usda';
   usage_count?: number;
   last_used?: string;
 }

@@ -14,7 +14,7 @@
 export interface FoodItem {
   // Core identification
   barcode: string;
-  source: 'openfoodfacts' | 'curated';
+  source: 'openfoodfacts' | 'curated' | 'manual' | 'usda';
 
   // Cache layer source (for search result prioritization)
   // local = SQLite, cloud = Supabase, external = API

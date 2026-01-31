@@ -3,9 +3,10 @@
  *
  * Allows users to create custom food items that are stored locally only.
  * Similar layout to FoodDetailScreen but with editable fields.
+ * Supports OCR scanning of nutrition labels to auto-fill values.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -31,6 +32,11 @@ import {
 } from '../../components/ui/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { customFoodCache, CustomFoodCache } from '../../services/cache/CustomFoodCache';
+import {
+  isOCRAvailable,
+  formatExtractionSummary,
+  type ExtractedNutritionValues,
+} from '../../services/NutritionOCRService';
 
 type NavigationProp = NativeStackNavigationProp<NutritionStackParamList, 'CreateFood'>;
 type CreateFoodRouteProp = RouteProp<NutritionStackParamList, 'CreateFood'>;
@@ -38,7 +44,7 @@ type CreateFoodRouteProp = RouteProp<NutritionStackParamList, 'CreateFood'>;
 export function CreateFoodScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<CreateFoodRouteProp>();
-  const { mealType } = route.params || {};
+  const { mealType, scannedValues } = route.params || {};
 
   // Form state
   const [name, setName] = useState('');
@@ -52,6 +58,80 @@ export function CreateFoodScreen() {
   const [servingSize, setServingSize] = useState('100');
 
   const [saving, setSaving] = useState(false);
+
+  // Check if OCR is available (Development Build only)
+  const ocrAvailable = isOCRAvailable();
+
+  // Handle scanned values from NutritionLabelScannerScreen
+  useEffect(() => {
+    if (scannedValues) {
+      // Apply extracted values to form
+      applyExtractedValues(scannedValues);
+
+      // Show summary to user
+      const summary = formatExtractionSummary(scannedValues);
+      const confidenceText =
+        scannedValues.confidence === 'high'
+          ? 'Hohe Erkennungsqualität'
+          : scannedValues.confidence === 'medium'
+          ? 'Mittlere Erkennungsqualität'
+          : 'Niedrige Erkennungsqualität';
+
+      // Check if any values were found
+      const hasValues = scannedValues.calories !== undefined ||
+        scannedValues.protein !== undefined ||
+        scannedValues.carbs !== undefined ||
+        scannedValues.fat !== undefined;
+
+      if (hasValues) {
+        Alert.alert(
+          'Nährwerte erkannt',
+          `${confidenceText}\n\n${summary}\n\nBitte überprüfe die Werte und gib den Namen des Lebensmittels ein.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Keine Nährwerte erkannt',
+          `${confidenceText}\n\nDie Nährwerttabelle konnte nicht gelesen werden.\n\nTipps:\n• Halte die Kamera näher an die Tabelle\n• Achte auf gute Beleuchtung\n• Vermeide Reflexionen\n\nDu kannst die Werte auch manuell eingeben.`,
+          [{ text: 'OK' }]
+        );
+      }
+    }
+  }, [scannedValues]);
+
+  /**
+   * Handle navigation to dedicated scanner screen
+   */
+  const handleScanNutritionLabel = () => {
+    navigation.navigate('NutritionLabelScanner', { mealType });
+  };
+
+  /**
+   * Apply extracted OCR values to form fields
+   */
+  const applyExtractedValues = (values: ExtractedNutritionValues) => {
+    if (values.calories !== undefined) {
+      setCalories(values.calories.toString());
+    }
+    if (values.protein !== undefined) {
+      setProtein(values.protein.toString());
+    }
+    if (values.carbs !== undefined) {
+      setCarbs(values.carbs.toString());
+    }
+    if (values.fat !== undefined) {
+      setFat(values.fat.toString());
+    }
+    if (values.sugar !== undefined) {
+      setSugar(values.sugar.toString());
+    }
+    if (values.fiber !== undefined) {
+      setFiber(values.fiber.toString());
+    }
+    if (values.servingSize !== undefined) {
+      setServingSize(values.servingSize.toString());
+    }
+  };
 
   // Validation
   const isValid = name.trim().length > 0 && calories.trim().length > 0 && parseFloat(calories) >= 0;
@@ -181,7 +261,25 @@ export function CreateFoodScreen() {
 
           {/* Nutrition Section */}
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Nahrwerte (pro 100g)</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Nahrwerte (pro 100g)</Text>
+              {ocrAvailable ? (
+                <TouchableOpacity
+                  style={styles.scanButton}
+                  onPress={handleScanNutritionLabel}
+                >
+                  <Ionicons name="scan" size={20} color={COLORS.white} />
+                  <Text style={styles.scanButtonText}>Scannen</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.scanUnavailableHint}>
+                  <Ionicons name="camera-outline" size={16} color={COLORS.textTertiary} />
+                  <Text style={styles.scanUnavailableText}>
+                    Scan nur im Dev Build
+                  </Text>
+                </View>
+              )}
+            </View>
 
             <View style={[styles.inputRow, styles.highlightedRow]}>
               <View style={styles.inputLabelContainer}>
@@ -309,7 +407,40 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: SPACING.lg,
+  },
+
+  // Scan Button
+  scanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  scanButtonDisabled: {
+    opacity: 0.6,
+  },
+  scanButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  scanUnavailableHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  scanUnavailableText: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
   },
 
   // Input Fields

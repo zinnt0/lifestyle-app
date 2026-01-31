@@ -15,8 +15,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.trizin.lifestyleapp",
+      "deploymentTarget": "16.0",
       "infoPlist": {
-        "NSCameraUsageDescription": "Diese App benötigt Zugriff auf die Kamera, um Barcodes von Lebensmitteln zu scannen.",
+        "NSCameraUsageDescription": "Diese App benötigt Zugriff auf die Kamera, um Barcodes von Lebensmitteln zu scannen und Nährwertangaben zu erkennen.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -45,6 +46,16 @@
     },
     "updates": {
       "url": "https://u.expo.dev/143aa238-6b0f-4938-a144-85b866414ed3"
-    }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
+      ]
+    ]
   }
 }
