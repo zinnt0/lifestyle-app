@@ -16,6 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.trizin.lifestyleapp",
       "deploymentTarget": "16.0",
+      "buildNumber": "11",
       "infoPlist": {
         "NSCameraUsageDescription": "Diese App benötigt Zugriff auf die Kamera, um Barcodes von Lebensmitteln zu scannen und Nährwertangaben zu erkennen.",
         "ITSAppUsesNonExemptEncryption": false

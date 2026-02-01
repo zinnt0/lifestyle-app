@@ -65,6 +65,8 @@ export function CreateFoodScreen() {
   // Handle scanned values from NutritionLabelScannerScreen
   useEffect(() => {
     if (scannedValues) {
+      console.log('[CreateFood] Received scanned values:', scannedValues);
+
       // Apply extracted values to form
       applyExtractedValues(scannedValues);
 
@@ -72,10 +74,10 @@ export function CreateFoodScreen() {
       const summary = formatExtractionSummary(scannedValues);
       const confidenceText =
         scannedValues.confidence === 'high'
-          ? 'Hohe Erkennungsqualität'
+          ? 'Hohe Erkennungsqualität ✓'
           : scannedValues.confidence === 'medium'
-          ? 'Mittlere Erkennungsqualität'
-          : 'Niedrige Erkennungsqualität';
+          ? 'Mittlere Erkennungsqualität ⚠️'
+          : 'Niedrige Erkennungsqualität ✗';
 
       // Check if any values were found
       const hasValues = scannedValues.calories !== undefined ||
@@ -87,13 +89,37 @@ export function CreateFoodScreen() {
         Alert.alert(
           'Nährwerte erkannt',
           `${confidenceText}\n\n${summary}\n\nBitte überprüfe die Werte und gib den Namen des Lebensmittels ein.`,
-          [{ text: 'OK' }]
+          [
+            { text: 'OK' },
+            {
+              text: 'Erkannten Text anzeigen',
+              onPress: () => {
+                Alert.alert(
+                  'Erkannter Text',
+                  scannedValues.rawText || 'Kein Text verfügbar',
+                  [{ text: 'Schließen' }]
+                );
+              },
+            },
+          ]
         );
       } else {
         Alert.alert(
           'Keine Nährwerte erkannt',
-          `${confidenceText}\n\nDie Nährwerttabelle konnte nicht gelesen werden.\n\nTipps:\n• Halte die Kamera näher an die Tabelle\n• Achte auf gute Beleuchtung\n• Vermeide Reflexionen\n\nDu kannst die Werte auch manuell eingeben.`,
-          [{ text: 'OK' }]
+          `${confidenceText}\n\nDie Nährwerttabelle konnte nicht gelesen werden.\n\nTipps:\n• Halte die Kamera näher an die Tabelle\n• Achte auf gute Beleuchtung\n• Vermeide Reflexionen\n• Positioniere die Tabelle gerade\n\nDu kannst die Werte auch manuell eingeben.`,
+          [
+            { text: 'OK' },
+            {
+              text: 'Erkannten Text anzeigen',
+              onPress: () => {
+                Alert.alert(
+                  'Erkannter Text',
+                  scannedValues.rawText || 'Kein Text verfügbar',
+                  [{ text: 'Schließen' }]
+                );
+              },
+            },
+          ]
         );
       }
     }

@@ -56,39 +56,41 @@ const NUTRITION_PATTERNS: Array<{
     patterns: [
       // Match after kJ value: "1850 kJ / 440 kcal" or "1850kJ/440kcal" (most specific, check first)
       /kj\s*[\/|]\s*(\d+(?:[.,]\d+)?)\s*kcal/i,
-      // German: Brennwert, Energie with flexible spacing
-      /(?:brennwert|energie|energy)[:\s]+.*?(\d+(?:[.,]\d+)?)\s*kcal/i,
-      // Match "440 kcal" or "440kcal" anywhere in text
-      /(\d+(?:[.,]\d+)?)\s*kcal/i,
+      // German: Brennwert, Energie with flexible spacing and optional "pro 100g"
+      /(?:brennwert|energie|energy)(?:\s+pro\s+100\s*g)?[:\s]+.*?(\d+(?:[.,]\d+)?)\s*kcal/i,
+      // Match "440 kcal" or "440kcal" anywhere in text (but avoid matching kJ values)
+      /(\d+(?:[.,]\d+)?)\s*kcal(?!\s*\/)/i,
       // Kalorien label
       /kalorien[:\s]+(\d+(?:[.,]\d+)?)/i,
       /calories?[:\s]+(\d+(?:[.,]\d+)?)/i,
+      // "Energie: 440" (without explicit kcal, assuming kcal is standard)
+      /(?:brennwert|energie)(?:\s+pro\s+100\s*g)?[:\s]+(\d{2,4})(?!\s*kj)(?:\s|$)/i,
     ],
   },
   {
     field: 'protein',
     patterns: [
       // German: Eiweiß, Eiweiss with word boundary
-      /\b(?:eiwei(?:ss|ß))\s+(\d+(?:[.,]\d+)?)\s*g/i,
-      /\b(?:eiwei(?:ss|ß))[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+      /\b(?:eiwei(?:ss|ß))\s+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g/i,
+      /\b(?:eiwei(?:ss|ß))[:\s]+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g?/i,
       // English: Protein
-      /\bprotein\s+(\d+(?:[.,]\d+)?)\s*g/i,
-      /\bprotein[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
-      // With < or > symbols
-      /\b(?:eiwei(?:ss|ß)|protein)\s*[<>]?\s*(\d+(?:[.,]\d+)?)\s*g/i,
+      /\bprotein\s+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g/i,
+      /\bprotein[:\s]+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g?/i,
+      // Without explicit 'g' unit (assuming g is standard)
+      /\b(?:eiwei(?:ss|ß)|protein)[:\s]+[<>]?\s*(\d+(?:[.,]\d+)?)(?:\s|$)/i,
     ],
   },
   {
     field: 'carbs',
     patterns: [
       // German: Kohlenhydrate with word boundary
-      /\bkohlenhydrate?\s+(\d+(?:[.,]\d+)?)\s*g/i,
-      /\bkohlenhydrate?[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+      /\bkohlenhydrate?\s+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g/i,
+      /\bkohlenhydrate?[:\s]+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g?/i,
       // English: Carbohydrates, Carbs
-      /\bcarbohydrates?\s+(\d+(?:[.,]\d+)?)\s*g/i,
-      /\bcarbs?[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
-      // With < or > symbols
-      /\b(?:kohlenhydrate?|carbohydrates?)\s*[<>]?\s*(\d+(?:[.,]\d+)?)\s*g/i,
+      /\bcarbohydrates?\s+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g/i,
+      /\bcarbs?[:\s]+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g?/i,
+      // Without explicit 'g' unit
+      /\b(?:kohlenhydrate?|carbohydrates?)[:\s]+[<>]?\s*(\d+(?:[.,]\d+)?)(?:\s|$)/i,
     ],
   },
   {
@@ -96,11 +98,13 @@ const NUTRITION_PATTERNS: Array<{
     patterns: [
       // German: Fett - use word boundary to avoid matching "gesättigte Fettsäuren"
       // But exclude "fettsäuren" by checking what follows
-      /\bfett\s+(\d+(?:[.,]\d+)?)\s*g(?!esättigte|säuren)/i,
-      /\bfett[:\s]+(\d+(?:[.,]\d+)?)\s*g?(?!esättigte|säuren)/i,
+      /\bfett\s+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g(?!esättigte|säuren)/i,
+      /\bfett[:\s]+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g?(?!esättigte|säuren)/i,
       // English: Fat, Total fat
-      /\b(?:total\s+)?fat\s+(\d+(?:[.,]\d+)?)\s*g/i,
-      /\b(?:total\s+)?fat[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+      /\b(?:total\s+)?fat\s+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g/i,
+      /\b(?:total\s+)?fat[:\s]+[<>]?\s*(\d+(?:[.,]\d+)?)\s*g?/i,
+      // Without explicit 'g' unit (but not after "saturated" or similar)
+      /\bfett[:\s]+[<>]?\s*(\d+(?:[.,]\d+)?)(?:\s|$)(?!esättigte|säuren)/i,
     ],
   },
   {
@@ -123,9 +127,9 @@ const NUTRITION_PATTERNS: Array<{
       // German: Ballaststoffe with word boundary
       /\bballaststoffe?\s+(\d+(?:[.,]\d+)?)\s*g/i,
       /\bballaststoffe?[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
-      // English: Fiber, Fibre
-      /\b(?:dietary\s+)?fibre?\s+(\d+(?:[.,]\d+)?)\s*g/i,
-      /\b(?:dietary\s+)?fibre?[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+      // English: Fiber, Fibre (fixed pattern to match both spellings)
+      /\b(?:dietary\s+)?fi(?:ber|bre)\s+(\d+(?:[.,]\d+)?)\s*g/i,
+      /\b(?:dietary\s+)?fi(?:ber|bre)[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
     ],
   },
   {
@@ -191,16 +195,42 @@ function extractNutritionFromText(text: string): ExtractedNutritionValues {
     confidence: 'low',
   };
 
+  console.log('[NutritionOCR] Original text length:', text.length);
+  console.log('[NutritionOCR] Original text (first 300 chars):', text.substring(0, 300));
+
   // Normalize text: lowercase, normalize whitespace, but keep some structure
   // Replace multiple spaces/tabs with single space, but keep newlines as spaces
-  const normalizedText = text
+  let normalizedText = text
     .toLowerCase()
     .replace(/[\t\r]+/g, ' ')
     .replace(/\n+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
 
-  console.log('[NutritionOCR] Normalized text for parsing:', normalizedText.substring(0, 500));
+  // Fix OCR errors: Remove spaces within numbers and units
+  // "4 40" -> "440", "2 1" -> "21", "8 , 2" -> "8,2"
+  normalizedText = normalizedText.replace(/(\d)\s+(\d)/g, '$1$2');
+  normalizedText = normalizedText.replace(/(\d)\s*,\s*(\d)/g, '$1,$2');
+  normalizedText = normalizedText.replace(/(\d)\s*\.\s*(\d)/g, '$1.$2');
+
+  // "k cal" -> "kcal", "k j" -> "kj", "kca l" -> "kcal"
+  normalizedText = normalizedText.replace(/k\s*cal/gi, 'kcal');
+  normalizedText = normalizedText.replace(/k\s*j/gi, 'kj');
+  normalizedText = normalizedText.replace(/kca\s*l/gi, 'kcal');
+
+  // Fix broken compound words (common OCR errors)
+  normalizedText = normalizedText.replace(/kohlen\s*hydrate?/g, 'kohlenhydrate');
+  normalizedText = normalizedText.replace(/ballast\s*stoffe?/g, 'ballaststoffe');
+  normalizedText = normalizedText.replace(/brenn\s*wert/g, 'brennwert');
+  normalizedText = normalizedText.replace(/ei\s*wei[sß]/g, 'eiweiß');
+  normalizedText = normalizedText.replace(/ener\s*gie/g, 'energie');
+
+  // Remove common OCR artifacts
+  normalizedText = normalizedText.replace(/[|]/g, ' '); // Replace pipes with spaces
+  normalizedText = normalizedText.replace(/\s{2,}/g, ' '); // Normalize spaces again
+
+  console.log('[NutritionOCR] Normalized text for parsing:');
+  console.log(normalizedText.substring(0, 500));
 
   let matchCount = 0;
 
@@ -259,7 +289,7 @@ export async function recognizeNutritionLabel(
   }
 
   try {
-    console.log('[NutritionOCR] Starting text recognition...');
+    console.log('[NutritionOCR] Starting text recognition for:', imageUri);
 
     // Perform text recognition using Latin script (covers German and English)
     const result = await TextRecognition.recognize(
@@ -267,32 +297,46 @@ export async function recognizeNutritionLabel(
       TextRecognitionScript?.LATIN || 0 // 0 is LATIN in older versions
     );
 
+    console.log('[NutritionOCR] Recognition result:', {
+      hasResult: !!result,
+      hasText: !!result?.text,
+      textLength: result?.text?.length || 0,
+    });
+
     if (!result || !result.text) {
-      console.log('[NutritionOCR] No text recognized');
+      console.warn('[NutritionOCR] No text recognized from image');
       return {
         confidence: 'low',
-        rawText: '',
+        rawText: 'Kein Text erkannt. Bitte stelle sicher, dass:\n• Die Nährwerttabelle gut beleuchtet ist\n• Das Bild scharf ist\n• Die Tabelle vollständig im Bild ist',
       };
     }
 
-    console.log('[NutritionOCR] Recognized text:', result.text.substring(0, 200) + '...');
+    console.log('[NutritionOCR] Full recognized text:', result.text);
 
     // Extract nutrition values from the recognized text
     const extractedValues = extractNutritionFromText(result.text);
 
-    console.log('[NutritionOCR] Extracted values:', {
+    console.log('[NutritionOCR] Extraction complete:', {
       calories: extractedValues.calories,
       protein: extractedValues.protein,
       carbs: extractedValues.carbs,
       fat: extractedValues.fat,
+      sugar: extractedValues.sugar,
+      fiber: extractedValues.fiber,
+      servingSize: extractedValues.servingSize,
       confidence: extractedValues.confidence,
+      rawTextLength: extractedValues.rawText?.length,
     });
 
     return extractedValues;
-  } catch (error) {
+  } catch (error: any) {
     console.error('[NutritionOCR] Recognition error:', error);
+    console.error('[NutritionOCR] Error stack:', error?.stack);
+
+    // Provide more specific error information
+    const errorMessage = error?.message || 'Unbekannter Fehler';
     throw new Error(
-      'Fehler bei der Texterkennung. Bitte versuche es erneut oder gib die Werte manuell ein.'
+      `Fehler bei der Texterkennung: ${errorMessage}\n\nBitte versuche es erneut mit:\n• Besserer Beleuchtung\n• Klarerem Fokus\n• Weniger Reflexionen`
     );
   }
 }

@@ -72,26 +72,38 @@ export function NutritionLabelScannerScreen() {
     if (!cameraRef.current || capturing || processing) return;
 
     setCapturing(true);
+    console.log('[Scanner] Starting capture...');
 
     try {
       // Haptic feedback
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      // Take photo
+      // Take photo with high quality
+      console.log('[Scanner] Taking picture...');
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        skipProcessing: false,
+        quality: 1, // Max quality
+        skipProcessing: false, // Allow processing for better quality
+        exif: false, // Don't include EXIF data (faster)
+      });
+
+      console.log('[Scanner] Photo captured:', {
+        hasUri: !!photo?.uri,
+        uri: photo?.uri,
+        width: photo?.width,
+        height: photo?.height,
       });
 
       if (!photo?.uri) {
-        throw new Error('Foto konnte nicht aufgenommen werden');
+        throw new Error('Foto konnte nicht aufgenommen werden - keine URI erhalten');
       }
 
       setCapturing(false);
       setProcessing(true);
 
       // Process with OCR
+      console.log('[Scanner] Starting OCR processing...');
       const extractedValues = await recognizeNutritionLabel(photo.uri);
+      console.log('[Scanner] OCR processing complete:', extractedValues);
 
       // Success haptic
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -103,7 +115,13 @@ export function NutritionLabelScannerScreen() {
       });
 
     } catch (error: any) {
-      console.error('Capture/OCR error:', error);
+      console.error('[Scanner] Capture/OCR error:', error);
+      console.error('[Scanner] Error details:', {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name,
+      });
+
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
       // Still return to CreateFoodScreen but with error info
@@ -111,7 +129,7 @@ export function NutritionLabelScannerScreen() {
         mealType,
         scannedValues: {
           confidence: 'low',
-          rawText: error.message || 'Fehler bei der Erkennung',
+          rawText: `Fehler: ${error.message || 'Unbekannter Fehler bei der Erkennung'}\n\nBitte versuche es erneut oder gib die Werte manuell ein.`,
         },
       });
     } finally {
