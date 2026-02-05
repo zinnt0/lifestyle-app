@@ -165,25 +165,40 @@ export async function addFoodToDiary(data: {
  * Get Daily Summary - Holt die tägliche Ernährungszusammenfassung
  */
 export async function getDailySummary(userId: string, date: string) {
-  const url = new URL(`${FUNCTIONS_URL}/get-daily-summary`);
-  url.searchParams.set('userId', userId);
-  url.searchParams.set('date', date);
+  try {
+    const url = new URL(`${FUNCTIONS_URL}/get-daily-summary`);
+    url.searchParams.set('userId', userId);
+    url.searchParams.set('date', date);
 
-  // Get auth token from supabase session
-  const { data: { session } } = await supabase.auth.getSession();
+    // Get auth token from supabase session
+    const { data: { session } } = await supabase.auth.getSession();
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      'Authorization': `Bearer ${session?.access_token}`,
-      'Content-Type': 'application/json',
-    },
-  });
+    if (!session?.access_token) {
+      console.warn('[NutritionAPI] No active session found');
+    }
 
-  if (!response.ok) {
-    throw new Error(`Failed to get daily summary: ${response.statusText}`);
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Authorization': `Bearer ${session?.access_token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error('[NutritionAPI] Daily summary error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText,
+      });
+      throw new Error(`Failed to get daily summary: ${response.status} ${response.statusText || errorText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('[NutritionAPI] getDailySummary exception:', error);
+    throw error;
   }
-
-  return await response.json();
 }
 
 /**
