@@ -230,7 +230,8 @@ export const WorkoutSessionScreen: React.FC<Props> = ({
           onPress: async () => {
             try {
               await trainingService.pauseWorkoutSession(sessionId);
-              navigation.goBack();
+              // Navigate to TrainingDashboard and clear the WorkoutSession from stack
+              navigation.navigate("TrainingDashboard");
             } catch {
               Alert.alert("Fehler", "Workout konnte nicht pausiert werden");
             }
@@ -242,7 +243,7 @@ export const WorkoutSessionScreen: React.FC<Props> = ({
           onPress: async () => {
             try {
               await trainingService.cancelWorkoutSession(sessionId);
-              navigation.goBack();
+              navigation.navigate("TrainingDashboard");
             } catch {
               Alert.alert("Fehler", "Workout konnte nicht abgebrochen werden");
             }
