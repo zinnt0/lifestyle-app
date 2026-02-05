@@ -29,7 +29,8 @@ import { useTrainingNavigation } from "@/hooks/useTrainingNavigation";
 import { ActivePlanCard } from "@/components/training/ActivePlanCard";
 import { InactivePlanCard } from "@/components/training/InactivePlanCard";
 import { AppHeader } from "@/components/ui/AppHeader";
-import type { TrainingPlan, TrainingPlanDetails } from "@/types/training.types";
+import { PastWorkoutsModal } from "@/components/training/PastWorkoutsModal";
+import type { TrainingPlan, TrainingPlanDetails, WorkoutSession } from "@/types/training.types";
 
 /**
  * TrainingDashboardScreen Component
@@ -49,6 +50,11 @@ export const TrainingDashboardScreen: React.FC = () => {
   const [inactivePlans, setInactivePlans] = useState<TrainingPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Past Workouts Modal State
+  const [pastWorkoutsModalVisible, setPastWorkoutsModalVisible] = useState(false);
+  const [pastWorkoutsSessions, setPastWorkoutsSessions] = useState<WorkoutSession[]>([]);
+  const [pastWorkoutsLoading, setPastWorkoutsLoading] = useState(false);
 
   /**
    * Load all training plans and separate active/inactive
@@ -201,6 +207,45 @@ export const TrainingDashboardScreen: React.FC = () => {
   }, [navigation]);
 
   /**
+   * Open past workouts modal and load sessions
+   */
+  const handleOpenPastWorkoutsModal = useCallback(async () => {
+    try {
+      setPastWorkoutsModalVisible(true);
+      setPastWorkoutsLoading(true);
+
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        Alert.alert("Fehler", "Du musst angemeldet sein.");
+        return;
+      }
+
+      // Load past workout sessions
+      const sessions = await trainingService.getCompletedSessions(user.id, 50);
+      setPastWorkoutsSessions(sessions);
+    } catch (error) {
+      console.error("Fehler beim Laden der vergangenen Workouts:", error);
+      Alert.alert(
+        "Fehler",
+        "Vergangene Workouts konnten nicht geladen werden."
+      );
+    } finally {
+      setPastWorkoutsLoading(false);
+    }
+  }, []);
+
+  /**
+   * Close past workouts modal
+   */
+  const handleClosePastWorkoutsModal = useCallback(() => {
+    setPastWorkoutsModalVisible(false);
+  }, []);
+
+  /**
    * Handle deleting a training plan
    * - Shows confirmation dialog
    * - Deletes plan from backend
@@ -317,6 +362,26 @@ export const TrainingDashboardScreen: React.FC = () => {
           </View>
         )}
 
+        {/* Past Workouts Section */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.pastWorkoutsButton}
+            onPress={handleOpenPastWorkoutsModal}
+            activeOpacity={0.7}
+          >
+            <View style={styles.pastWorkoutsContent}>
+              <Ionicons name="calendar-outline" size={28} color="#3083FF" />
+              <View style={styles.pastWorkoutsTextContainer}>
+                <Text style={styles.pastWorkoutsTitle}>Vergangene Workouts</Text>
+                <Text style={styles.pastWorkoutsSubtitle}>
+                  Alle abgeschlossenen Trainingseinheiten ansehen
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#999" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Inactive Plans Section */}
         {inactivePlans.length > 0 && (
           <View style={styles.section}>
@@ -344,6 +409,14 @@ export const TrainingDashboardScreen: React.FC = () => {
           </View>
         )}
       </ScrollView>
+
+      {/* Past Workouts Modal */}
+      <PastWorkoutsModal
+        visible={pastWorkoutsModalVisible}
+        onClose={handleClosePastWorkoutsModal}
+        sessions={pastWorkoutsSessions}
+        loading={pastWorkoutsLoading}
+      />
     </SafeAreaView>
   );
 };
@@ -470,5 +543,37 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
     lineHeight: 24,
+  },
+  // Past Workouts Button
+  pastWorkoutsButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: "rgba(48, 131, 255, 0.2)",
+  },
+  pastWorkoutsContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  pastWorkoutsTextContainer: {
+    flex: 1,
+  },
+  pastWorkoutsTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+  },
+  pastWorkoutsSubtitle: {
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 18,
   },
 });

@@ -1849,6 +1849,49 @@ async function getUpcomingWorkouts(
 }
 
 // ============================================================================
+// Workout History
+// ============================================================================
+
+/**
+ * Lädt vergangene Workout-Sessions eines Users
+ * Sortiert nach Datum (neueste zuerst)
+ *
+ * @param userId - Die ID des Users
+ * @param limit - Maximale Anzahl der Sessions (Standard: 50)
+ * @returns Liste der vergangenen Sessions mit Plan und Workout Details
+ */
+async function getCompletedSessions(
+  userId: string,
+  limit: number = 50
+): Promise<WorkoutSession[]> {
+  try {
+    const { data, error } = await supabase
+      .from("workout_sessions")
+      .select(
+        `
+        *,
+        plan:training_plans(id, name),
+        workout:plan_workouts(id, name)
+      `
+      )
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .order("date", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("Fehler beim Laden der vergangenen Sessions:", error);
+      throw new Error("Vergangene Sessions konnten nicht geladen werden");
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error("Fehler in getCompletedSessions:", error);
+    throw error;
+  }
+}
+
+// ============================================================================
 // Export
 // ============================================================================
 
@@ -1892,4 +1935,7 @@ export const trainingService = {
   // Next Workout
   getNextWorkout,
   getUpcomingWorkouts,
+
+  // Workout History
+  getCompletedSessions,
 };
