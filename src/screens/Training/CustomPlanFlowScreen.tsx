@@ -21,6 +21,7 @@ import {
   TextInput,
   Dimensions,
   FlatList,
+  Modal,
 } from "react-native";
 import { Image } from "expo-image";
 import { Card } from "@/components/ui/Card";
@@ -29,6 +30,11 @@ import { useTrainingNavigation } from "@/hooks/useTrainingNavigation";
 import { supabase } from "@/lib/supabase";
 import type { Exercise } from "@/types/training.types";
 import * as Haptics from "expo-haptics";
+import DraggableFlatList, {
+  ScaleDecorator,
+  RenderItemParams,
+} from "react-native-draggable-flatlist";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -145,6 +151,10 @@ export const CustomPlanFlowScreen: React.FC = () => {
   const [equipmentFilter, setEquipmentFilter] = useState<string>('all');
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState<boolean>(false);
+
+  // Reorder modal state
+  const [reorderModalVisible, setReorderModalVisible] = useState(false);
+  const [reorderDayIndex, setReorderDayIndex] = useState<number | null>(null);
 
   // Calculate progress
   const calculateProgress = (): number => {
@@ -1065,6 +1075,145 @@ export const CustomPlanFlowScreen: React.FC = () => {
   };
 
   // ============================================================================
+  // Reorder Modal
+  // ============================================================================
+
+  const openReorderModal = (dayIndex: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setReorderDayIndex(dayIndex);
+    setReorderModalVisible(true);
+  };
+
+  const closeReorderModal = () => {
+    setReorderModalVisible(false);
+    setReorderDayIndex(null);
+  };
+
+  const handleReorderExercises = (newData: SelectedExercise[]) => {
+    if (reorderDayIndex === null) return;
+
+    const updatedConfigs = [...planState.dayConfigurations];
+    const dayConfig = updatedConfigs[reorderDayIndex];
+
+    // Replace all exercises with the new order
+    const allExercises: SelectedExercise[] = [];
+    Object.values(dayConfig.selectedExercisesByGroup).forEach((exercises) => {
+      allExercises.push(...exercises);
+    });
+
+    // Update the day config with the new order
+    // We'll store the new order as a flat list, grouped by muscle group
+    dayConfig.selectedExercisesByGroup = {};
+    newData.forEach((ex) => {
+      // Find which muscle group this exercise belongs to
+      let belongsToGroup: string | null = null;
+      for (const group of dayConfig.muscleGroups) {
+        const dbMuscles = MUSCLE_GROUP_DB_MAPPING[group.id] || [group.id];
+        if (ex.exercise.primary_muscles?.some((m) => dbMuscles.includes(m))) {
+          belongsToGroup = group.id;
+          break;
+        }
+      }
+
+      if (belongsToGroup) {
+        if (!dayConfig.selectedExercisesByGroup[belongsToGroup]) {
+          dayConfig.selectedExercisesByGroup[belongsToGroup] = [];
+        }
+        dayConfig.selectedExercisesByGroup[belongsToGroup].push(ex);
+      }
+    });
+
+    setPlanState({ ...planState, dayConfigurations: updatedConfigs });
+  };
+
+  const renderReorderModal = () => {
+    if (reorderDayIndex === null) return null;
+
+    const dayConfig = planState.dayConfigurations[reorderDayIndex];
+    const allExercises: SelectedExercise[] = [];
+    Object.values(dayConfig.selectedExercisesByGroup).forEach((exercises) => {
+      allExercises.push(...exercises);
+    });
+
+    const renderItem = ({ item, drag, isActive }: RenderItemParams<SelectedExercise>) => {
+      return (
+        <ScaleDecorator>
+          <TouchableOpacity
+            onLongPress={drag}
+            disabled={isActive}
+            style={[
+              styles.reorderExerciseCard,
+              isActive && styles.reorderExerciseCardActive,
+            ]}
+          >
+            <View style={styles.reorderDragHandle}>
+              <Text style={styles.reorderDragHandleText}>☰</Text>
+            </View>
+            {item.exercise.image_start_url ? (
+              <Image
+                source={{ uri: item.exercise.image_start_url }}
+                style={styles.reorderExerciseImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            ) : (
+              <View style={styles.reorderExerciseImagePlaceholder}>
+                <Text style={styles.reorderExerciseImagePlaceholderText}>🏋️</Text>
+              </View>
+            )}
+            <View style={styles.reorderExerciseInfo}>
+              <Text style={styles.reorderExerciseName}>{item.exercise.name_de}</Text>
+              <Text style={styles.reorderExerciseConfig}>
+                {item.sets} Sätze × {item.repsMin}-{item.repsMax} Wdh
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </ScaleDecorator>
+      );
+    };
+
+    return (
+      <Modal
+        visible={reorderModalVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={closeReorderModal}
+      >
+        <SafeAreaView style={styles.reorderModalContainer}>
+          <View style={styles.reorderModalHeader}>
+            <Text style={styles.reorderModalTitle}>
+              Übungsreihenfolge ändern
+            </Text>
+            <Text style={styles.reorderModalSubtitle}>
+              {dayConfig.schedule.dayOfWeek} - Lange drücken und ziehen
+            </Text>
+          </View>
+
+          <GestureHandlerRootView style={styles.reorderModalContent}>
+            <DraggableFlatList
+              data={allExercises}
+              onDragEnd={({ data }) => handleReorderExercises(data)}
+              keyExtractor={(item) => item.exercise.id}
+              renderItem={renderItem}
+              contentContainerStyle={styles.reorderListContent}
+            />
+          </GestureHandlerRootView>
+
+          <View style={styles.reorderModalFooter}>
+            <Button
+              variant="primary"
+              onPress={closeReorderModal}
+              style={styles.reorderModalButton}
+            >
+              Fertig
+            </Button>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
+  };
+
+  // ============================================================================
   // Step 5: Preview & Create
   // ============================================================================
 
@@ -1241,15 +1390,25 @@ export const CustomPlanFlowScreen: React.FC = () => {
           </Card>
 
           {/* Day Breakdown */}
-          {planState.dayConfigurations.map((day) => {
+          {planState.dayConfigurations.map((day, dayIndex) => {
             const allExercises: SelectedExercise[] = [];
             Object.values(day.selectedExercisesByGroup).forEach((exercises) => {
               allExercises.push(...exercises);
             });
 
             return (
-              <Card key={day.dayNumber} padding="large" style={{ marginBottom: SPACING.md }}>
-                <Text style={styles.previewSectionTitle}>{day.schedule.dayOfWeek}</Text>
+              <Card
+                key={day.dayNumber}
+                padding="large"
+                style={{ marginBottom: SPACING.md }}
+                onPress={() => openReorderModal(dayIndex)}
+              >
+                <View style={styles.previewDayHeader}>
+                  <Text style={styles.previewSectionTitle}>{day.schedule.dayOfWeek}</Text>
+                  <View style={styles.reorderButton}>
+                    <Text style={styles.reorderButtonText}>↕️ Sortieren</Text>
+                  </View>
+                </View>
                 {day.schedule.time && (
                   <Text style={styles.previewDayTime}>🕐 {day.schedule.time}</Text>
                 )}
@@ -1264,9 +1423,9 @@ export const CustomPlanFlowScreen: React.FC = () => {
                   <Text style={styles.statValue}>{allExercises.length}</Text>
                 </View>
                 <View style={styles.exercisePreviewList}>
-                  {allExercises.map((ex) => (
+                  {allExercises.map((ex, index) => (
                     <Text key={ex.exercise.id} style={styles.exercisePreviewItem}>
-                      • {ex.exercise.name_de} ({ex.sets}x{ex.repsMin}-{ex.repsMax})
+                      {index + 1}. {ex.exercise.name_de} ({ex.sets}x{ex.repsMin}-{ex.repsMax})
                     </Text>
                   ))}
                 </View>
@@ -1327,6 +1486,9 @@ export const CustomPlanFlowScreen: React.FC = () => {
         {currentStep === "configureDays" && renderConfigureDaysStep()}
         {currentStep === "preview" && renderPreviewStep()}
       </View>
+
+      {/* Reorder Modal */}
+      {renderReorderModal()}
     </SafeAreaView>
   );
 };
@@ -1845,6 +2007,23 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: SPACING.md,
   },
+  previewDayHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  reorderButton: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+  },
+  reorderButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.white,
+  },
   previewDayTime: {
     fontSize: 14,
     color: COLORS.textSecondary,
@@ -1897,5 +2076,104 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: COLORS.white,
+  },
+  // Reorder Modal
+  reorderModalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  reorderModalHeader: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.lg,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  reorderModalTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  reorderModalSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  reorderModalContent: {
+    flex: 1,
+  },
+  reorderListContent: {
+    padding: SPACING.md,
+  },
+  reorderExerciseCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  reorderExerciseCardActive: {
+    elevation: 8,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    backgroundColor: COLORS.selected,
+  },
+  reorderDragHandle: {
+    width: 32,
+    height: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: SPACING.sm,
+  },
+  reorderDragHandleText: {
+    fontSize: 20,
+    color: COLORS.textSecondary,
+  },
+  reorderExerciseImage: {
+    width: 60,
+    height: 45,
+    borderRadius: 8,
+    marginRight: SPACING.md,
+    backgroundColor: "#F0F0F0",
+  },
+  reorderExerciseImagePlaceholder: {
+    width: 60,
+    height: 45,
+    borderRadius: 8,
+    marginRight: SPACING.md,
+    backgroundColor: "#F0F0F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reorderExerciseImagePlaceholderText: {
+    fontSize: 20,
+  },
+  reorderExerciseInfo: {
+    flex: 1,
+  },
+  reorderExerciseName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  reorderExerciseConfig: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  reorderModalFooter: {
+    padding: SPACING.md,
+    backgroundColor: COLORS.white,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  reorderModalButton: {
+    width: "100%",
   },
 });
