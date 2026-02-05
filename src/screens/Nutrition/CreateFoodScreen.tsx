@@ -46,15 +46,17 @@ export function CreateFoodScreen() {
   const route = useRoute<CreateFoodRouteProp>();
   const { mealType, scannedValues } = route.params || {};
 
-  // Form state
+  // Form state - following German nutrition label standard order
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
   const [calories, setCalories] = useState('');
-  const [protein, setProtein] = useState('');
-  const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
+  const [saturatedFat, setSaturatedFat] = useState('');
+  const [carbs, setCarbs] = useState('');
   const [sugar, setSugar] = useState('');
   const [fiber, setFiber] = useState('');
+  const [protein, setProtein] = useState('');
+  const [sodium, setSodium] = useState('');
   const [servingSize, setServingSize] = useState('100');
 
   const [saving, setSaving] = useState(false);
@@ -139,20 +141,26 @@ export function CreateFoodScreen() {
     if (values.calories !== undefined) {
       setCalories(values.calories.toString());
     }
-    if (values.protein !== undefined) {
-      setProtein(values.protein.toString());
+    if (values.fat !== undefined) {
+      setFat(values.fat.toString());
+    }
+    if (values.saturated_fat !== undefined) {
+      setSaturatedFat(values.saturated_fat.toString());
     }
     if (values.carbs !== undefined) {
       setCarbs(values.carbs.toString());
-    }
-    if (values.fat !== undefined) {
-      setFat(values.fat.toString());
     }
     if (values.sugar !== undefined) {
       setSugar(values.sugar.toString());
     }
     if (values.fiber !== undefined) {
       setFiber(values.fiber.toString());
+    }
+    if (values.protein !== undefined) {
+      setProtein(values.protein.toString());
+    }
+    if (values.sodium !== undefined) {
+      setSodium(values.sodium.toString());
     }
     if (values.servingSize !== undefined) {
       setServingSize(values.servingSize.toString());
@@ -175,11 +183,13 @@ export function CreateFoodScreen() {
         name: name.trim(),
         brand: brand.trim() || undefined,
         calories: parseFloat(calories) || 0,
-        protein: protein ? parseFloat(protein) : undefined,
-        carbs: carbs ? parseFloat(carbs) : undefined,
         fat: fat ? parseFloat(fat) : undefined,
+        saturated_fat: saturatedFat ? parseFloat(saturatedFat) : undefined,
+        carbs: carbs ? parseFloat(carbs) : undefined,
         sugar: sugar ? parseFloat(sugar) : undefined,
         fiber: fiber ? parseFloat(fiber) : undefined,
+        protein: protein ? parseFloat(protein) : undefined,
+        sodium: sodium ? parseFloat(sodium) : undefined,
         serving_size: parseFloat(servingSize) || 100,
         serving_unit: 'g',
       });
@@ -325,7 +335,13 @@ export function CreateFoodScreen() {
               </View>
             </View>
 
-            {renderInputField('Eiweiss', protein, setProtein, {
+            {renderInputField('Fett', fat, setFat, {
+              placeholder: '0',
+              keyboardType: 'numeric',
+              unit: 'g',
+            })}
+
+            {renderInputField('  davon gesättigte Fettsäuren', saturatedFat, setSaturatedFat, {
               placeholder: '0',
               keyboardType: 'numeric',
               unit: 'g',
@@ -337,19 +353,25 @@ export function CreateFoodScreen() {
               unit: 'g',
             })}
 
-            {renderInputField('davon Zucker', sugar, setSugar, {
-              placeholder: '0',
-              keyboardType: 'numeric',
-              unit: 'g',
-            })}
-
-            {renderInputField('Fett', fat, setFat, {
+            {renderInputField('  davon Zucker', sugar, setSugar, {
               placeholder: '0',
               keyboardType: 'numeric',
               unit: 'g',
             })}
 
             {renderInputField('Ballaststoffe', fiber, setFiber, {
+              placeholder: '0',
+              keyboardType: 'numeric',
+              unit: 'g',
+            })}
+
+            {renderInputField('Eiweiß', protein, setProtein, {
+              placeholder: '0',
+              keyboardType: 'numeric',
+              unit: 'g',
+            })}
+
+            {renderInputField('Salz', sodium, setSodium, {
               placeholder: '0',
               keyboardType: 'numeric',
               unit: 'g',

@@ -27,8 +27,10 @@ export interface ExtractedNutritionValues {
   protein?: number;
   carbs?: number;
   fat?: number;
+  saturated_fat?: number;
   sugar?: number;
   fiber?: number;
+  sodium?: number;
   servingSize?: number;
   /** Raw recognized text for debugging */
   rawText?: string;
@@ -108,6 +110,22 @@ const NUTRITION_PATTERNS: Array<{
     ],
   },
   {
+    field: 'saturated_fat',
+    patterns: [
+      // German: "davon gesättigte Fettsäuren" (most common in German labels)
+      /davon\s+ges[aä]ttigte\s+fetts[aä]uren\s+(\d+(?:[.,]\d+)?)\s*g/i,
+      /davon\s+ges[aä]ttigte\s+fetts[aä]uren[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+      // Just "gesättigte Fettsäuren"
+      /ges[aä]ttigte\s+fetts[aä]uren\s+(\d+(?:[.,]\d+)?)\s*g/i,
+      /ges[aä]ttigte\s+fetts[aä]uren[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+      // English: "of which saturates" or "saturated fat"
+      /(?:of\s+which\s+)?saturates?\s+(\d+(?:[.,]\d+)?)\s*g/i,
+      /saturated\s+fat\s+(\d+(?:[.,]\d+)?)\s*g/i,
+      /(?:of\s+which\s+)?saturates?[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+      /saturated\s+fat[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+    ],
+  },
+  {
     field: 'sugar',
     patterns: [
       // German: "davon Zucker" (most common in German labels)
@@ -130,6 +148,19 @@ const NUTRITION_PATTERNS: Array<{
       // English: Fiber, Fibre (fixed pattern to match both spellings)
       /\b(?:dietary\s+)?fi(?:ber|bre)\s+(\d+(?:[.,]\d+)?)\s*g/i,
       /\b(?:dietary\s+)?fi(?:ber|bre)[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+    ],
+  },
+  {
+    field: 'sodium',
+    patterns: [
+      // German: Salz with word boundary
+      /\bsalz\s+(\d+(?:[.,]\d+)?)\s*g/i,
+      /\bsalz[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+      // English: Salt, Sodium
+      /\bsalt\s+(\d+(?:[.,]\d+)?)\s*g/i,
+      /\bsalt[:\s]+(\d+(?:[.,]\d+)?)\s*g?/i,
+      /\bsodium\s+(\d+(?:[.,]\d+)?)\s*(?:g|mg)/i,
+      /\bsodium[:\s]+(\d+(?:[.,]\d+)?)\s*(?:g|mg)?/i,
     ],
   },
   {
@@ -188,6 +219,7 @@ function parseNumericValue(value: string): number {
 
 /**
  * Extract nutrition values from recognized text
+ * Enhanced to follow German nutrition label standard order
  */
 function extractNutritionFromText(text: string): ExtractedNutritionValues {
   const result: ExtractedNutritionValues = {
@@ -196,11 +228,22 @@ function extractNutritionFromText(text: string): ExtractedNutritionValues {
   };
 
   console.log('[NutritionOCR] Original text length:', text.length);
-  console.log('[NutritionOCR] Original text (first 300 chars):', text.substring(0, 300));
+  console.log('[NutritionOCR] Original text (first 500 chars):', text.substring(0, 500));
+
+  // Step 1: Only process text after "Nährwerte" or "NÄHRWERTE"
+  const naehrwerteIndex = text.toLowerCase().indexOf('nährwerte');
+  let relevantText = text;
+  if (naehrwerteIndex !== -1) {
+    relevantText = text.substring(naehrwerteIndex);
+    console.log('[NutritionOCR] Found "Nährwerte" at index', naehrwerteIndex);
+    console.log('[NutritionOCR] Processing text after "Nährwerte"');
+  } else {
+    console.log('[NutritionOCR] "Nährwerte" not found, processing full text');
+  }
 
   // Normalize text: lowercase, normalize whitespace, but keep some structure
   // Replace multiple spaces/tabs with single space, but keep newlines as spaces
-  let normalizedText = text
+  let normalizedText = relevantText
     .toLowerCase()
     .replace(/[\t\r]+/g, ' ')
     .replace(/\n+/g, ' ')
@@ -224,35 +267,143 @@ function extractNutritionFromText(text: string): ExtractedNutritionValues {
   normalizedText = normalizedText.replace(/brenn\s*wert/g, 'brennwert');
   normalizedText = normalizedText.replace(/ei\s*wei[sß]/g, 'eiweiß');
   normalizedText = normalizedText.replace(/ener\s*gie/g, 'energie');
+  normalizedText = normalizedText.replace(/ges[aä]ttigte\s+fetts[aä]uren/g, 'gesättigtefettsäuren');
+  normalizedText = normalizedText.replace(/davon\s+ges[aä]ttigte/g, 'davongesättigte');
 
   // Remove common OCR artifacts
   normalizedText = normalizedText.replace(/[|]/g, ' '); // Replace pipes with spaces
   normalizedText = normalizedText.replace(/\s{2,}/g, ' '); // Normalize spaces again
 
   console.log('[NutritionOCR] Normalized text for parsing:');
-  console.log(normalizedText.substring(0, 500));
+  console.log(normalizedText.substring(0, 700));
 
-  let matchCount = 0;
+  // Step 2: Try German standard order extraction first
+  // German nutrition labels follow this order:
+  // 1. Brennwert (kJ/kcal)
+  // 2. Fett
+  // 3. davon gesättigte Fettsäuren
+  // 4. Kohlenhydrate
+  // 5. davon Zucker
+  // 6. Ballaststoffe
+  // 7. Eiweiß
+  // 8. Salz
 
-  for (const { field, patterns } of NUTRITION_PATTERNS) {
-    for (const pattern of patterns) {
-      const match = normalizedText.match(pattern);
-      if (match && match[1]) {
-        const value = parseNumericValue(match[1]);
+  // Extract all gram values (numerical values followed by 'g')
+  const gramValuesRegex = /(\d+(?:[.,]\d+)?)\s*g\b/gi;
+  const gramMatches = [...normalizedText.matchAll(gramValuesRegex)];
+  const gramValues = gramMatches.map(m => parseNumericValue(m[1]));
 
-        // Sanity checks for reasonable values (per 100g)
-        // Calories: max ~900 kcal/100g (pure fat is ~900, oils ~884)
-        // But allow up to 950 for safety margin
-        if (field === 'calories' && (value < 0 || value > 950)) continue;
-        // Macros: max 100g per 100g serving (can't have more than 100%)
-        if (field !== 'calories' && field !== 'servingSize' && (value < 0 || value > 100)) continue;
-        // Serving size: typically 1-500g for most products
-        if (field === 'servingSize' && (value < 1 || value > 1000)) continue;
+  console.log('[NutritionOCR] Found gram values:', gramValues);
 
-        // Only set if not already set (first match wins)
-        if (result[field] === undefined) {
+  // Extract kcal value (for calories)
+  const kcalMatch = normalizedText.match(/(\d+(?:[.,]\d+)?)\s*kcal/i);
+  if (kcalMatch) {
+    const calories = parseNumericValue(kcalMatch[1]);
+    if (calories >= 0 && calories <= 950) {
+      result.calories = calories;
+      console.log('[NutritionOCR] Extracted calories:', calories);
+    }
+  }
+
+  // Define the expected order of nutrition labels and their field names
+  type NumericNutritionField = 'fat' | 'saturated_fat' | 'carbs' | 'sugar' | 'fiber' | 'protein' | 'sodium';
+
+  const germanOrderLabels: Array<{ keywords: string[]; field: NumericNutritionField; exclude?: string[] }> = [
+    { keywords: ['fett'], field: 'fat', exclude: ['gesättigt', 'säuren'] },
+    { keywords: ['davongesättigte', 'gesättigtefettsäuren', 'gesättigt'], field: 'saturated_fat' },
+    { keywords: ['kohlenhydrate'], field: 'carbs' },
+    { keywords: ['davonzucker', 'zucker'], field: 'sugar' },
+    { keywords: ['ballaststoffe'], field: 'fiber' },
+    { keywords: ['eiweiß', 'eiweiss', 'protein'], field: 'protein' },
+    { keywords: ['salz'], field: 'sodium' },
+  ];
+
+  // Find positions of each nutrition label in the text
+  interface LabelPosition {
+    field: NumericNutritionField;
+    position: number;
+    keyword: string;
+  }
+
+  const labelPositions: LabelPosition[] = [];
+  for (const label of germanOrderLabels) {
+    for (const keyword of label.keywords) {
+      const pos = normalizedText.indexOf(keyword);
+      if (pos !== -1) {
+        // Check exclude keywords
+        let shouldExclude = false;
+        if (label.exclude) {
+          for (const excludeWord of label.exclude) {
+            const excludePos = normalizedText.indexOf(excludeWord, pos);
+            if (excludePos !== -1 && excludePos < pos + keyword.length + 20) {
+              shouldExclude = true;
+              break;
+            }
+          }
+        }
+        if (!shouldExclude) {
+          labelPositions.push({ field: label.field, position: pos, keyword });
+          console.log(`[NutritionOCR] Found "${keyword}" at position ${pos} for field ${label.field}`);
+          break; // Use first match for this label
+        }
+      }
+    }
+  }
+
+  // Sort by position to get the order they appear in the text
+  labelPositions.sort((a, b) => a.position - b.position);
+  console.log('[NutritionOCR] Label order found:', labelPositions.map(l => l.field));
+
+  // Map gram values to labels in order
+  // Skip the first gram value if it looks like it's from "pro 100g"
+  let gramIndex = 0;
+  for (let i = 0; i < gramValues.length; i++) {
+    if (gramValues[i] === 100 && i === 0) {
+      console.log('[NutritionOCR] Skipping first value (100g serving size indicator)');
+      gramIndex = 1;
+      break;
+    }
+  }
+
+  // Assign gram values to fields based on label order
+  for (let i = 0; i < labelPositions.length && gramIndex < gramValues.length; i++) {
+    const label = labelPositions[i];
+    const value = gramValues[gramIndex];
+
+    // Sanity checks
+    if (value < 0 || value > 100) {
+      console.log(`[NutritionOCR] Skipping invalid value ${value} for ${label.field}`);
+      gramIndex++;
+      continue;
+    }
+
+    result[label.field] = value;
+    console.log(`[NutritionOCR] Mapped ${label.field} = ${value}g (from position ${label.position})`);
+    gramIndex++;
+  }
+
+  // Fall back to pattern matching if ordered extraction didn't work well
+  let matchCount = Object.keys(result).filter(k => k !== 'rawText' && k !== 'confidence' && result[k as keyof ExtractedNutritionValues] !== undefined).length;
+
+  if (matchCount < 3) {
+    console.log('[NutritionOCR] Ordered extraction yielded few results, falling back to pattern matching');
+
+    for (const { field, patterns } of NUTRITION_PATTERNS) {
+      if (result[field] !== undefined) continue; // Skip if already extracted
+
+      for (const pattern of patterns) {
+        const match = normalizedText.match(pattern);
+        if (match && match[1]) {
+          const value = parseNumericValue(match[1]);
+
+          // Sanity checks for reasonable values (per 100g)
+          if (field === 'calories' && (value < 0 || value > 950)) continue;
+          if (field !== 'calories' && field !== 'servingSize' && (value < 0 || value > 100)) continue;
+          if (field === 'servingSize' && (value < 1 || value > 1000)) continue;
+
           result[field] = value;
           matchCount++;
+          console.log(`[NutritionOCR] Pattern match: ${field} = ${value}`);
           break;
         }
       }
@@ -260,13 +411,25 @@ function extractNutritionFromText(text: string): ExtractedNutritionValues {
   }
 
   // Determine confidence based on how many fields were extracted
-  if (matchCount >= 4) {
+  if (matchCount >= 5) {
     result.confidence = 'high';
-  } else if (matchCount >= 2) {
+  } else if (matchCount >= 3) {
     result.confidence = 'medium';
   } else {
     result.confidence = 'low';
   }
+
+  console.log('[NutritionOCR] Final extraction results:', {
+    calories: result.calories,
+    fat: result.fat,
+    saturated_fat: result.saturated_fat,
+    carbs: result.carbs,
+    sugar: result.sugar,
+    fiber: result.fiber,
+    protein: result.protein,
+    sodium: result.sodium,
+    confidence: result.confidence,
+  });
 
   return result;
 }
@@ -343,16 +506,20 @@ export async function recognizeNutritionLabel(
 
 /**
  * Format extracted values for display to user
+ * Following German nutrition label standard order
  */
 export function formatExtractionSummary(values: ExtractedNutritionValues): string {
   const parts: string[] = [];
 
+  // Follow German standard order
   if (values.calories !== undefined) parts.push(`Kalorien: ${values.calories} kcal`);
-  if (values.protein !== undefined) parts.push(`Eiweiß: ${values.protein}g`);
-  if (values.carbs !== undefined) parts.push(`Kohlenhydrate: ${values.carbs}g`);
   if (values.fat !== undefined) parts.push(`Fett: ${values.fat}g`);
-  if (values.sugar !== undefined) parts.push(`Zucker: ${values.sugar}g`);
+  if (values.saturated_fat !== undefined) parts.push(`  davon gesättigte Fettsäuren: ${values.saturated_fat}g`);
+  if (values.carbs !== undefined) parts.push(`Kohlenhydrate: ${values.carbs}g`);
+  if (values.sugar !== undefined) parts.push(`  davon Zucker: ${values.sugar}g`);
   if (values.fiber !== undefined) parts.push(`Ballaststoffe: ${values.fiber}g`);
+  if (values.protein !== undefined) parts.push(`Eiweiß: ${values.protein}g`);
+  if (values.sodium !== undefined) parts.push(`Salz: ${values.sodium}g`);
 
   if (parts.length === 0) {
     return 'Keine Nährwerte erkannt';

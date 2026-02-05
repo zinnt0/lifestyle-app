@@ -34,6 +34,7 @@ export interface FoodItem {
   protein?: number;
   carbs?: number;
   fat?: number;
+  saturated_fat?: number;
   fiber?: number;
   sugar?: number;
   sodium?: number;
@@ -197,6 +198,7 @@ export interface OFFProduct {
     'proteins_100g'?: number;
     'carbohydrates_100g'?: number;
     'fat_100g'?: number;
+    'saturated-fat_100g'?: number;
     'fiber_100g'?: number;
     'sugars_100g'?: number;
     'sodium_100g'?: number;

@@ -90,9 +90,9 @@ export class CustomFoodCache {
 
       await this.db!.runAsync(
         `INSERT INTO custom_foods (
-          id, barcode, name, brand, calories, protein, carbs, fat, fiber, sugar, sodium,
+          id, barcode, name, brand, calories, protein, carbs, fat, saturated_fat, fiber, sugar, sodium,
           serving_size, serving_unit, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           customFood.id,
           customFood.barcode,
@@ -102,6 +102,7 @@ export class CustomFoodCache {
           customFood.protein || null,
           customFood.carbs || null,
           customFood.fat || null,
+          customFood.saturated_fat || null,
           customFood.fiber || null,
           customFood.sugar || null,
           customFood.sodium || null,
@@ -262,7 +263,7 @@ export class CustomFoodCache {
 
       await this.db!.runAsync(
         `UPDATE custom_foods SET
-          name = ?, brand = ?, calories = ?, protein = ?, carbs = ?, fat = ?,
+          name = ?, brand = ?, calories = ?, protein = ?, carbs = ?, fat = ?, saturated_fat = ?,
           fiber = ?, sugar = ?, sodium = ?, serving_size = ?, serving_unit = ?,
           updated_at = ?
          WHERE id = ?`,
@@ -273,6 +274,7 @@ export class CustomFoodCache {
           updates.protein ?? existing.protein ?? null,
           updates.carbs ?? existing.carbs ?? null,
           updates.fat ?? existing.fat ?? null,
+          updates.saturated_fat ?? existing.saturated_fat ?? null,
           updates.fiber ?? existing.fiber ?? null,
           updates.sugar ?? existing.sugar ?? null,
           updates.sodium ?? existing.sodium ?? null,
@@ -357,6 +359,7 @@ export class CustomFoodCache {
         protein REAL,
         carbs REAL,
         fat REAL,
+        saturated_fat REAL,
         fiber REAL,
         sugar REAL,
         sodium REAL,
@@ -372,6 +375,20 @@ export class CustomFoodCache {
     `;
 
     await this.db!.execAsync(createTableSQL);
+
+    // Migration: Add saturated_fat column if it doesn't exist
+    try {
+      await this.db!.execAsync(`
+        ALTER TABLE custom_foods ADD COLUMN saturated_fat REAL;
+      `);
+      console.log(`${LOG_PREFIX} Added saturated_fat column`);
+    } catch (error: any) {
+      // Column might already exist, which is fine
+      if (!error.message?.includes('duplicate column')) {
+        console.log(`${LOG_PREFIX} saturated_fat column already exists or migration not needed`);
+      }
+    }
+
     console.log(`${LOG_PREFIX} Tables created`);
   }
 
@@ -390,6 +407,7 @@ export class CustomFoodCache {
       protein: row.protein || undefined,
       carbs: row.carbs || undefined,
       fat: row.fat || undefined,
+      saturated_fat: row.saturated_fat || undefined,
       fiber: row.fiber || undefined,
       sugar: row.sugar || undefined,
       sodium: row.sodium || undefined,
@@ -425,6 +443,7 @@ export class CustomFoodCache {
       protein: customFood.protein,
       carbs: customFood.carbs,
       fat: customFood.fat,
+      saturated_fat: customFood.saturated_fat,
       fiber: customFood.fiber,
       sugar: customFood.sugar,
       sodium: customFood.sodium,
