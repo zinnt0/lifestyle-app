@@ -1,49 +1,74 @@
 /**
- * Workout Session Screen
+ * Workout Session Screen – Übersicht
  *
- * Active workout tracking screen:
- * - Exercise carousel (simple navigation for now)
- * - Set logging with expandable rows
- * - Progress tracking
- * - Exercise completion with haptic feedback
- * - Workout completion modal
+ * Zeigt die Übungen des aktiven Workouts als vertikale Kachelliste an.
+ * - Kachel: Bild links, Name + Kurzinfo rechts, Chevron
+ * - 3-Punkte-Menü zum temporären Entfernen einer Übung
+ * - "Übung hinzufügen" Button unten (temporär, nur dieses Workout)
+ * - Tipp auf Kachel → ExerciseDetailScreen
+ * - Fortschrittsanzeige oben
+ * - Auto-Pause bei App-Hintergrund
  */
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  FlatList,
   Image,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Dimensions,
-  ViewToken,
   AppState,
   AppStateStatus,
+  Modal,
+  FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import * as Haptics from "expo-haptics";
+import { useFocusEffect } from "@react-navigation/native";
 import { TrainingStackParamList } from "@/navigation/types";
 import { trainingService } from "@/services/trainingService";
-import { oneRMService } from "@/services/oneRMService";
 import { supabase } from "@/lib/supabase";
-import type { SessionExercise, TrainingPlan } from "@/types/training.types";
+import type { SessionExercise, Exercise } from "@/types/training.types";
 import { ProgressBar } from "@/components/training/ProgressBar";
-import { SetRow } from "@/components/training/SetRow";
-import { PaginationDots } from "@/components/training/PaginationDots";
-import { Button } from "@/components/ui/Button";
-import { AlternativesModal } from "@/components/training/AlternativesModal";
 
 type Props = NativeStackScreenProps<TrainingStackParamList, "WorkoutSession">;
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CARD_PADDING = 20;
-const CARD_WIDTH = SCREEN_WIDTH - CARD_PADDING * 2;
+// ── Muskelgruppen-Zuordnung ──────────────────────────────────────────────
+const MUSCLE_TO_GROUP: Record<string, string> = {
+  chest: "Brust",
+  triceps: "Arme",
+  biceps: "Arme",
+  forearms: "Arme",
+  anterior_deltoid: "Schultern",
+  lateral_deltoid: "Schultern",
+  side_delts: "Schultern",
+  posterior_deltoid: "Schultern",
+  traps: "Schultern",
+  lats: "Rücken",
+  middle_back: "Rücken",
+  rhomboids: "Rücken",
+  erectors: "Rücken",
+  core: "Core",
+  obliques: "Core",
+  quadriceps: "Beine",
+  quads: "Beine",
+  hamstrings: "Beine",
+  glutes: "Beine",
+  calves: "Beine",
+};
+
+const GROUP_ORDER = [
+  "Brust",
+  "Rücken",
+  "Schultern",
+  "Arme",
+  "Beine",
+  "Core",
+  "Sonstige",
+];
 
 export const WorkoutSessionScreen: React.FC<Props> = ({
   route,
@@ -51,238 +76,66 @@ export const WorkoutSessionScreen: React.FC<Props> = ({
 }) => {
   const { sessionId } = route.params;
 
-  // Refs
-  const flatListRef = useRef<FlatList<SessionExercise>>(null);
-
-  // State
+  // ── State ──────────────────────────────────────────────────────────
   const [exercises, setExercises] = useState<SessionExercise[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedSet, setExpandedSet] = useState<number | null>(null);
-  const [showAlternatives, setShowAlternatives] = useState(false);
-  const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(
-    null
-  );
-  const [pendingSets, setPendingSets] = useState<
-    Record<
-      string,
-      Record<number, { weight: number; reps: number; rir?: number }>
-    >
-  >({});
-  const [plan, setPlan] = useState<TrainingPlan | null>(null);
-  const [recommendedWeights, setRecommendedWeights] = useState<
-    Record<string, number | null>
-  >({});
-  const [trainingMaxes, setTrainingMaxes] = useState<
-    Record<string, number | null>
-  >({});
-  const [userId, setUserId] = useState<string | null>(null);
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const [menuExerciseId, setMenuExerciseId] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [availableExercises, setAvailableExercises] = useState<Exercise[]>([]);
+  const [addLoading, setAddLoading] = useState(false);
 
-  // Current exercise
-  const currentExercise = exercises[currentIndex];
+  // ── Refs ───────────────────────────────────────────────────────────
+  const hasLoadedRef = useRef(false);
+  const hasShownCompletionRef = useRef(false);
 
-  // Progress calculation
-  const progress = useMemo(() => {
-    if (exercises.length === 0) return 0;
-    const completedCount = exercises.filter((ex) => ex.is_completed).length;
-    return (completedCount / exercises.length) * 100;
-  }, [exercises]);
-
-  // Viewability config for tracking current card
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-  }).current;
-
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-        setCurrentIndex(viewableItems[0].index);
-        setExpandedSet(null); // Reset expanded state on card change
-      }
-    }
-  ).current;
-
-  // Load session exercises on mount
+  // ── Auto-Pause bei App-Hintergrund ─────────────────────────────────
   useEffect(() => {
-    loadSession();
-  }, [sessionId]);
-
-  // Auto-scroll to first incomplete exercise
-  useEffect(() => {
-    if (exercises.length > 0 && currentIndex === 0) {
-      const firstIncomplete = exercises.findIndex((ex) => !ex.is_completed);
-      if (firstIncomplete !== -1) {
-        setCurrentIndex(firstIncomplete);
-      }
-    }
-  }, [exercises]);
-
-  // Auto-pause when app goes to background or component unmounts
-  useEffect(() => {
-    let isPausing = false; // Flag to prevent duplicate pause calls
-
-    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-      if (nextAppState === "background" || nextAppState === "inactive") {
-        if (isPausing) {
-          console.log("Pausierung läuft bereits, überspringe");
-          return;
-        }
-        // App goes to background - pause the session
+    let isPausing = false;
+    const handler = async (state: AppStateStatus) => {
+      if (state === "background" || state === "inactive") {
+        if (isPausing) return;
+        isPausing = true;
         try {
-          isPausing = true;
           await trainingService.pauseWorkoutSession(sessionId);
-        } catch (error) {
-          console.error("Fehler beim automatischen Pausieren:", error);
+        } catch (e) {
+          console.error("Auto-pause failed:", e);
         } finally {
           isPausing = false;
         }
       }
     };
-
-    const subscription = AppState.addEventListener(
-      "change",
-      handleAppStateChange
-    );
-
-    // Cleanup: Pause session when component unmounts (user navigates away)
+    const sub = AppState.addEventListener("change", handler);
     return () => {
-      subscription.remove();
-      // Only pause on unmount if not already pausing
-      if (!isPausing) {
-        trainingService.pauseWorkoutSession(sessionId).catch((error) => {
-          console.error("Fehler beim Pausieren beim Verlassen:", error);
-        });
-      }
+      sub.remove();
+      trainingService.pauseWorkoutSession(sessionId).catch(() => {});
     };
   }, [sessionId]);
 
-  /**
-   * Load session exercises and calculate recommended weights for dynamic plans
-   */
+  // ── Focus-Effect: Laden beim ersten Aufruf, Aktualisieren beim Zurückkehren
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasLoadedRef.current) {
+        hasLoadedRef.current = true;
+        loadSession();
+      } else {
+        refreshExercises();
+      }
+    }, [sessionId])
+  );
+
+  // ── Daten laden ────────────────────────────────────────────────────
   const loadSession = async () => {
     try {
       setLoading(true);
       setError(null);
-
-      // Get current user
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setError("Nicht angemeldet");
-        return;
-      }
-
-      setUserId(user.id);
-
-      // Load session exercises
-      const sessionExercises = await trainingService.getSessionExercises(
-        sessionId
-      );
-
-      if (!sessionExercises || sessionExercises.length === 0) {
+      const data = await trainingService.getSessionExercises(sessionId);
+      if (!data || data.length === 0) {
         setError("Keine Übungen für dieses Workout gefunden");
         return;
       }
-
-      // Load session to get plan_id
-      const { data: session, error: sessionError } = await supabase
-        .from("workout_sessions")
-        .select("plan_id")
-        .eq("id", sessionId)
-        .single();
-
-      if (sessionError || !session) {
-        setError("Session konnte nicht geladen werden");
-        return;
-      }
-
-      // Load plan to check if it's dynamic
-      const { data: planData, error: planError } = await supabase
-        .from("training_plans")
-        .select("*, template:plan_templates(is_dynamic, tm_percentage)")
-        .eq("id", session.plan_id)
-        .single();
-
-      if (planError || !planData) {
-        console.error("Plan konnte nicht geladen werden:", planError);
-        // Continue without plan data - not critical
-      } else {
-        setPlan(planData);
-
-        // Check if plan is dynamic
-        const isDynamic =
-          planData.tm_percentage !== null &&
-          planData.tm_percentage !== undefined;
-
-        if (isDynamic) {
-          // Calculate recommended weights and training maxes for each exercise
-          const weights: Record<string, number | null> = {};
-          const tms: Record<string, number | null> = {};
-
-          for (const exercise of sessionExercises) {
-            // Calculate weights for exercises with percentage_1rm OR set_configurations
-            if (
-              exercise.percentage_1rm ||
-              (exercise.set_configurations &&
-                exercise.set_configurations.length > 0)
-            ) {
-              try {
-                // Get the Training Max (TM) for set_configurations
-                // TM = 1RM * tm_percentage (e.g. 90% of 1RM)
-                const trainingMax = await oneRMService.calculateWorkingWeight(
-                  user.id,
-                  exercise.exercise_id,
-                  100, // 100% to get the full TM
-                  planData.tm_percentage || 100
-                );
-                tms[exercise.exercise_id] = trainingMax;
-                console.log(
-                  "[WorkoutSession] Training Max for",
-                  exercise.exercise_id,
-                  ":",
-                  trainingMax
-                );
-
-                // Calculate recommended weight if percentage_1rm is set (for non-set_configurations exercises)
-                if (exercise.percentage_1rm) {
-                  const recommendedWeight =
-                    await oneRMService.calculateWorkingWeight(
-                      user.id,
-                      exercise.exercise_id,
-                      exercise.percentage_1rm,
-                      planData.tm_percentage || 100
-                    );
-
-                  console.log(
-                    "[WorkoutSession] Received weight for",
-                    exercise.exercise_id,
-                    ":",
-                    recommendedWeight,
-                    "type:",
-                    typeof recommendedWeight
-                  );
-                  weights[exercise.exercise_id] = recommendedWeight;
-                }
-              } catch (weightError) {
-                console.error(
-                  `Fehler beim Berechnen des Gewichts für Exercise ${exercise.exercise_id}:`,
-                  weightError
-                );
-                weights[exercise.exercise_id] = null;
-                tms[exercise.exercise_id] = null;
-              }
-            }
-          }
-
-          setRecommendedWeights(weights);
-          setTrainingMaxes(tms);
-        }
-      }
-
-      setExercises(sessionExercises);
+      setExercises(data);
     } catch (err) {
       console.error("Fehler beim Laden der Session:", err);
       setError("Workout konnte nicht geladen werden");
@@ -291,200 +144,94 @@ export const WorkoutSessionScreen: React.FC<Props> = ({
     }
   };
 
-  /**
-   * Handle set logging (now just stores in local state)
-   */
-  const handleSetLog = (
-    exerciseId: string,
-    setNumber: number,
-    weight: number,
-    reps: number,
-    rir?: number
-  ) => {
-    setPendingSets((prev) => ({
-      ...prev,
-      [exerciseId]: {
-        ...prev[exerciseId],
-        [setNumber]: { weight, reps, rir },
-      },
-    }));
+  // Aktualisiert DB-Exercises, behält temporäre bei
+  const refreshExercises = async () => {
+    try {
+      const dbExercises = await trainingService.getSessionExercises(sessionId);
+      setExercises((prev) => {
+        const temps = prev.filter((ex) => ex.id.startsWith("temp_"));
+        return [...dbExercises, ...temps];
+      });
+    } catch (e) {
+      console.error("Refresh failed:", e);
+    }
   };
 
-  /**
-   * Handle exercise completion
-   */
-  const handleExerciseComplete = async (exerciseId: string) => {
-    const exercise = exercises.find((ex) => ex.exercise_id === exerciseId);
-    if (!exercise) return;
+  // ── Berechnete Werte ───────────────────────────────────────────────
+  const visibleExercises = useMemo(
+    () => exercises.filter((ex) => !removedIds.has(ex.id)),
+    [exercises, removedIds]
+  );
 
-    const pendingSetsForExercise = pendingSets[exerciseId] || {};
-    const totalSetsCount =
-      exercise.completed_sets.length +
-      Object.keys(pendingSetsForExercise).length;
+  const progress = useMemo(() => {
+    if (visibleExercises.length === 0) return 0;
+    const completed = visibleExercises.filter((ex) => ex.is_completed).length;
+    return (completed / visibleExercises.length) * 100;
+  }, [visibleExercises]);
 
-    // Check if all sets are logged
-    if (totalSetsCount < exercise.sets) {
+  const groupedExercises = useMemo(() => {
+    const map = new Map<string, SessionExercise[]>();
+    for (const ex of visibleExercises) {
+      const muscle = ex.exercise?.primary_muscles?.[0] || "";
+      const group = MUSCLE_TO_GROUP[muscle] || "Sonstige";
+      if (!map.has(group)) map.set(group, []);
+      map.get(group)!.push(ex);
+    }
+    return GROUP_ORDER.filter((g) => map.has(g)).map((g) => ({
+      groupName: g,
+      exercises: map.get(g)!,
+    }));
+  }, [visibleExercises]);
+
+  // ── Workout-Completion-Erkennung ───────────────────────────────────
+  useEffect(() => {
+    if (!hasLoadedRef.current || hasShownCompletionRef.current) return;
+    if (
+      visibleExercises.length > 0 &&
+      visibleExercises.every((ex) => ex.is_completed)
+    ) {
+      hasShownCompletionRef.current = true;
       Alert.alert(
-        "Unvollständige Übung",
-        `Du hast erst ${totalSetsCount} von ${exercise.sets} Sätzen absolviert. Möchtest du trotzdem fortfahren?`,
+        "Workout abgeschlossen!",
+        "Glückwunsch! Du hast alle Übungen geschafft.",
         [
-          { text: "Abbrechen", style: "cancel" },
-          { text: "Fortfahren", onPress: () => completeExercise(exerciseId) },
+          {
+            text: "Statistiken ansehen",
+            onPress: () => completeWorkout(true),
+          },
+          { text: "Fertig", onPress: () => completeWorkout(false) },
         ]
       );
-      return;
     }
+  }, [visibleExercises]);
 
-    completeExercise(exerciseId);
-  };
-
-  /**
-   * Complete exercise and advance
-   */
-  const completeExercise = async (exerciseId: string) => {
-    try {
-      // Save all pending sets for this exercise
-      const pendingSetsForExercise = pendingSets[exerciseId] || {};
-
-      for (const [setNumberStr, setData] of Object.entries(
-        pendingSetsForExercise
-      )) {
-        const setNumber = parseInt(setNumberStr);
-        await trainingService.logSet(
-          sessionId,
-          exerciseId,
-          setNumber,
-          setData.weight,
-          setData.reps,
-          setData.rir
-        );
-      }
-
-      // Clear pending sets for this exercise
-      setPendingSets((prev) => {
-        const newPendingSets = { ...prev };
-        delete newPendingSets[exerciseId];
-        return newPendingSets;
-      });
-
-      // Haptic feedback
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Reload session to get updated data
-      await loadSession();
-
-      // Mark as completed locally
-      const updatedExercises = exercises.map((ex) =>
-        ex.exercise_id === exerciseId ? { ...ex, is_completed: true } : ex
-      );
-      setExercises(updatedExercises);
-
-      // Check if this was the last exercise
-      const allCompleted = updatedExercises.every((ex) => ex.is_completed);
-
-      if (allCompleted) {
-        // Last exercise → show completion modal
-        showCompletionModal();
-      } else if (currentIndex < exercises.length - 1) {
-        // Auto-advance to next exercise with smooth scroll
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({
-            index: currentIndex + 1,
-            animated: true,
-          });
-        }, 500); // Small delay for better UX
-      }
-    } catch (err) {
-      console.error("Fehler beim Speichern der Sets:", err);
-      Alert.alert("Fehler", "Sets konnten nicht gespeichert werden");
-    }
-  };
-
-  /**
-   * Show completion modal
-   */
-  const showCompletionModal = () => {
-    Alert.alert(
-      "Workout abgeschlossen!",
-      "Glückwunsch! Du hast alle Übungen geschafft.",
-      [
-        {
-          text: "Statistiken ansehen",
-          onPress: async () => {
-            // Complete the session first, then navigate to summary
-            await completeWorkout(true);
-          },
-        },
-        {
-          text: "Fertig",
-          onPress: async () => {
-            await completeWorkout();
-          },
-        },
-      ]
-    );
-  };
-
-  /**
-   * Complete the workout session
-   * @param showSummary - If true, navigate to summary screen instead of dashboard
-   */
-  const completeWorkout = async (showSummary: boolean = false) => {
+  // ── Handlers ───────────────────────────────────────────────────────
+  const completeWorkout = async (showSummary: boolean) => {
     try {
       await trainingService.completeWorkoutSession(sessionId);
-
       if (showSummary) {
         navigation.replace("WorkoutSummary", { sessionId });
       } else {
         navigation.navigate("TrainingDashboard");
       }
-    } catch (err) {
-      console.error("Fehler beim Abschließen des Workouts:", err);
+    } catch {
       Alert.alert("Fehler", "Workout konnte nicht abgeschlossen werden");
     }
   };
 
-  /**
-   * Handle navigation between exercises
-   */
-  const handlePrevious = () => {
-    if (currentIndex > 0) {
-      flatListRef.current?.scrollToIndex({
-        index: currentIndex - 1,
-        animated: true,
-      });
-    }
-  };
-
-  const handleNext = () => {
-    if (currentIndex < exercises.length - 1) {
-      flatListRef.current?.scrollToIndex({
-        index: currentIndex + 1,
-        animated: true,
-      });
-    }
-  };
-
-  /**
-   * Close workout with confirmation
-   */
   const handleClose = () => {
     Alert.alert(
       "Workout verlassen?",
       "Möchtest du das Workout pausieren oder komplett abbrechen?",
       [
-        {
-          text: "Zurück",
-          style: "cancel",
-        },
+        { text: "Zurück", style: "cancel" },
         {
           text: "Pausieren",
           onPress: async () => {
             try {
               await trainingService.pauseWorkoutSession(sessionId);
               navigation.goBack();
-            } catch (error) {
-              console.error("Fehler beim Pausieren:", error);
+            } catch {
               Alert.alert("Fehler", "Workout konnte nicht pausiert werden");
             }
           },
@@ -496,8 +243,7 @@ export const WorkoutSessionScreen: React.FC<Props> = ({
             try {
               await trainingService.cancelWorkoutSession(sessionId);
               navigation.goBack();
-            } catch (error) {
-              console.error("Fehler beim Abbrechen:", error);
+            } catch {
               Alert.alert("Fehler", "Workout konnte nicht abgebrochen werden");
             }
           },
@@ -506,311 +252,106 @@ export const WorkoutSessionScreen: React.FC<Props> = ({
     );
   };
 
-  /**
-   * Handle exercise name press to show alternatives
-   */
-  const handleExerciseNamePress = (exerciseId: string) => {
-    setSelectedExerciseId(exerciseId);
-    setShowAlternatives(true);
+  const handleTilePress = (exercise: SessionExercise) => {
+    const isTemp = exercise.id.startsWith("temp_");
+    navigation.navigate("ExerciseDetail", {
+      sessionId,
+      exerciseId: exercise.id,
+      ...(isTemp && {
+        tempExercise: {
+          exerciseId: exercise.exercise_id,
+          name: exercise.exercise?.name || "",
+          nameDe: exercise.exercise?.name_de || "",
+          imageUrl: exercise.exercise?.image_start_url,
+          sets: exercise.sets,
+          repsTarget: exercise.reps_target,
+        },
+      }),
+    });
   };
 
-  /**
-   * Handle exercise substitution
-   */
-  const handleSubstitute = async (alternativeExerciseId: string) => {
-    if (!selectedExerciseId) return;
-
-    try {
-      // Update the exercise in the plan_exercises table
-      const currentExercise = exercises.find(
-        (ex) => ex.exercise_id === selectedExerciseId
-      );
-
-      if (!currentExercise) {
-        throw new Error("Exercise nicht gefunden");
-      }
-
-      const { error: updateError } = await supabase
-        .from("plan_exercises")
-        .update({ exercise_id: alternativeExerciseId })
-        .eq("id", currentExercise.id);
-
-      if (updateError) {
-        console.error("Fehler beim Ersetzen der Exercise:", updateError);
-        throw new Error("Exercise konnte nicht ersetzt werden");
-      }
-
-      // Optional: Log substitution (if table exists)
-      try {
-        await supabase.from("workout_exercise_substitutions").insert({
-          session_id: sessionId,
-          original_exercise_id: selectedExerciseId,
-          substitute_exercise_id: alternativeExerciseId,
-          reason: "user_preference",
-        });
-      } catch (logError) {
-        // Silently ignore if table doesn't exist
-      }
-
-      // Reload session to show updated exercise
-      await loadSession();
-
-      // Success feedback
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Erfolg", "Übung wurde erfolgreich ersetzt");
-    } catch (err) {
-      console.error("Fehler beim Ersetzen der Exercise:", err);
-      Alert.alert("Fehler", "Übung konnte nicht ersetzt werden");
+  const handleRemove = () => {
+    if (menuExerciseId) {
+      setRemovedIds((prev) => new Set([...prev, menuExerciseId]));
+      setMenuExerciseId(null);
     }
   };
 
-  /**
-   * Render individual exercise card
-   */
-  const renderExerciseCard = ({
-    item: exercise,
-  }: {
-    item: SessionExercise;
-  }) => {
-    // Extract recommended weight with proper type checking
-    const recommendedWeight = recommendedWeights[exercise.exercise_id];
-    const trainingMax = trainingMaxes[exercise.exercise_id];
-    const hasValidRecommendedWeight =
-      (typeof recommendedWeight === "number" ||
-        typeof trainingMax === "number") &&
-      (exercise.percentage_1rm != null ||
-        (exercise.set_configurations &&
-          exercise.set_configurations.length > 0));
-
-    return (
-      <View style={styles.carouselCard}>
-        <ScrollView
-          style={styles.cardScrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.cardContent}
-        >
-          <View style={styles.exerciseCard}>
-            {/* Exercise Image */}
-            {exercise.exercise?.video_url && (
-              <View style={styles.imageContainer}>
-                <Image
-                  source={{ uri: exercise.exercise.video_url }}
-                  style={styles.exerciseImage}
-                  resizeMode="cover"
-                />
-              </View>
-            )}
-
-            {/* Exercise Name - Touchable for alternatives */}
-            <TouchableOpacity
-              onPress={() => handleExerciseNamePress(exercise.exercise_id)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.exerciseName}>
-                {exercise.exercise?.name_de || exercise.exercise?.name}
-              </Text>
-              {/* Label for assistance exercises (only for dynamic plans without percentage) */}
-              {plan?.template?.is_dynamic &&
-                !exercise.percentage_1rm &&
-                !(
-                  exercise.set_configurations &&
-                  exercise.set_configurations.length > 0
-                ) && <Text style={styles.assistanceLabel}>Zusatzübung</Text>}
-              <Text style={styles.alternativesHint}>
-                Tippen für Alternativen
-              </Text>
-            </TouchableOpacity>
-
-            {/* Exercise Info */}
-            <Text style={styles.exerciseInfo}>
-              {exercise.set_configurations &&
-              exercise.set_configurations.length > 0 ? (
-                // Show set-specific reps for set_configurations
-                <>
-                  {exercise.sets} Sätze •{" "}
-                  {exercise.set_configurations.map((config, idx) => (
-                    <Text key={idx}>
-                      {config.reps}
-                      {config.is_amrap ? "+" : ""}
-                      {idx < exercise.set_configurations!.length - 1 ? "/" : ""}
-                    </Text>
-                  ))}{" "}
-                  Wdh
-                  {exercise.rest_seconds && (
-                    <Text style={styles.restTimeInline}>
-                      {" "}
-                      • {Math.floor(exercise.rest_seconds / 60)}:
-                      {String(exercise.rest_seconds % 60).padStart(2, "0")}{" "}
-                      Pause
-                    </Text>
-                  )}
-                </>
-              ) : (
-                // Standard display for regular exercises
-                <>
-                  {exercise.sets} Sätze •{" "}
-                  {exercise.reps_min && exercise.reps_max
-                    ? `${exercise.reps_min}-${exercise.reps_max} Wdh`
-                    : exercise.reps_target
-                    ? `${exercise.reps_target} Wdh`
-                    : "Wiederholungen"}
-                  {exercise.rest_seconds && (
-                    <Text style={styles.restTimeInline}>
-                      {" "}
-                      • {Math.floor(exercise.rest_seconds / 60)}:
-                      {String(exercise.rest_seconds % 60).padStart(2, "0")}{" "}
-                      Pause
-                    </Text>
-                  )}
-                </>
-              )}
-            </Text>
-
-            {/* Recommended Weight for Dynamic Plans (only for non-set_configurations exercises) */}
-            {hasValidRecommendedWeight &&
-              !(
-                exercise.set_configurations &&
-                exercise.set_configurations.length > 0
-              ) && (
-                <View style={styles.recommendedWeightContainer}>
-                  <Text style={styles.recommendedWeightLabel}>
-                    💡 Empfohlen:
-                  </Text>
-                  <Text style={styles.recommendedWeightValue}>
-                    {(recommendedWeight ?? 0).toFixed(1)} kg
-                  </Text>
-                  <Text style={styles.recommendedWeightPercentage}>
-                    ({exercise.percentage_1rm}% vom TM)
-                  </Text>
-                </View>
-              )}
-
-            {/* Sets */}
-            <View style={styles.setsContainer}>
-              {exercise.set_configurations &&
-              exercise.set_configurations.length > 0
-                ? // 5/3/1 style with set_configurations
-                  exercise.set_configurations.map((config) => {
-                    const setNumber = config.set_number;
-                    const completedSet = exercise.completed_sets.find(
-                      (s) => s.set_number === setNumber
-                    );
-                    const pendingSet =
-                      pendingSets[exercise.exercise_id]?.[setNumber];
-
-                    // Calculate weight for this specific set from Training Max
-                    // Formula: TM * (percentage / 100), rounded to nearest 2.5kg
-                    const trainingMax = trainingMaxes[exercise.exercise_id];
-                    const setWeight = trainingMax
-                      ? Math.round(
-                          (trainingMax * config.percentage_1rm) / 100 / 2.5
-                        ) * 2.5
-                      : undefined;
-
-                    return (
-                      <SetRow
-                        key={setNumber}
-                        setNumber={setNumber}
-                        targetWeight={setWeight}
-                        targetReps={config.reps}
-                        rirTarget={exercise.rir_target}
-                        isExpanded={expandedSet === setNumber}
-                        onToggle={() =>
-                          setExpandedSet(
-                            expandedSet === setNumber ? null : setNumber
-                          )
-                        }
-                        onLog={(weight, reps, rir) =>
-                          handleSetLog(
-                            exercise.exercise_id,
-                            setNumber,
-                            weight,
-                            reps,
-                            rir
-                          )
-                        }
-                        completedSet={completedSet}
-                        pendingSet={pendingSet}
-                        isAMRAP={config.is_amrap}
-                        setNotes={config.notes}
-                        percentageLabel={`${config.percentage_1rm}%`}
-                      />
-                    );
-                  })
-                : // Standard sets (all the same)
-                  Array.from({ length: exercise.sets }).map((_, index) => {
-                    const setNumber = index + 1;
-                    const completedSet = exercise.completed_sets.find(
-                      (s) => s.set_number === setNumber
-                    );
-                    const pendingSet =
-                      pendingSets[exercise.exercise_id]?.[setNumber];
-                    const recommendedWeight =
-                      recommendedWeights[exercise.exercise_id];
-
-                    return (
-                      <SetRow
-                        key={setNumber}
-                        setNumber={setNumber}
-                        targetWeight={recommendedWeight || undefined}
-                        targetReps={
-                          exercise.reps_target ||
-                          exercise.reps_min ||
-                          exercise.reps_max
-                        }
-                        rirTarget={exercise.rir_target}
-                        isExpanded={expandedSet === setNumber}
-                        onToggle={() =>
-                          setExpandedSet(
-                            expandedSet === setNumber ? null : setNumber
-                          )
-                        }
-                        onLog={(weight, reps, rir) =>
-                          handleSetLog(
-                            exercise.exercise_id,
-                            setNumber,
-                            weight,
-                            reps,
-                            rir
-                          )
-                        }
-                        completedSet={completedSet}
-                        pendingSet={pendingSet}
-                      />
-                    );
-                  })}
-            </View>
-
-            {/* Complete Exercise Button */}
-            <TouchableOpacity
-              style={[
-                styles.completeButton,
-                exercise.is_completed && styles.completedButton,
-              ]}
-              onPress={() => handleExerciseComplete(exercise.exercise_id)}
-            >
-              <Text
-                style={[
-                  styles.completeButtonText,
-                  exercise.is_completed && styles.completedButtonText,
-                ]}
-              >
-                {exercise.is_completed
-                  ? "✓ Abgeschlossen"
-                  : "Übung abschließen"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
+  const handleFinishWorkout = () => {
+    const allDone = visibleExercises.every((ex) => ex.is_completed);
+    if (allDone) {
+      completeWorkout(true);
+      return;
+    }
+    Alert.alert(
+      "Workout abschließen?",
+      "Nicht alle Übungen sind abgeschlossen. Möchtest du trotzdem das Workout beenden?",
+      [
+        { text: "Abbrechen", style: "cancel" },
+        { text: "Abschließen", onPress: () => completeWorkout(true) },
+      ]
     );
   };
 
-  // Loading state
+  const handleOpenAdd = async () => {
+    setAddLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("exercises")
+        .select("*")
+        .eq("is_active", true)
+        .order("name_de");
+      if (error) throw error;
+      const currentIds = new Set(visibleExercises.map((ex) => ex.exercise_id));
+      setAvailableExercises(
+        (data || []).filter((ex: Exercise) => !currentIds.has(ex.id))
+      );
+      setShowAddModal(true);
+    } catch {
+      Alert.alert("Fehler", "Übungen konnten nicht geladen werden");
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const handleAddExercise = (ex: Exercise) => {
+    const temp = {
+      id: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      workout_id: "",
+      exercise_id: ex.id,
+      order_in_workout: exercises.length + 1,
+      sets: 3,
+      reps_target: 10,
+      completed_sets: [],
+      is_completed: false,
+      exercise: ex,
+    } as unknown as SessionExercise;
+    setExercises((prev) => [...prev, temp]);
+    setShowAddModal(false);
+  };
+
+  // ── Hilfsfunktionen ────────────────────────────────────────────────
+  const getSubtitle = (ex: SessionExercise): string => {
+    const parts = [`${ex.sets} Sätze`];
+    if (ex.set_configurations?.length) {
+      parts.push(
+        ex.set_configurations
+          .map((c) => `${c.reps}${c.is_amrap ? "+" : ""}`)
+          .join("/") + " Wdh"
+      );
+    } else if (ex.reps_min && ex.reps_max) {
+      parts.push(`${ex.reps_min}-${ex.reps_max} Wdh`);
+    } else if (ex.reps_target) {
+      parts.push(`${ex.reps_target} Wdh`);
+    }
+    return parts.join(" • ");
+  };
+
+  // ── Render: Loading ────────────────────────────────────────────────
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centerContainer}>
+        <View style={styles.center}>
           <ActivityIndicator size="large" color="#3083FF" />
           <Text style={styles.loadingText}>Lade Workout...</Text>
         </View>
@@ -818,345 +359,545 @@ export const WorkoutSessionScreen: React.FC<Props> = ({
     );
   }
 
-  // Error state
-  if (error || !currentExercise) {
+  // ── Render: Error ──────────────────────────────────────────────────
+  if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <Text style={styles.errorText}>{error || "Fehler beim Laden"}</Text>
-          <Button onPress={() => navigation.goBack()}>Zurück</Button>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.linkText}>Zurück</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  // ── Render: Hauptansicht ───────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-          <Text style={styles.closeButtonText}>✕</Text>
+        <TouchableOpacity onPress={handleClose} style={styles.headerBtn}>
+          <Text style={styles.headerBtnText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Workout Session</Text>
+        <Text style={styles.headerTitle}>Workout</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <ProgressBar progress={progress} color="#70e0ba" height={8} />
+      {/* Fortschrittsanzeige */}
+      <View style={styles.progressWrap}>
+        <ProgressBar progress={progress} color="#4ECDC4" height={6} />
         <Text style={styles.progressText}>
-          {exercises.filter((ex) => ex.is_completed).length} /{" "}
-          {exercises.length} Übungen
+          {visibleExercises.filter((ex) => ex.is_completed).length} /{" "}
+          {visibleExercises.length} Übungen
         </Text>
       </View>
 
-      {/* Exercise Carousel */}
-      <FlatList
-        ref={flatListRef}
-        data={exercises}
-        renderItem={renderExerciseCard}
-        keyExtractor={(item) => item.id}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={SCREEN_WIDTH}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        contentContainerStyle={styles.carouselContainer}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        getItemLayout={(data, index) => ({
-          length: SCREEN_WIDTH,
-          offset: SCREEN_WIDTH * index,
-          index,
-        })}
-        initialScrollIndex={0}
-        onScrollToIndexFailed={(info) => {
-          // Handle scroll failure gracefully
-          setTimeout(() => {
-            flatListRef.current?.scrollToIndex({
-              index: info.index,
-              animated: true,
-            });
-          }, 100);
-        }}
-      />
+      {/* Kachelliste – nach Muskelgruppen */}
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        {groupedExercises.map((group, groupIndex) => (
+          <View key={group.groupName}>
+            <Text
+              style={[
+                styles.sectionHeader,
+                groupIndex === 0 && { paddingTop: 4 },
+              ]}
+            >
+              {group.groupName}
+            </Text>
 
-      {/* Navigation */}
-      <View style={styles.navigation}>
-        <TouchableOpacity
-          onPress={handlePrevious}
-          disabled={currentIndex === 0}
-          style={[
-            styles.navButton,
-            currentIndex === 0 && styles.navButtonDisabled,
-          ]}
-        >
-          <Text
-            style={[
-              styles.navButtonText,
-              currentIndex === 0 && styles.navButtonTextDisabled,
-            ]}
-          >
-            ← Zurück
-          </Text>
+            {group.exercises.map((exercise) => (
+              <View
+                key={exercise.id}
+                style={[
+                  styles.tileWrapper,
+                  exercise.is_completed && styles.tileWrapperCompleted,
+                ]}
+              >
+                {/* Hauptkachel – tappbar */}
+                <TouchableOpacity
+                  style={[
+                    styles.tile,
+                    exercise.is_completed && styles.tileCompleted,
+                  ]}
+                  onPress={() => handleTilePress(exercise)}
+                  activeOpacity={0.82}
+                >
+                  {/* Bild */}
+                  <View style={styles.tileImgWrap}>
+                    {exercise.exercise?.image_start_url ? (
+                      <Image
+                        source={{ uri: exercise.exercise.image_start_url }}
+                        style={styles.tileImg}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.tileImgPlaceholder}>
+                        <Text style={{ fontSize: 28 }}>🏋️</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Info */}
+                  <View style={styles.tileInfo}>
+                    <Text style={styles.tileName} numberOfLines={1}>
+                      {exercise.exercise?.name_de ||
+                        exercise.exercise?.name ||
+                        "Übung"}
+                    </Text>
+                    <Text style={styles.tileSub}>{getSubtitle(exercise)}</Text>
+                    {exercise.is_completed && (
+                      <Text style={styles.tileCompletedText}>
+                        ✓ Abgeschlossen
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Chevron */}
+                  <Text style={styles.tileChevron}>›</Text>
+                </TouchableOpacity>
+
+                {/* 3-Punkte-Menü */}
+                <TouchableOpacity
+                  style={styles.menuBtn}
+                  onPress={() => setMenuExerciseId(exercise.id)}
+                  hitSlop={{ top: 8, right: 4, bottom: 8, left: 8 }}
+                >
+                  <Text style={styles.menuBtnText}>⋮</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ))}
+        <View style={{ height: 12 }} />
+      </ScrollView>
+
+      {/* Bottom-Buttons */}
+      <View style={styles.bottomBtnRow}>
+        <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd}>
+          <Text style={styles.addBtnText}>+ Übung</Text>
         </TouchableOpacity>
-
-        <PaginationDots total={exercises.length} current={currentIndex} />
-
-        <TouchableOpacity
-          onPress={handleNext}
-          disabled={currentIndex === exercises.length - 1}
-          style={[
-            styles.navButton,
-            currentIndex === exercises.length - 1 && styles.navButtonDisabled,
-          ]}
-        >
-          <Text
-            style={[
-              styles.navButtonText,
-              currentIndex === exercises.length - 1 &&
-                styles.navButtonTextDisabled,
-            ]}
-          >
-            Weiter →
-          </Text>
+        <TouchableOpacity style={styles.finishBtn} onPress={handleFinishWorkout}>
+          <Text style={styles.finishBtnText}>Workout abschließen</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Alternatives Modal */}
-      <AlternativesModal
-        visible={showAlternatives}
-        exerciseId={selectedExerciseId || ""}
-        onSelect={handleSubstitute}
-        onClose={() => {
-          setShowAlternatives(false);
-          setSelectedExerciseId(null);
-        }}
-      />
+      {/* ── Modal: Übung entfernen (Bestätigung) ── */}
+      <Modal
+        visible={menuExerciseId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuExerciseId(null)}
+      >
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => setMenuExerciseId(null)}
+        >
+          <View style={styles.confirmModal}>
+            <Text style={styles.confirmTitle}>Übung entfernen</Text>
+            <Text style={styles.confirmSub}>
+              Diese Änderung betrifft nur das aktuelle Workout und beeinflusst
+              keine weiteren Workouts.
+            </Text>
+            <View style={styles.confirmBtns}>
+              <TouchableOpacity
+                style={styles.confirmCancelBtn}
+                onPress={() => setMenuExerciseId(null)}
+              >
+                <Text style={styles.confirmCancelText}>Abbrechen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmDeleteBtn}
+                onPress={handleRemove}
+              >
+                <Text style={styles.confirmDeleteText}>Entfernen</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Modal: Übung hinzufügen ── */}
+      <Modal
+        visible={showAddModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <SafeAreaView style={styles.modalWrap}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Übung hinzufügen</Text>
+            <TouchableOpacity onPress={() => setShowAddModal(false)}>
+              <Text style={styles.modalCloseIcon}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {addLoading ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color="#3083FF" />
+            </View>
+          ) : (
+            <FlatList
+              data={availableExercises}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.pickerItem}
+                  onPress={() => handleAddExercise(item)}
+                >
+                  <View style={styles.pickerContent}>
+                    <Text style={styles.pickerName}>
+                      {item.name_de || item.name}
+                    </Text>
+                    <Text style={styles.pickerSub}>
+                      {item.movement_pattern}
+                      {item.primary_muscles?.length
+                        ? ` • ${item.primary_muscles.slice(0, 2).join(", ")}`
+                        : ""}
+                    </Text>
+                  </View>
+                  <Text style={styles.pickerChevron}>›</Text>
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
 
+// ── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
   },
-  centerContainer: {
+  center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    gap: 12,
     padding: 20,
-    gap: 16,
   },
+
+  // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 8,
     paddingBottom: 12,
     backgroundColor: "#fff",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  closeButton: {
+  headerBtn: {
     width: 40,
     height: 40,
     alignItems: "center",
     justifyContent: "center",
   },
-  closeButtonText: {
+  headerBtnText: {
     fontSize: 24,
-    color: "#3083FF",
+    color: "#1B3A5C",
+    fontWeight: "600",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#1a1a1a",
   },
-  progressContainer: {
+
+  // Progress
+  progressWrap: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingVertical: 10,
     backgroundColor: "#fff",
-    gap: 8,
+    gap: 6,
   },
   progressText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
-    color: "#3083FF",
+    color: "#4ECDC4",
     textAlign: "center",
   },
-  carouselContainer: {
-    paddingTop: 16,
-  },
-  carouselCard: {
-    width: SCREEN_WIDTH,
-    paddingHorizontal: CARD_PADDING,
-  },
-  cardScrollView: {
+
+  // ScrollView
+  scroll: {
     flex: 1,
-    overflow: "visible",
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  cardContent: {
-    paddingBottom: 20,
-    overflow: "visible",
+
+  // Abschnitt-Überschriften
+  sectionHeader: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#7a8a94",
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    paddingTop: 20,
+    paddingBottom: 6,
   },
-  exerciseCard: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 24,
-    gap: 16,
-    shadowColor: "#3083FF",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+
+  // ── Kachel ──
+  tileWrapper: {
+    position: "relative",
+    marginBottom: 14,
+  },
+  tileWrapperCompleted: {
+    opacity: 0.5,
+  },
+  tile: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#4ECDC4",
+    borderRadius: 18,
+    padding: 14,
+    paddingRight: 36, // Platz für ⋮
+    gap: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
     elevation: 4,
-    minHeight: 400,
-    borderWidth: 1,
-    borderColor: "#E8F0FE",
   },
-  imageContainer: {
-    width: "100%",
-    height: 200,
+  tileCompleted: {
+    backgroundColor: "#3BB8A8",
+  },
+  tileImgWrap: {
+    width: 78,
+    height: 78,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "#fff",
+    flexShrink: 0,
   },
-  exerciseImage: {
+  tileImg: {
     width: "100%",
     height: "100%",
   },
-  exerciseName: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#1a1a1a",
-    letterSpacing: -0.5,
-  },
-  assistanceLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-    backgroundColor: "#F5F5F5",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    alignSelf: "flex-start",
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  alternativesHint: {
-    fontSize: 13,
-    color: "#3083FF",
-    marginTop: 6,
-    fontWeight: "500",
-  },
-  exerciseInfo: {
-    fontSize: 16,
-    color: "#666",
-  },
-  restTimeInline: {
-    fontSize: 16,
-    color: "#999",
-  },
-  setsContainer: {
-    gap: 8,
-    overflow: "visible",
-  },
-  recommendedWeightContainer: {
-    flexDirection: "row",
+  tileImgPlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#e0f7f4",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E3F2FD",
-    borderRadius: 12,
-    padding: 12,
-    marginVertical: 8,
-    gap: 6,
   },
-  recommendedWeightLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1976D2",
+  tileInfo: {
+    flex: 1,
+    gap: 2,
   },
-  recommendedWeightValue: {
-    fontSize: 16,
+  tileName: {
+    fontSize: 17,
     fontWeight: "700",
-    color: "#1976D2",
+    color: "#1a1a1a",
   },
-  recommendedWeightPercentage: {
-    fontSize: 13,
+  tileSub: {
+    fontSize: 14,
+    color: "#145a4a",
     fontWeight: "500",
-    color: "#5E92C4",
   },
-  completeButton: {
-    backgroundColor: "#70e0ba",
-    borderRadius: 14,
-    padding: 18,
+  tileCompletedText: {
+    fontSize: 12,
+    color: "#fff",
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  tileChevron: {
+    fontSize: 24,
+    color: "#1a1a1a",
+    fontWeight: "600",
+  },
+
+  // 3-Punkte-Menü
+  menuBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 26,
+    height: 26,
     alignItems: "center",
-    marginTop: 8,
-    shadowColor: "#70e0ba",
-    shadowOffset: { width: 0, height: 4 },
+    justifyContent: "center",
+    zIndex: 2,
+  },
+  menuBtnText: {
+    fontSize: 18,
+    color: "#1a1a1a",
+    fontWeight: "700",
+  },
+
+  // Bottom-Buttons
+  bottomBtnRow: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    paddingTop: 6,
+    gap: 10,
+  },
+  addBtn: {
+    flex: 1,
+    backgroundColor: "#1B3A5C",
+    borderRadius: 14,
+    padding: 16,
+    alignItems: "center",
+    shadowColor: "#1B3A5C",
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: 6,
     elevation: 4,
   },
-  completedButton: {
-    backgroundColor: "#E8F5E9",
-    shadowOpacity: 0,
+  addBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#fff",
+    letterSpacing: 0.3,
   },
-  completeButtonText: {
-    fontSize: 17,
+  finishBtn: {
+    flex: 1.3,
+    backgroundColor: "#4ECDC4",
+    borderRadius: 14,
+    padding: 16,
+    alignItems: "center",
+    shadowColor: "#4ECDC4",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  finishBtnText: {
+    fontSize: 15,
     fontWeight: "700",
     color: "#fff",
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
-  completedButtonText: {
-    color: "#70e0ba",
+
+  // ── Overlay & Bestätigung ──
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
   },
-  navigation: {
+  confirmModal: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 24,
+    width: "100%",
+    gap: 14,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1a1a1a",
+  },
+  confirmSub: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 20,
+  },
+  confirmBtns: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 2,
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    padding: 12,
+    alignItems: "center",
+  },
+  confirmCancelText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#666",
+  },
+  confirmDeleteBtn: {
+    flex: 1,
+    borderRadius: 10,
+    backgroundColor: "#E53935",
+    padding: 12,
+    alignItems: "center",
+  },
+  confirmDeleteText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#fff",
+  },
+
+  // ── Add-Exercise-Modal ──
+  modalWrap: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1a1a1a",
+  },
+  modalCloseIcon: {
+    fontSize: 22,
+    color: "#666",
+  },
+  pickerItem: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
   },
-  navButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#3083FF",
-    backgroundColor: "#fff",
+  pickerContent: {
+    flex: 1,
+    gap: 2,
   },
-  navButtonDisabled: {
-    borderColor: "#E0E0E0",
-    backgroundColor: "#F8F9FA",
-  },
-  navButtonText: {
-    fontSize: 14,
+  pickerName: {
+    fontSize: 16,
     fontWeight: "600",
-    color: "#3083FF",
+    color: "#1a1a1a",
   },
-  navButtonTextDisabled: {
+  pickerSub: {
+    fontSize: 13,
+    color: "#888",
+  },
+  pickerChevron: {
+    fontSize: 20,
     color: "#999",
   },
+
+  // ── Text ──
   loadingText: {
-    fontSize: 17,
-    fontWeight: "500",
+    fontSize: 16,
     color: "#3083FF",
+    fontWeight: "500",
   },
   errorText: {
-    fontSize: 17,
+    fontSize: 16,
+    color: "#E53935",
     fontWeight: "500",
-    color: "#F44336",
     textAlign: "center",
-    marginBottom: 16,
+  },
+  linkText: {
+    fontSize: 15,
+    color: "#3083FF",
+    fontWeight: "600",
+    marginTop: 8,
   },
 });

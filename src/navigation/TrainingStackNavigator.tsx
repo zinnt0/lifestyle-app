@@ -8,7 +8,6 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, TouchableOpacity, Text } from "react-native";
 
 // Import Training Screens
 import { TrainingDashboardScreen } from "@/screens/Training/TrainingDashboardScreen";
@@ -21,6 +20,7 @@ import { WorkoutSessionScreen } from "@/screens/Training/WorkoutSessionScreen";
 import WorkoutSummaryScreen from "@/screens/Training/WorkoutSummaryScreen";
 import WorkoutHistoryScreen from "@/screens/Training/WorkoutHistoryScreen";
 import { OneRMInputScreen } from "@/screens/Training/OneRMInputScreen";
+import { ExerciseDetailScreen } from "@/screens/Training/ExerciseDetailScreen";
 
 /**
  * Type-safe navigation params for Training Stack
@@ -36,6 +36,18 @@ export type TrainingStackParamList = {
   OneRMInput: { planTemplateId: string; requiredExerciseIds: string[] };
   TrainingPlanDetail: { planId: string };
   WorkoutSession: { sessionId: string };
+  ExerciseDetail: {
+    sessionId: string;
+    exerciseId: string;
+    tempExercise?: {
+      exerciseId: string;
+      name: string;
+      nameDe: string;
+      imageUrl?: string;
+      sets: number;
+      repsTarget?: number;
+    };
+  };
   WorkoutSummary: { sessionId: string };
   WorkoutHistory: undefined;
 };
@@ -173,33 +185,18 @@ export const TrainingStackNavigator: React.FC = () => {
       <Stack.Screen
         name="WorkoutSession"
         component={WorkoutSessionScreen}
-        options={({ navigation }) => ({
-          title: "Workout",
-          // Prevent swipe-back during workout
+        options={{
+          headerShown: false,
           gestureEnabled: false,
-          // Custom close button with confirmation
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={() => {
-                Alert.alert(
-                  "Workout beenden?",
-                  "Möchtest du das Workout wirklich beenden? Dein Fortschritt wird gespeichert.",
-                  [
-                    { text: "Abbrechen", style: "cancel" },
-                    {
-                      text: "Beenden",
-                      style: "destructive",
-                      onPress: () => navigation.goBack(),
-                    },
-                  ]
-                );
-              }}
-              style={{ paddingRight: 16 }}
-            >
-              <Text style={{ fontSize: 18, color: "#333" }}>✕</Text>
-            </TouchableOpacity>
-          ),
-        })}
+        }}
+      />
+
+      <Stack.Screen
+        name="ExerciseDetail"
+        component={ExerciseDetailScreen}
+        options={{
+          headerShown: false,
+        }}
       />
 
       <Stack.Screen

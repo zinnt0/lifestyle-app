@@ -59,6 +59,18 @@ export type TrainingStackParamList = {
   CustomPlanFlow: undefined;
   TrainingPlanDetail: { planId: string };
   WorkoutSession: { sessionId: string };
+  ExerciseDetail: {
+    sessionId: string;
+    exerciseId: string;
+    tempExercise?: {
+      exerciseId: string;
+      name: string;
+      nameDe: string;
+      imageUrl?: string;
+      sets: number;
+      repsTarget?: number;
+    };
+  };
   WorkoutSummary: { sessionId: string };
   WorkoutHistory: undefined;
 };
